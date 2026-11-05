@@ -1,0 +1,657 @@
+// Elevate — multi-tenant event operations platform.
+// Every tenant-owned table carries `tenantId`. The API always scopes queries by it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Tenancy ─────────────────────────────
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique // "sunstone", "altaschool", "mirai"
+  name      String
+  /// Theme tokens: { colors: {primary, primaryFg, accent, bg, fg, muted, card}, logoUrl, faviconUrl, font, radius }
+  theme     Json     @default("{}")
+  /// Brand settings: { hashtags: string[], linkedinOrgUrl, emailFrom, supportEmail, social: {...} }
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  domains        TenantDomain[]
+  campuses       Campus[]
+  memberships    Membership[]
+  events         Event[]
+  certTemplates  CertificateTemplate[]
+  taskTemplates  TaskTemplate[]
+}
+
+model TenantDomain {
+  id                String    @id @default(cuid())
+  tenantId          String
+  hostname          String    @unique // "event.sunstone.in"
+  isPrimary         Boolean   @default(false)
+  verificationToken String    @default(cuid())
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Campus {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  code      String
+  city      String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+  events      EventCampus[]
+
+  @@unique([tenantId, code])
+}
+
+// ───────────────────────────── People ─────────────────────────────
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  phone       String?
+  avatarUrl   String?
+  linkedinUrl String?
+  githubUrl   String?
+  isPlatformAdmin Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships     Membership[]
+  registrations   Registration[]
+  teamMemberships TeamMember[]
+  judgeAssignments JudgeAssignment[]
+  scores          Score[]
+  certificates    Certificate[]
+  linkedinPosts   LinkedInPost[]
+  assignedTasks   EventTask[]      @relation("TaskAssignee")
+  activities      EventActivity[]
+  otpCodes        OtpCode[]
+  staffRoles      EventStaff[]
+}
+
+enum Role {
+  BRAND_ADMIN
+  CAMPUS_ADMIN
+  EVENT_MANAGER
+  JUDGE
+  VOLUNTEER
+  SPEAKER
+  STUDENT
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      Role     @default(STUDENT)
+  campusId  String?
+  batch     String?  // e.g. "2025-29"
+  rollNo    String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campus Campus? @relation(fields: [campusId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@index([tenantId, role])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ───────────────────────────── Events ─────────────────────────────
+
+enum EventType {
+  HACKATHON
+  SEMINAR
+  WORKSHOP
+  GUEST_LECTURE
+  COMPETITION
+  BOOTCAMP
+  WEBINAR
+  CULTURAL
+  OTHER
+}
+
+enum EventScope {
+  CENTRAL
+  CAMPUS
+}
+
+enum EventMode {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum EventStatus {
+  DRAFT
+  PLANNING
+  ANNOUNCED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  LIVE
+  JUDGING
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+model Event {
+  id               String      @id @default(cuid())
+  tenantId         String
+  slug             String
+  title            String
+  tagline          String?
+  description      String?
+  type             EventType
+  scope            EventScope  @default(CENTRAL)
+  mode             EventMode   @default(OFFLINE)
+  status           EventStatus @default(DRAFT)
+  coverImageUrl    String?
+  venue            String?
+  meetingUrl       String?
+  startsAt         DateTime
+  endsAt           DateTime
+  registrationOpensAt  DateTime?
+  registrationClosesAt DateTime?
+  capacity         Int?
+  requiresApproval Boolean     @default(false)
+  /// Enabled modules: { teams, judging, submissions, guests, checkin, certificates, feedback, budget }
+  modules          Json        @default("{}")
+  /// Hackathon config: { minTeamSize, maxTeamSize, tracks: [{id,name,description}], prizes: [...] }
+  config           Json        @default("{}")
+  /// Custom registration questions: [{ id, label, type, required, options? }]
+  registrationForm Json        @default("[]")
+  driveFolderUrl   String?
+  resultsPublishedAt DateTime?
+  /// Cached outcome summary, regenerated on demand
+  outcome          Json?
+  createdById      String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campuses      EventCampus[]
+  sessions      EventSession[]
+  staff         EventStaff[]
+  tasks         EventTask[]
+  guests        EventGuest[]
+  registrations Registration[]
+  teams         Team[]
+  rubric        RubricCriterion[]
+  rounds        JudgingRound[]
+  judges        JudgeAssignment[]
+  media         MediaAsset[]
+  socialPosts   SocialPost[]
+  certificates  Certificate[]
+  linkedinPosts LinkedInPost[]
+  feedback      Feedback[]
+  expenses      Expense[]
+  activities    EventActivity[]
+  announcements Announcement[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+  @@index([tenantId, startsAt])
+}
+
+model EventCampus {
+  eventId  String
+  campusId String
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  campus Campus @relation(fields: [campusId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, campusId])
+}
+
+model EventSession {
+  id        String   @id @default(cuid())
+  eventId   String
+  title     String
+  speaker   String?
+  startsAt  DateTime
+  endsAt    DateTime
+  location  String?
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+/// Event-level role assignment (manager, volunteer, photographer, mentor, ...)
+model EventStaff {
+  id      String @id @default(cuid())
+  eventId String
+  userId  String
+  role    String // "MANAGER" | "VOLUNTEER" | "PHOTOGRAPHER" | "MENTOR" | "SOCIAL"
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, role])
+}
+
+// ───────────────────────────── Planning ─────────────────────────────
+
+enum TaskPhase {
+  PRE
+  DURING
+  POST
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+  SKIPPED
+}
+
+/// Brand-editable checklist template per event type
+model TaskTemplate {
+  id        String    @id @default(cuid())
+  tenantId  String
+  eventType EventType
+  phase     TaskPhase
+  title     String
+  /// Due date offset in days relative to event start (negative = before)
+  dueOffsetDays Int   @default(0)
+  sortOrder Int       @default(0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, eventType])
+}
+
+model EventTask {
+  id          String     @id @default(cuid())
+  eventId     String
+  phase       TaskPhase
+  title       String
+  notes       String?
+  status      TaskStatus @default(TODO)
+  dueAt       DateTime?
+  assigneeId  String?
+  completedAt DateTime?
+  sortOrder   Int        @default(0)
+  /// Optional evidence link (poster, drive, booking confirmation)
+  evidenceUrl String?
+
+  event    Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  @@index([eventId, phase])
+}
+
+enum GuestStatus {
+  PROPOSED
+  INVITED
+  CONFIRMED
+  DECLINED
+  ARRIVED
+  THANKED
+}
+
+model EventGuest {
+  id           String      @id @default(cuid())
+  eventId      String
+  name         String
+  email        String?
+  phone        String?
+  designation  String?
+  organization String?
+  bio          String?
+  photoUrl     String?
+  linkedinUrl  String?
+  role         String      @default("SPEAKER") // SPEAKER | CHIEF_GUEST | PANELIST | JUDGE
+  status       GuestStatus @default(PROPOSED)
+  travelNotes  String?
+  honorarium   Decimal?    @db.Decimal(12, 2)
+  mementoGiven Boolean     @default(false)
+  thankYouSentAt DateTime?
+  createdAt    DateTime    @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  eventId   String
+  title     String
+  body      String
+  channels  String[] // ["EMAIL", "PUSH", "WHATSAPP", "IN_APP"]
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ───────────────────────────── Participation ─────────────────────────────
+
+enum RegistrationStatus {
+  REGISTERED
+  APPROVED
+  WAITLISTED
+  REJECTED
+  CANCELLED
+  CHECKED_IN
+  NO_SHOW
+}
+
+model Registration {
+  id          String             @id @default(cuid())
+  eventId     String
+  userId      String
+  status      RegistrationStatus @default(REGISTERED)
+  answers     Json               @default("{}")
+  ticketCode  String             @unique @default(cuid())
+  checkedInAt DateTime?
+  checkedInById String?
+  createdAt   DateTime           @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId, status])
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  inviteCode  String   @unique
+  trackId     String?
+  // Submission
+  projectTitle String?
+  projectSummary String?
+  repoUrl     String?
+  demoUrl     String?
+  deckUrl     String?
+  videoUrl    String?
+  submittedAt DateTime?
+  // Result
+  rank        Int?
+  award       String?  // "WINNER" | "RUNNER_UP" | "SECOND_RUNNER_UP" | "SPECIAL_MENTION"
+  createdAt   DateTime @default(now())
+
+  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  members TeamMember[]
+  scores  Score[]
+  judgeAssignments JudgeAssignment[]
+
+  @@unique([eventId, name])
+}
+
+model TeamMember {
+  teamId   String
+  userId   String
+  isLeader Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+}
+
+// ───────────────────────────── Judging ─────────────────────────────
+
+model RubricCriterion {
+  id          String  @id @default(cuid())
+  eventId     String
+  name        String
+  description String?
+  maxScore    Int     @default(10)
+  weight      Float   @default(1)
+  sortOrder   Int     @default(0)
+
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  scores Score[]
+}
+
+model JudgingRound {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String   // "Screening", "Finals"
+  sortOrder Int      @default(0)
+  isOpen    Boolean  @default(false)
+  closedAt  DateTime?
+
+  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  scores Score[]
+  assignments JudgeAssignment[]
+}
+
+/// A judge on an event. If teamId is null the judge scores every team in the round.
+model JudgeAssignment {
+  id        String  @id @default(cuid())
+  eventId   String
+  userId    String
+  roundId   String?
+  teamId    String?
+
+  event Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  round JudgingRound? @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  team  Team?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, roundId, teamId])
+}
+
+model Score {
+  id          String   @id @default(cuid())
+  roundId     String
+  teamId      String
+  judgeId     String
+  criterionId String
+  value       Float
+  comment     String?
+  submittedAt DateTime? // null = draft, set = locked
+  updatedAt   DateTime @updatedAt
+
+  round     JudgingRound    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  team      Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  judge     User            @relation(fields: [judgeId], references: [id], onDelete: Cascade)
+  criterion RubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, teamId, judgeId, criterionId])
+}
+
+// ───────────────────────────── Media & social ─────────────────────────────
+
+enum MediaKind {
+  PHOTO_ALBUM
+  PHOTO
+  VIDEO
+  POSTER
+  GUEST_PHOTO
+  DECK
+  REPORT
+  OTHER
+}
+
+model MediaAsset {
+  id          String    @id @default(cuid())
+  eventId     String
+  kind        MediaKind
+  title       String?
+  url         String    // Drive link or storage URL
+  uploadedById String?
+  createdAt   DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+enum SocialPlatform {
+  LINKEDIN
+  INSTAGRAM
+  X
+  FACEBOOK
+  YOUTUBE
+  WHATSAPP
+}
+
+enum SocialPostStatus {
+  PLANNED
+  DRAFTED
+  POSTED
+}
+
+model SocialPost {
+  id        String           @id @default(cuid())
+  eventId   String
+  platform  SocialPlatform
+  status    SocialPostStatus @default(PLANNED)
+  caption   String?
+  url       String?
+  ownerId   String?
+  postedAt  DateTime?
+  /// Filled later: { impressions, likes, comments, shares }
+  metrics   Json?
+  createdAt DateTime         @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+// ───────────────────────────── Certificates & LinkedIn ─────────────────────────────
+
+enum CertificateType {
+  PARTICIPATION
+  WINNER
+  RUNNER_UP
+  SPECIAL_MENTION
+  JUDGE
+  SPEAKER
+  VOLUNTEER
+  MENTOR
+}
+
+model CertificateTemplate {
+  id        String          @id @default(cuid())
+  tenantId  String
+  type      CertificateType
+  /// { backgroundUrl, title, bodyTemplate: "This is to certify that {{name}} ...", signatories: [{name, title, signatureUrl}] }
+  design    Json
+  createdAt DateTime        @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type])
+}
+
+model Certificate {
+  id         String          @id @default(cuid())
+  eventId    String
+  userId     String
+  type       CertificateType
+  serial     String          @unique // human-friendly verification code
+  recipientName String
+  detail     String?         // "Winner — Team Byte Me"
+  pdfUrl     String?
+  issuedAt   DateTime        @default(now())
+  revokedAt  DateTime?
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, type])
+}
+
+enum LinkedInPostStatus {
+  SUGGESTED
+  EDITED
+  POSTED
+  SKIPPED
+}
+
+model LinkedInPost {
+  id          String             @id @default(cuid())
+  eventId     String
+  userId      String
+  draft       String
+  generatedBy String             @default("template") // "template" | "ai"
+  status      LinkedInPostStatus @default(SUGGESTED)
+  postUrl     String?
+  postedAt    DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+// ───────────────────────────── Feedback, budget, audit ─────────────────────────────
+
+model Feedback {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String?
+  rating    Int      // 1-5
+  nps       Int?     // 0-10
+  comment   String?
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  eventId     String
+  category    String   // VENUE, FOOD, TRAVEL, PRIZES, MARKETING, MEMENTO, OTHER
+  description String
+  planned     Decimal  @default(0) @db.Decimal(12, 2)
+  actual      Decimal  @default(0) @db.Decimal(12, 2)
+  receiptUrl  String?
+  createdAt   DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventActivity {
+  id        String   @id @default(cuid())
+  eventId   String
+  actorId   String?
+  action    String   // "status.changed", "task.done", "media.added", "scores.submitted", ...
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([eventId, createdAt])
+}

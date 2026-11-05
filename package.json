@@ -1,0 +1,15 @@
+{
+  "name": "elevate",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/api", "apps/web", "packages/shared"],
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "db:migrate": "npm run prisma:migrate -w @elevate/api",
+    "db:seed": "npm run seed -w @elevate/api",
+    "dev:api": "npm run dev -w @elevate/api",
+    "dev:web": "npm run dev -w @elevate/web",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": { "node": ">=20" }
+}

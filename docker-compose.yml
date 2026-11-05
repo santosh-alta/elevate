@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: elevate
+      POSTGRES_PASSWORD: elevate
+      POSTGRES_DB: elevate
+    ports:
+      - "5432:5432"
+    volumes:
+      - elevate-db:/var/lib/postgresql/data
+volumes:
+  elevate-db:
