@@ -1,0 +1,30 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "build": {
+    "base": {
+      "autoIncrement": true
+    },
+    "altaschool": {
+      "extends": "base",
+      "env": { "BRAND": "altaschool", "EXPO_PUBLIC_API_URL": "https://api.elevate.app" }
+    },
+    "sunstone": {
+      "extends": "base",
+      "env": { "BRAND": "sunstone", "EXPO_PUBLIC_API_URL": "https://api.elevate.app" }
+    },
+    "mirai": {
+      "extends": "base",
+      "env": { "BRAND": "mirai", "EXPO_PUBLIC_API_URL": "https://api.elevate.app" }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "BRAND": "altaschool" }
+    }
+  },
+  "submit": {
+    "altaschool": {},
+    "sunstone": {},
+    "mirai": {}
+  }
+}

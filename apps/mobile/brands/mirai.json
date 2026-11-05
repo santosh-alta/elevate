@@ -1,0 +1,8 @@
+{
+  "slug": "mirai",
+  "appName": "Mirai Events",
+  "bundleId": "com.mirai.events",
+  "scheme": "miraievents",
+  "iconColor": "#0ea5e9",
+  "apiUrl": "http://localhost:4000"
+}

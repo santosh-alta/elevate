@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: 79 70 229;
+  --primary-fg: 255 255 255;
+  --accent: 245 158 11;
+  --bg: 248 250 252;
+  --fg: 15 23 42;
+  --muted: 100 116 139;
+  --card: 255 255 255;
+  --border: 226 232 240;
+  --radius: 12px;
+  --font-brand: "Inter";
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { background: rgb(var(--bg)); color: rgb(var(--fg)); }
+
+@media print {
+  body { background: white; }
+  .no-print { display: none !important; }
+}

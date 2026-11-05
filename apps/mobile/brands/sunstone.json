@@ -1,0 +1,8 @@
+{
+  "slug": "sunstone",
+  "appName": "Sunstone Events",
+  "bundleId": "in.sunstone.events",
+  "scheme": "sunstoneevents",
+  "iconColor": "#f97316",
+  "apiUrl": "http://localhost:4000"
+}

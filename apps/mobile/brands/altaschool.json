@@ -1,0 +1,8 @@
+{
+  "slug": "altaschool",
+  "appName": "Alta Events",
+  "bundleId": "tech.altaschool.events",
+  "scheme": "altaevents",
+  "iconColor": "#4f46e5",
+  "apiUrl": "http://localhost:4000"
+}
