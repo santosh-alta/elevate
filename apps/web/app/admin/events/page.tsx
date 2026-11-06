@@ -3,7 +3,7 @@ import { CalendarPlus } from "lucide-react";
 import { EVENT_STATUSES, EVENT_TYPES } from "@elevate/shared";
 import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { eventCampuses, eventCount, fmtRange, humanize } from "@/lib/format";
+import { eventCampuses, eventCount, fmtRange, humanize, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, Button, Card, EmptyState, LinkButton, Select, StatusBadge, Table, Td, Th } from "@/components/ui";
 
@@ -24,7 +24,7 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
       </div>
       <form className="grid gap-3 sm:grid-cols-4">
         <Select name="status" defaultValue={sp.status ?? ""}><option value="">Any status</option>{EVENT_STATUSES.map((s) => <option key={s} value={s}>{humanize(s)}</option>)}</Select>
-        <Select name="type" defaultValue={sp.type ?? ""}><option value="">Any type</option>{EVENT_TYPES.map((s) => <option key={s} value={s}>{humanize(s)}</option>)}</Select>
+        <Select name="type" defaultValue={sp.type ?? ""}><option value="">Any type</option>{EVENT_TYPES.map((s) => <option key={s} value={s}>{typeLabel(s)}</option>)}</Select>
         <Select name="campusId" defaultValue={sp.campusId ?? ""}><option value="">Any campus</option>{tenant.campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
         <Button type="submit" variant="outline">Filter</Button>
       </form>
@@ -36,7 +36,7 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
               {events.map((e) => (
                 <tr key={e.id} className="hover:bg-bg">
                   <Td><Link href={`/admin/events/${e.id}`} className="font-medium hover:text-primary">{e.title}</Link></Td>
-                  <Td><Badge tone="primary">{humanize(e.type)}</Badge></Td>
+                  <Td><Badge tone="primary">{typeLabel(e.type)}</Badge></Td>
                   <Td className="text-muted">{e.scope === "CENTRAL" ? "Central" : eventCampuses(e).map((c) => c.code || c.name).join(", ")} · {humanize(e.mode)}</Td>
                   <Td className="whitespace-nowrap text-muted">{fmtRange(e.startsAt, e.endsAt)}</Td>
                   <Td className="tabular-nums">{eventCount(e, "registrations") ?? "—"}</Td>

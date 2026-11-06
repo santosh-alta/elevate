@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { eventCampuses, fmtRange, humanize } from "@/lib/format";
+import { eventCampuses, fmtRange, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge, Tabs } from "@/components/ui";
 import { ModeBadge } from "@/components/event-card";
@@ -18,8 +18,11 @@ import { CertificatesTab } from "./tabs/certificates";
 import { LinkedInTab } from "./tabs/linkedin";
 import { ReportTab } from "./tabs/report";
 import { EventForm } from "../event-form";
+import { EventPageTab } from "./tabs/event-page";
+import { NotificationsTab } from "./tabs/notifications";
+import { CloneEventButton } from "@/components/admin/clone-event-button";
 
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; guest?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
@@ -29,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function EventCommandCentre({ params, searchParams }: Props) {
   const { id } = await params;
-  const { tab = "overview" } = await searchParams;
+  const { tab = "overview", guest } = await searchParams;
   const event = await apiGet<ElevateEvent>(`/events/${id}`);
   if (!event) notFound();
   const tenant = await requireTenant();
@@ -38,12 +41,14 @@ export default async function EventCommandCentre({ params, searchParams }: Props
   const tabs = [
     { key: "overview", label: "Overview" },
     { key: "checklist", label: "Checklist" },
+    { key: "page", label: "Event page" },
     ...(m.guests ? [{ key: "guests", label: "Guests" }] : []),
     { key: "registrations", label: "Registrations" },
     ...(m.teams || m.judging ? [{ key: "judging", label: "Teams & judging" }] : []),
     { key: "media", label: "Media & social" },
     ...(m.certificates !== false ? [{ key: "certificates", label: "Certificates" }] : []),
     { key: "linkedin", label: "LinkedIn" },
+    { key: "notifications", label: "Communications" },
     { key: "report", label: "Outcome report" },
     { key: "details", label: "Edit details" },
   ];
@@ -58,21 +63,32 @@ export default async function EventCommandCentre({ params, searchParams }: Props
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={event.status} />
-              <Badge tone="primary">{humanize(event.type)}</Badge>
+              <Badge tone="primary">{typeLabel(event.type)}</Badge>
               <ModeBadge mode={event.mode} />
               <Badge>{event.scope === "CENTRAL" ? "Central" : campuses.map((c) => c.name).join(", ") || "Campus"}</Badge>
             </div>
             <h1 className="mt-2 text-2xl font-semibold">{event.title}</h1>
             <p className="text-sm text-muted">{fmtRange(event.startsAt, event.endsAt)}{event.venue ? ` · ${event.venue}` : ""}</p>
           </div>
-          <Link href={`/events/${event.slug}`} target="_blank" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">Public page <ExternalLink className="h-3.5 w-3.5" /></Link>
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            <Link
+              href={`/events/${event.slug}${["DRAFT", "PLANNING"].includes(event.status) && event.previewToken ? `?preview=${event.previewToken}` : ""}`}
+              target="_blank"
+              className="inline-flex h-8 items-center gap-1 rounded-brand px-3 text-sm font-medium text-primary hover:bg-primary/5"
+            >
+              {["DRAFT", "PLANNING"].includes(event.status) ? "Preview page" : "Public page"} <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+            <CloneEventButton eventId={event.id} title={event.title} startsAt={event.startsAt} endsAt={event.endsAt} />
+          </div>
         </div>
         <div className="mt-5"><Tabs tabs={tabs} active={active} baseHref={`/admin/events/${event.id}`} /></div>
       </div>
 
       {active === "overview" && <OverviewTab event={event} />}
       {active === "checklist" && <ChecklistTab event={event} />}
-      {active === "guests" && <GuestsTab event={event} />}
+      {active === "guests" && <GuestsTab event={event} guestId={guest} />}
+      {active === "page" && <EventPageTab event={event} />}
+      {active === "notifications" && <NotificationsTab event={event} />}
       {active === "registrations" && <RegistrationsTab event={event} />}
       {active === "judging" && <JudgingTab event={event} />}
       {active === "media" && <MediaTab event={event} />}

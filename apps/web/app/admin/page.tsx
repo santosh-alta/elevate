@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CalendarPlus } from "lucide-react";
 import { apiGet, apiList } from "@/lib/api";
-import { fmtDate, fmtRange, humanize } from "@/lib/format";
+import { fmtDate, fmtRange, humanize, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { StatGrid } from "@/components/kv";
 import { Badge, Card, CardHeader, EmptyState, LinkButton, Stat, StatusBadge, Table, Td, Th } from "@/components/ui";
@@ -55,7 +55,7 @@ export default async function AdminDashboard() {
               <tbody>
                 {[...live.filter((l) => !upcoming.some((u) => u.id === l.id)), ...upcoming].slice(0, 10).map((e) => (
                   <tr key={e.id} className="hover:bg-bg">
-                    <Td><Link href={`/admin/events/${e.id}`} className="font-medium hover:text-primary">{e.title}</Link><span className="block text-xs text-muted">{humanize(e.type)} · {humanize(e.mode)}</span></Td>
+                    <Td><Link href={`/admin/events/${e.id}`} className="font-medium hover:text-primary">{e.title}</Link><span className="block text-xs text-muted">{typeLabel(e.type)} · {humanize(e.mode)}</span></Td>
                     <Td className="text-muted">{fmtRange(e.startsAt, e.endsAt)}</Td>
                     <Td><StatusBadge status={e.status} /></Td>
                   </tr>

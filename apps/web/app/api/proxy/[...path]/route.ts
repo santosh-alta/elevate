@@ -13,14 +13,16 @@ async function handler(req: NextRequest, ctx: { params: Promise<{ path: string[]
   const ct = req.headers.get("content-type");
   if (ct) headers["Content-Type"] = ct;
 
-  const hasBody = !["GET", "HEAD"].includes(req.method);
+  const hasBody = !["GET", "HEAD"].includes(req.method) && req.body !== null;
   try {
+    // Bodies (JSON or multipart/form-data with its boundary) are streamed through untouched.
     const res = await fetch(url, {
       method: req.method,
       headers,
-      body: hasBody ? await req.arrayBuffer() : undefined,
+      body: hasBody ? req.body : undefined,
       cache: "no-store",
-    });
+      ...(hasBody ? { duplex: "half" } : {}),
+    } as RequestInit);
     const out = new Headers();
     for (const h of ["content-type", "content-disposition", "cache-control"]) {
       const v = res.headers.get(h);

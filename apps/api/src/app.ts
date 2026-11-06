@@ -1,5 +1,6 @@
 import Fastify, { type FastifyError } from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { prismaPlugin } from "./plugins/prisma";
@@ -16,6 +17,11 @@ import { mediaRoutes } from "./routes/media";
 import { certificateRoutes } from "./routes/certificates";
 import { reportRoutes } from "./routes/reports";
 import { adminRoutes } from "./routes/admin";
+import { guestRoutes } from "./routes/guests";
+import { eventPageRoutes } from "./routes/eventPage";
+import { uploadRoutes } from "./routes/uploads";
+import { notificationRoutes } from "./routes/notifications";
+import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
 export async function buildApp() {
   const app = Fastify({
@@ -42,6 +48,8 @@ export async function buildApp() {
       done(err, undefined);
     }
   });
+
+  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 20, fieldSize: 10_000 } });
 
   // Order matters: tenant resolution runs before auth (auth looks up the membership in the tenant).
   await prismaPlugin(app);
@@ -88,6 +96,10 @@ export async function buildApp() {
       certificateRoutes(v1);
       reportRoutes(v1);
       adminRoutes(v1);
+      guestRoutes(v1);
+      eventPageRoutes(v1);
+      uploadRoutes(v1);
+      notificationRoutes(v1);
     },
     { prefix: "/v1" },
   );

@@ -14,6 +14,8 @@ npm install
 # The phone can't reach "localhost": point it at your laptop's LAN IP where the API runs (port 4000)
 EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 BRAND=sunstone npx expo start
 ```
+
+`webUrl` in `brands/<slug>.json` (or `EXPO_PUBLIC_WEB_URL`) is the brand's public website; the app uses it for event share links.
 Scan the QR code with Expo Go (Android) or the Camera app (iOS). Use `BRAND=altaschool` or `BRAND=mirai` for the
 other brands. In Expo Go the app name and icon are Expo Go's; the brand name, bundle id and icon apply in store builds.
 

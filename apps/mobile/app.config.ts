@@ -16,6 +16,8 @@ export interface BrandConfig {
   scheme: string;
   iconColor: string;
   apiUrl: string;
+  /** Public website for this brand (event pages, share links). */
+  webUrl?: string;
 }
 
 function loadBrand(slug: string): BrandConfig {
@@ -30,6 +32,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const brand = loadBrand(process.env.BRAND ?? "altaschool");
   // EXPO_PUBLIC_API_URL overrides the brand's API url (e.g. your laptop's LAN IP while developing on a phone).
   const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? brand.apiUrl;
+  const webUrl = process.env.EXPO_PUBLIC_WEB_URL ?? brand.webUrl;
 
   return {
     ...config,
@@ -59,10 +62,17 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           recordAudioAndroid: false,
         },
       ],
+      [
+        "expo-image-picker",
+        {
+          photosPermission: `Allow ${brand.appName} to pick event photos from your library.`,
+          cameraPermission: `Allow ${brand.appName} to take event photos.`,
+        },
+      ],
     ],
     experiments: { typedRoutes: false },
     extra: {
-      brand: { ...brand, apiUrl },
+      brand: { ...brand, apiUrl, webUrl },
     },
   };
 };

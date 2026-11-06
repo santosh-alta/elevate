@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Award, Download, Linkedin, Ticket } from "lucide-react";
+import { Award, Bell, Download, Linkedin, Ticket } from "lucide-react";
 import { apiList } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { getHost, requireTenant } from "@/lib/tenant";
-import { fmtDate, fmtRange, humanize } from "@/lib/format";
-import type { Certificate, LinkedInPost, Registration, Team } from "@/lib/types";
+import { fmtDate, fmtDateTime, fmtRange, humanize } from "@/lib/format";
+import type { AppNotification, Certificate, LinkedInPost, Registration, Team } from "@/lib/types";
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, Select, StatusBadge, Textarea } from "@/components/ui";
 import { ApiForm } from "@/components/client/api-form";
+import { ApiButton } from "@/components/client/api-button";
 import { LinkedInDraft } from "./linkedin-draft";
 
 export const metadata: Metadata = { title: "My space" };
@@ -17,12 +18,15 @@ export default async function MePage() {
   const tenant = await requireTenant();
   const host = await getHost();
   const origin = `${/^(localhost|127\.|[a-z0-9-]+\.localhost)/.test(host) ? "http" : "https"}://${host}`;
-  const [regs, teams, certs, posts] = await Promise.all([
+  const [regs, teams, certs, posts, notifications] = await Promise.all([
     apiList<Registration>("/me/registrations"),
     apiList<Team>("/me/teams"),
     apiList<Certificate>("/me/certificates"),
     apiList<LinkedInPost>("/me/linkedin"),
+    apiList<AppNotification>("/me/notifications"),
   ]);
+  const sortedNotes = notifications.slice().sort((a, b) => Number(!!a.readAt) - Number(!!b.readAt) || +new Date(b.createdAt) - +new Date(a.createdAt));
+  const unread = notifications.filter((n) => !n.readAt).length;
   const active = regs.filter((r) => r.status !== "CANCELLED");
   const upcoming = active.filter((r) => r.event && !["COMPLETED", "ARCHIVED", "CANCELLED"].includes(r.event.status));
   const past = active.filter((r) => r.event && ["COMPLETED", "ARCHIVED"].includes(r.event.status));
@@ -37,6 +41,36 @@ export default async function MePage() {
         </div>
         <form action="/api/auth/logout" method="post"><Button variant="outline" size="sm">Sign out</Button></form>
       </div>
+
+      {notifications.length > 0 && (
+        <section id="notifications" className="scroll-mt-24">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-xl font-semibold"><span className="text-primary"><Bell className="h-5 w-5" /></span>Notifications{unread > 0 && <Badge tone="red">{unread} new</Badge>}</h2>
+            {unread > 0 && <ApiButton path="/me/notifications/read" body={{}} size="sm" variant="outline">Mark all read</ApiButton>}
+          </div>
+          <Card>
+            <ul className="divide-y divide-border">
+              {sortedNotes.slice(0, 15).map((n) => {
+                const link = n.ctaUrl ?? (typeof n.data?.url === "string" ? (n.data.url as string) : undefined) ?? (n.event?.slug ? `/events/${n.event.slug}` : undefined);
+                return (
+                  <li key={n.id} className={`flex gap-3 px-5 py-3 ${n.readAt ? "" : "bg-primary/5"}`}>
+                    <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${n.readAt ? "bg-transparent" : "bg-primary"}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm ${n.readAt ? "" : "font-semibold"}`}>{n.subject}</p>
+                      {n.body && <p className="mt-0.5 line-clamp-2 whitespace-pre-line text-sm text-muted">{n.body}</p>}
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted">
+                        <span>{fmtDateTime(n.createdAt)}</span>
+                        {link && <a href={link} className="font-medium text-primary hover:underline">{n.ctaLabel ?? "Open"}</a>}
+                        {!n.readAt && <ApiButton path="/me/notifications/read" body={{ ids: [n.id] }} size="sm" variant="ghost" className="h-6 px-2 text-xs">Mark read</ApiButton>}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        </section>
+      )}
 
       <section>
         <SectionTitle icon={<Ticket className="h-5 w-5" />} title="My tickets" />

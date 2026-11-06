@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { CertificateType, Event, Tenant } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
 import { brandBaseUrl, settingsOf, verifyUrl } from "./brand";
+import { notifyLinkedInReady, safely } from "./notify";
 
 export interface DraftContext {
   name: string;
@@ -17,9 +18,12 @@ export interface DraftContext {
   certificateUrl?: string;
 }
 
-const TYPE_WORD: Record<string, string> = {
+export const TYPE_WORD: Record<string, string> = {
   HACKATHON: "hackathon", SEMINAR: "seminar", WORKSHOP: "workshop", GUEST_LECTURE: "guest lecture",
   COMPETITION: "competition", BOOTCAMP: "bootcamp", WEBINAR: "webinar", CULTURAL: "event", OTHER: "event",
+  ENTREPRENEURSHIP: "entrepreneurship event", STARTUP_PITCH: "startup pitch", CONFERENCE: "conference",
+  PANEL_DISCUSSION: "panel discussion", MEETUP: "meetup", CAREER_FAIR: "career fair", INDUSTRY_VISIT: "industry visit",
+  ORIENTATION: "orientation", ALUMNI_MEET: "alumni meet", SPORTS: "sports event",
 };
 
 function tags(ctx: DraftContext): string {
@@ -69,8 +73,12 @@ export function templateDraft(ctx: DraftContext): string {
   return lines.join("\n");
 }
 
-const MODEL = "claude-opus-5-5";
+export const MODEL = "claude-opus-5-5";
 let client: Anthropic | null = null;
+export function anthropic(): Anthropic {
+  client ??= new Anthropic();
+  return client;
+}
 
 /** AI-written draft via Claude; returns null on any failure so callers fall back to the template. */
 export async function aiDraft(ctx: DraftContext): Promise<string | null> {
@@ -150,6 +158,7 @@ export async function generateLinkedInDrafts(eventId: string): Promise<{ created
   const certs = await prisma.certificate.findMany({ where: { eventId, revokedAt: null }, include: { user: true } });
   const best = new Map<string, { name: string; type: CertificateType | "PARTICIPATION"; serial?: string }>();
   for (const c of certs) {
+    if (!c.userId || !c.user) continue; // guests without an account don't get drafts
     const prev = best.get(c.userId);
     if (!prev || ROLE_PRIORITY.indexOf(c.type) < ROLE_PRIORITY.indexOf(prev.type as CertificateType)) {
       best.set(c.userId, { name: c.user.name, type: c.type, serial: c.serial });
@@ -196,7 +205,10 @@ export async function generateLinkedInDrafts(eventId: string): Promise<{ created
       create: { eventId, userId, draft, generatedBy },
       update: { draft, generatedBy },
     });
-    if (!had) created++;
+    if (!had) {
+      created++;
+      safely("linkedin.ready", () => notifyLinkedInReady(eventId, userId));
+    }
   });
 
   const total = await prisma.linkedInPost.count({ where: { eventId } });

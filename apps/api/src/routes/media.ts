@@ -7,6 +7,7 @@ import { requireTenant } from "../plugins/tenant";
 import { assertManageable, canCheckIn, canManageEvent, findEvent, requireEventManager, requireStaff, requireUser } from "../lib/permissions";
 import { forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
+import { aiCaption, captionFacts, templateCaption } from "../lib/social";
 
 const PUBLIC_KINDS: MediaKind[] = ["PHOTO_ALBUM", "PHOTO", "VIDEO", "POSTER"];
 const socialStatus = z.enum(["PLANNED", "DRAFTED", "POSTED"]);
@@ -85,6 +86,38 @@ export function mediaRoutes(app: FastifyInstance) {
     });
     await logActivity(event.id, req.auth!.user.id, "social.created", { platform: post.platform, status: post.status });
     return reply.status(201).send(post);
+  });
+
+  /** Drafts a caption per platform (AI when configured, else template). Posted rows are never touched. */
+  app.post<{ Params: { id: string } }>("/events/:id/social/suggest", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    const { platforms } = z
+      .object({ platforms: z.array(z.enum(SOCIAL_PLATFORMS)).min(1).default(["LINKEDIN", "INSTAGRAM", "X"]) })
+      .parse(req.body ?? {});
+    const facts = await captionFacts(event.id);
+    const existing = await prisma.socialPost.findMany({ where: { eventId: event.id }, orderBy: { createdAt: "asc" } });
+    const posts = [];
+    const skipped: string[] = [];
+    let usedAi = false;
+    for (const platform of [...new Set(platforms)]) {
+      const rows = existing.filter((p) => p.platform === platform);
+      const open = rows.find((p) => p.status !== "POSTED");
+      if (!open && rows.length) {
+        skipped.push(platform);
+        continue;
+      }
+      const ai = await aiCaption(platform, facts);
+      usedAi ||= !!ai;
+      const caption = ai ?? templateCaption(platform, facts);
+      const generatedBy = ai ? "ai" : "template";
+      posts.push(
+        open
+          ? await prisma.socialPost.update({ where: { id: open.id }, data: { caption, generatedBy, status: "DRAFTED" } })
+          : await prisma.socialPost.create({ data: { eventId: event.id, platform, caption, generatedBy, status: "DRAFTED" } }),
+      );
+    }
+    await logActivity(event.id, req.auth!.user.id, "social.suggested", { platforms: posts.map((p) => p.platform), generatedBy: usedAi ? "ai" : "template" });
+    return { posts, skipped, generatedBy: usedAi ? "ai" : "template" };
   });
 
   app.patch<{ Params: { postId: string } }>("/social/:postId", async (req) => {

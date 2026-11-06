@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { EVENT_MODES, EVENT_TYPES } from "@elevate/shared";
 import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { humanize } from "@/lib/format";
+import { humanize, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
 import { Button, EmptyState, Select } from "@/components/ui";
@@ -27,7 +27,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
       <form className="mt-6 grid gap-3 rounded-brand border border-border bg-card p-4 sm:grid-cols-5">
         <Select name="type" defaultValue={sp.type ?? ""}>
           <option value="">All types</option>
-          {EVENT_TYPES.map((t) => <option key={t} value={t}>{humanize(t)}</option>)}
+          {EVENT_TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
         </Select>
         <Select name="campusId" defaultValue={sp.campusId ?? ""}>
           <option value="">All campuses</option>

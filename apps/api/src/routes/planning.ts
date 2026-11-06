@@ -4,27 +4,10 @@ import { prisma } from "../plugins/prisma";
 import { assertManageable, requireEventManager } from "../lib/permissions";
 import { notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
+import { fanOutAnnouncement } from "../lib/notify";
 
 const phase = z.enum(["PRE", "DURING", "POST"]);
 const taskStatus = z.enum(["TODO", "IN_PROGRESS", "DONE", "BLOCKED", "SKIPPED"]);
-const guestStatus = z.enum(["PROPOSED", "INVITED", "CONFIRMED", "DECLINED", "ARRIVED", "THANKED"]);
-
-const guestSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  designation: z.string().optional(),
-  organization: z.string().optional(),
-  bio: z.string().optional(),
-  photoUrl: z.string().url().optional(),
-  linkedinUrl: z.string().url().optional(),
-  role: z.enum(["SPEAKER", "CHIEF_GUEST", "PANELIST", "JUDGE"]).default("SPEAKER"),
-  status: guestStatus.default("PROPOSED"),
-  travelNotes: z.string().optional(),
-  honorarium: z.number().nonnegative().optional(),
-  mementoGiven: z.boolean().optional(),
-});
-
 const expenseSchema = z.object({
   category: z.enum(["VENUE", "FOOD", "TRAVEL", "PRIZES", "MARKETING", "MEMENTO", "OTHER"]),
   description: z.string().min(1),
@@ -104,50 +87,7 @@ export function planningRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // ───────── Guests / speakers ─────────
-  app.get<{ Params: { id: string } }>("/events/:id/guests", async (req) => {
-    const event = await requireEventManager(req, req.params.id);
-    return prisma.eventGuest.findMany({ where: { eventId: event.id }, orderBy: { createdAt: "asc" } });
-  });
-
-  app.post<{ Params: { id: string } }>("/events/:id/guests", async (req, reply) => {
-    const event = await requireEventManager(req, req.params.id);
-    const body = guestSchema.parse(req.body);
-    const guest = await prisma.eventGuest.create({
-      data: { ...body, email: body.email?.toLowerCase(), eventId: event.id },
-    });
-    await logActivity(event.id, req.auth!.user.id, "guest.added", { guestId: guest.id, name: guest.name });
-    return reply.status(201).send(guest);
-  });
-
-  app.patch<{ Params: { guestId: string } }>("/guests/:guestId", async (req) => {
-    const guest = await prisma.eventGuest.findUnique({ where: { id: req.params.guestId }, include: { event: true } });
-    if (!guest) throw notFound("Guest");
-    await assertManageable(req, guest.event);
-    const body = guestSchema.partial().extend({ thankYouSent: z.boolean().optional() }).parse(req.body);
-    const { thankYouSent, ...fields } = body;
-    const updated = await prisma.eventGuest.update({
-      where: { id: guest.id },
-      data: {
-        ...fields,
-        email: fields.email?.toLowerCase(),
-        ...(thankYouSent !== undefined && { thankYouSentAt: thankYouSent ? new Date() : null }),
-        ...(thankYouSent && { status: "THANKED" }),
-      },
-    });
-    if (body.status && body.status !== guest.status) {
-      await logActivity(guest.eventId, req.auth!.user.id, "guest.status", { guestId: guest.id, name: guest.name, status: updated.status });
-    }
-    return updated;
-  });
-
-  app.delete<{ Params: { guestId: string } }>("/guests/:guestId", async (req) => {
-    const guest = await prisma.eventGuest.findUnique({ where: { id: req.params.guestId }, include: { event: true } });
-    if (!guest) throw notFound("Guest");
-    await assertManageable(req, guest.event);
-    await prisma.eventGuest.delete({ where: { id: guest.id } });
-    return { ok: true };
-  });
+  // Guests / speakers live in routes/guests.ts.
 
   // ───────── Budget ─────────
   app.get<{ Params: { id: string } }>("/events/:id/expenses", async (req) => {
@@ -197,9 +137,10 @@ export function planningRoutes(app: FastifyInstance) {
         channels: z.array(z.enum(["EMAIL", "PUSH", "WHATSAPP", "IN_APP"])).default(["IN_APP"]),
       })
       .parse(req.body);
-    // Delivery to email/push/WhatsApp is a Phase 2 integration; IN_APP is shown immediately.
-    const a = await prisma.announcement.create({ data: { ...body, eventId: event.id, sentAt: new Date() } });
-    await logActivity(event.id, req.auth!.user.id, "announcement.sent", { title: a.title, channels: a.channels });
-    return reply.status(201).send(a);
+    // EMAIL and IN_APP fan out to registrants now; PUSH/WHATSAPP are stored for later phases.
+    const a = await prisma.announcement.create({ data: { ...body, eventId: event.id } });
+    const recipients = await fanOutAnnouncement(a.id);
+    await logActivity(event.id, req.auth!.user.id, "announcement.sent", { title: a.title, channels: a.channels, recipients });
+    return reply.status(201).send({ ...a, sentAt: new Date(), recipients });
   });
 }

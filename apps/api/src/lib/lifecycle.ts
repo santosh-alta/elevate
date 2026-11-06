@@ -5,6 +5,7 @@ import { generateCertificates } from "./certificates";
 import { generateLinkedInDrafts } from "./linkedin";
 import { buildOutcome } from "./outcome";
 import { logActivity } from "./activity";
+import { notifyAudience } from "./notify";
 
 const FINAL: EventStatus[] = ["ARCHIVED", "CANCELLED"];
 
@@ -38,6 +39,8 @@ export function runCompletionAutomation(eventId: string, log: FastifyBaseLogger)
       const drafts = await generateLinkedInDrafts(eventId);
       await logActivity(eventId, null, "linkedin.generated", drafts);
       await buildOutcome(eventId);
+      const asked = await notifyAudience(eventId, "feedback.request");
+      await logActivity(eventId, null, "feedback.requested", { recipients: asked });
       log.info({ eventId, certs, drafts }, "completion automation finished");
     } catch (err) {
       log.error({ err, eventId }, "completion automation failed");

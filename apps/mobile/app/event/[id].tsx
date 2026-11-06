@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { useState } from "react";
-import { Alert, Image, Text, View } from "react-native";
-import { Api, EventDetail, Registration } from "../../src/api";
+import { Alert, Image, Pressable, Share, Text, View } from "react-native";
+import { Api, EventDetail, Faq, Registration, Sponsor, eventTypeLabel } from "../../src/api";
 import { modeLabel, statusTone } from "../../src/events";
 import { useSession } from "../../src/session";
 import { withAlpha } from "../../src/theme";
@@ -22,6 +23,62 @@ import {
   humanize,
   useFocusData,
 } from "../../src/ui";
+
+const SPONSOR_TIER_ORDER = ["TITLE", "GOLD", "SILVER", "PARTNER", "COMMUNITY"];
+
+function openUrl(url: string) {
+  if (/^https?:\/\//.test(url)) WebBrowser.openBrowserAsync(url).catch(() => Linking.openURL(url));
+  else Linking.openURL(url).catch(() => Alert.alert("Can't open link", url));
+}
+
+function FaqItem({ faq }: { faq: Faq }) {
+  const { theme } = useSession();
+  const [open, setOpen] = useState(false);
+  return (
+    <Pressable
+      onPress={() => setOpen((v) => !v)}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}
+    >
+      <Row style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <Text style={{ flex: 1, fontWeight: "700", color: theme.colors.fg, fontSize: 15 }}>{faq.q}</Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={theme.colors.muted} />
+      </Row>
+      {open ? <Body style={{ marginTop: 8 }}>{faq.a}</Body> : null}
+    </Pressable>
+  );
+}
+
+function SponsorTile({ sponsor }: { sponsor: Sponsor }) {
+  const { theme } = useSession();
+  return (
+    <Pressable
+      onPress={sponsor.website ? () => openUrl(sponsor.website!) : undefined}
+      disabled={!sponsor.website}
+      accessibilityRole={sponsor.website ? "link" : undefined}
+      style={{
+        width: "48%",
+        minHeight: 84,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.card,
+        padding: 10,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+      }}
+    >
+      {sponsor.logoUrl ? (
+        <Image source={{ uri: sponsor.logoUrl }} style={{ width: "100%", height: 40 }} resizeMode="contain" accessibilityLabel={sponsor.name} />
+      ) : (
+        <Text style={{ fontWeight: "800", color: theme.colors.fg, textAlign: "center" }}>{sponsor.name}</Text>
+      )}
+      {sponsor.logoUrl ? <Muted style={{ fontSize: 12, textAlign: "center" }} numberOfLines={1}>{sponsor.name}</Muted> : null}
+    </Pressable>
+  );
+}
 
 
 export default function EventDetailScreen() {
@@ -57,6 +114,33 @@ export default function EventDetailScreen() {
     }
   }
 
+  const publicUrl = Api.publicEventUrl(event.slug);
+
+  async function share() {
+    const when = formatDate(event.startsAt);
+    const message = [event.title, event.tagline, when, publicUrl].filter(Boolean).join("\n");
+    try {
+      await Share.share(publicUrl ? { message, url: publicUrl, title: event.title } : { message, title: event.title });
+    } catch {
+      // user dismissed or sharing unavailable
+    }
+  }
+
+  function addToCalendar() {
+    // The .ics opens in the phone's calendar app (iOS) or a calendar picker (Android).
+    Linking.openURL(Api.calendarUrl(event.slug || event.id)).catch(() =>
+      Alert.alert("Couldn't open calendar", "Try again from the event website."),
+    );
+  }
+
+  const guests = event.guests ?? [];
+  const sponsors = (event.sponsors ?? [])
+    .slice()
+    .sort((a, b) => SPONSOR_TIER_ORDER.indexOf(a.tier ?? "PARTNER") - SPONSOR_TIER_ORDER.indexOf(b.tier ?? "PARTNER"));
+  const sponsorTiers = [...new Set(sponsors.map((s) => s.tier ?? "PARTNER"))];
+  const faqs = event.faqs ?? [];
+  const isOver = new Date(event.endsAt).getTime() < Date.now();
+
   function cancel() {
     Alert.alert("Cancel registration?", "You can register again while registrations are open.", [
       { text: "Keep it", style: "cancel" },
@@ -80,7 +164,16 @@ export default function EventDetailScreen() {
 
   return (
     <Screen edges={[]} refreshing={refreshing} onRefresh={refresh} padded={false}>
-      <Stack.Screen options={{ title: humanize(event.type) }} />
+      <Stack.Screen
+        options={{
+          title: eventTypeLabel(event.type),
+          headerRight: () => (
+            <Pressable onPress={share} accessibilityRole="button" accessibilityLabel="Share event" hitSlop={8} style={{ padding: 6 }}>
+              <Ionicons name="share-outline" size={22} color={theme.colors.primary} />
+            </Pressable>
+          ),
+        }}
+      />
       {event.coverImageUrl ? (
         <Image source={{ uri: event.coverImageUrl }} style={{ width: "100%", height: 200 }} resizeMode="cover" />
       ) : (
@@ -89,7 +182,7 @@ export default function EventDetailScreen() {
 
       <View style={{ padding: 16 }}>
         <Row style={{ flexWrap: "wrap", marginBottom: 8 }}>
-          <Badge label={humanize(event.type)} tone="primary" />
+          <Badge label={eventTypeLabel(event.type)} tone="primary" />
           <Badge label={humanize(event.status)} tone={statusTone(event.status)} />
           <Badge label={event.scope === "CENTRAL" ? "Central" : "Campus"} />
         </Row>
@@ -123,7 +216,30 @@ export default function EventDetailScreen() {
               <Body>Registration closes {formatDate(event.registrationClosesAt)}</Body>
             </Row>
           ) : null}
+          {event.venueMapUrl ? (
+            <Pressable onPress={() => openUrl(event.venueMapUrl!)} accessibilityRole="link">
+              <Row>
+                <Ionicons name="map-outline" size={18} color={theme.colors.primary} />
+                <Body style={{ flex: 1, color: theme.colors.primary, fontWeight: "600" }}>Open venue in Maps</Body>
+              </Row>
+            </Pressable>
+          ) : null}
+          {event.livestreamUrl ? (
+            <Pressable onPress={() => openUrl(event.livestreamUrl!)} accessibilityRole="link">
+              <Row>
+                <Ionicons name="radio-outline" size={18} color={theme.colors.primary} />
+                <Body style={{ flex: 1, color: theme.colors.primary, fontWeight: "600" }}>Watch the livestream</Body>
+              </Row>
+            </Pressable>
+          ) : null}
         </Card>
+
+        {!isOver ? (
+          <Row style={{ marginBottom: 12 }}>
+            <Button title="Add to calendar" icon="calendar" variant="secondary" onPress={addToCalendar} style={{ flex: 1 }} />
+            <Button title="Share" icon="share-social" variant="secondary" onPress={share} style={{ flex: 1 }} />
+          </Row>
+        ) : null}
 
         {actionError ? <ErrorBanner message={actionError} /> : null}
 
@@ -188,36 +304,101 @@ export default function EventDetailScreen() {
           </>
         ) : null}
 
-        {event.guests && event.guests.length > 0 ? (
+        {guests.length > 0 ? (
           <>
             <SectionHeader>Speakers & guests</SectionHeader>
-            {event.guests.map((g) => (
-              <Card key={g.id}>
-                <Row style={{ gap: 12 }}>
+            {guests.map((g) => (
+              <Card key={g.id} onPress={g.linkedinUrl ? () => openUrl(g.linkedinUrl!) : undefined}>
+                <Row style={{ gap: 12, alignItems: "flex-start" }}>
                   {g.photoUrl ? (
-                    <Image source={{ uri: g.photoUrl }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+                    <Image source={{ uri: g.photoUrl }} style={{ width: 60, height: 60, borderRadius: 30 }} accessibilityLabel={`Photo of ${g.name}`} />
                   ) : (
                     <View
                       style={{
-                        width: 52,
-                        height: 52,
-                        borderRadius: 26,
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
                         backgroundColor: withAlpha(theme.colors.primary, 0.12),
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      <Text style={{ color: theme.colors.primary, fontWeight: "800", fontSize: 18 }}>{g.name.charAt(0)}</Text>
+                      <Text style={{ color: theme.colors.primary, fontWeight: "800", fontSize: 20 }}>{g.name.charAt(0)}</Text>
                     </View>
                   )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: "700", color: theme.colors.fg }}>{g.name}</Text>
-                    <Muted>{[g.designation, g.organization].filter(Boolean).join(", ")}</Muted>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Row style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <Text style={{ flex: 1, fontWeight: "700", color: theme.colors.fg, fontSize: 16 }}>{g.name}</Text>
+                      {g.role ? <Badge label={humanize(g.role)} /> : null}
+                    </Row>
+                    {g.designation || g.organization ? (
+                      <Muted>{[g.designation, g.organization].filter(Boolean).join(", ")}</Muted>
+                    ) : null}
+                    {g.talkTitle ? (
+                      <Text style={{ marginTop: 6, color: theme.colors.fg, fontWeight: "600", fontStyle: "italic" }}>“{g.talkTitle}”</Text>
+                    ) : null}
+                    {g.sessionAt ? <Muted style={{ fontSize: 12 }}>{formatDate(g.sessionAt)}</Muted> : null}
+                    {g.linkedinUrl ? (
+                      <Row style={{ marginTop: 4 }}>
+                        <Ionicons name="logo-linkedin" size={14} color={theme.colors.primary} />
+                        <Muted style={{ fontSize: 12, color: theme.colors.primary }}>View LinkedIn</Muted>
+                      </Row>
+                    ) : null}
                   </View>
-                  {g.role ? <Badge label={humanize(g.role)} /> : null}
                 </Row>
               </Card>
             ))}
+          </>
+        ) : null}
+
+        {sponsors.length > 0 ? (
+          <>
+            <SectionHeader>Sponsors & partners</SectionHeader>
+            {sponsorTiers.map((tier) => (
+              <View key={tier} style={{ marginBottom: 8 }}>
+                {sponsorTiers.length > 1 ? <Muted style={{ fontSize: 12, fontWeight: "700", marginBottom: 6 }}>{humanize(tier)}</Muted> : null}
+                <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 }}>
+                  {sponsors.filter((sp) => (sp.tier ?? "PARTNER") === tier).map((sp) => (
+                    <SponsorTile key={sp.id} sponsor={sp} />
+                  ))}
+                </View>
+              </View>
+            ))}
+          </>
+        ) : null}
+
+        {faqs.length > 0 ? (
+          <>
+            <SectionHeader>FAQs</SectionHeader>
+            <Card style={{ paddingVertical: 0 }}>
+              {faqs.map((f, i) => (
+                <FaqItem key={`${i}-${f.q}`} faq={f} />
+              ))}
+            </Card>
+          </>
+        ) : null}
+
+        {event.contactEmail || event.contactPhone ? (
+          <>
+            <SectionHeader>Questions? Contact the organisers</SectionHeader>
+            <Card style={{ gap: 12 }}>
+              {event.contactEmail ? (
+                <Pressable onPress={() => openUrl(`mailto:${event.contactEmail}`)} accessibilityRole="link">
+                  <Row>
+                    <Ionicons name="mail-outline" size={18} color={theme.colors.primary} />
+                    <Body style={{ color: theme.colors.primary, fontWeight: "600" }}>{event.contactEmail}</Body>
+                  </Row>
+                </Pressable>
+              ) : null}
+              {event.contactPhone ? (
+                <Pressable onPress={() => openUrl(`tel:${event.contactPhone!.replace(/\s+/g, "")}`)} accessibilityRole="link">
+                  <Row>
+                    <Ionicons name="call-outline" size={18} color={theme.colors.primary} />
+                    <Body style={{ color: theme.colors.primary, fontWeight: "600" }}>{event.contactPhone}</Body>
+                  </Row>
+                </Pressable>
+              ) : null}
+            </Card>
           </>
         ) : null}
 

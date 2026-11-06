@@ -1,36 +1,61 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { CalendarDays, Clock, ExternalLink, Images, MapPin, Trophy, Users, Video } from "lucide-react";
+import {
+  CalendarDays, Clock, ExternalLink, Eye, Images, Mail, MapPin, Phone, Radio, Star, Trophy, Users, Video,
+} from "lucide-react";
+import { SPONSOR_TIERS } from "@elevate/shared";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe } from "@/lib/auth";
-import { eventCampuses, eventCount, fmtDateTime, fmtRange, humanize } from "@/lib/format";
-import type { ElevateEvent, LeaderboardRow, Media, Registration, Team } from "@/lib/types";
+import { getOrigin, getTenant } from "@/lib/tenant";
+import { eventCampuses, eventCount, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, typeLabel } from "@/lib/format";
+import type { ElevateEvent, Guest, LeaderboardRow, Media, Registration, Sponsor, Team } from "@/lib/types";
 import { EventCover, ModeBadge } from "@/components/event-card";
 import { Badge, Button, Card, CardBody, CardHeader, Field, Input, LinkButton, Select, StatusBadge, Table, Td, Textarea, Th } from "@/components/ui";
 import { ApiButton } from "@/components/client/api-button";
 import { ApiForm } from "@/components/client/api-form";
 import { CopyButton } from "@/components/client/misc";
+import { AddToCalendar, Countdown, ShareButtons } from "@/components/client/event-public";
+import { GuestAvatar } from "@/components/guest-avatar";
 
-type Params = { params: Promise<{ slug: string }> };
+type Params = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> };
 
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
-  const { slug } = await params;
-  const e = await apiGet<ElevateEvent>(`/events/${encodeURIComponent(slug)}`);
-  return e ? { title: e.title, description: e.tagline ?? undefined } : { title: "Event" };
+function eventPath(slug: string, preview?: string) {
+  return `/events/${encodeURIComponent(slug)}${preview ? `?preview=${encodeURIComponent(preview)}` : ""}`;
 }
 
-export default async function EventPage({ params }: Params) {
+export async function generateMetadata({ params, searchParams }: Params): Promise<Metadata> {
   const { slug } = await params;
-  const event = await apiGet<ElevateEvent>(`/events/${encodeURIComponent(slug)}`);
+  const { preview } = await searchParams;
+  const [e, tenant, origin] = await Promise.all([apiGet<ElevateEvent>(eventPath(slug, preview)), getTenant(), getOrigin()]);
+  if (!e) return { title: "Event" };
+  const description = e.tagline ?? e.description?.slice(0, 180) ?? `${typeLabel(e.type)} by ${tenant?.name ?? "us"}`;
+  const url = `${origin}/events/${e.slug}`;
+  const images = e.coverImageUrl ? [{ url: e.coverImageUrl, alt: e.title }] : tenant?.theme.logoUrl ? [{ url: tenant.theme.logoUrl }] : undefined;
+  return {
+    title: e.title,
+    description,
+    alternates: { canonical: url },
+    robots: preview ? { index: false, follow: false } : undefined,
+    openGraph: { type: "website", title: e.title, description, url, siteName: tenant ? `${tenant.name} Events` : undefined, images },
+    twitter: { card: e.coverImageUrl ? "summary_large_image" : "summary", title: e.title, description, images: images?.map((i) => i.url) },
+  };
+}
+
+export default async function EventPage({ params, searchParams }: Params) {
+  const { slug } = await params;
+  const { preview } = await searchParams;
+  const event = await apiGet<ElevateEvent>(eventPath(slug, preview));
   if (!event) notFound();
 
   const me = await getMe();
-  const [myRegs, myTeams, media, leaderboard] = await Promise.all([
+  const [myRegs, myTeams, media, leaderboard, sponsorsList, origin] = await Promise.all([
     me ? apiList<Registration>("/me/registrations") : Promise.resolve([]),
     me && event.modules?.teams ? apiList<Team>(`/me/teams?eventId=${event.id}`) : Promise.resolve([]),
-    apiList<Media>(`/events/${event.id}/media`),
+    event.gallery ? Promise.resolve([] as Media[]) : apiList<Media>(`/events/${event.id}/media`),
     event.resultsPublishedAt ? apiList<LeaderboardRow>(`/events/${event.id}/leaderboard`) : Promise.resolve([]),
+    event.sponsors ? Promise.resolve(event.sponsors) : apiList<Sponsor>(`/events/${event.id}/sponsors`),
+    getOrigin(),
   ]);
   const registration = myRegs.find((r) => r.eventId === event.id && r.status !== "CANCELLED");
   const myTeam = myTeams.find((t) => t.eventId === event.id) ?? myTeams[0];
@@ -38,45 +63,77 @@ export default async function EventPage({ params }: Params) {
   const regs = eventCount(event, "registrations");
   const album = event.driveFolderUrl ?? media.find((m) => m.kind === "PHOTO_ALBUM")?.url;
   const tracks = event.config?.tracks ?? [];
+  const gallery = (event.gallery ?? media.filter((m) => m.kind === "PHOTO" && isImage(m)))
+    .slice().sort((a, b) => Number(!!b.isHighlight) - Number(!!a.isHighlight));
+  const guests = (event.guests ?? []).filter((g) => g.isPublic !== false);
+  const faqs = (event.faqs ?? []).filter((f) => f.q);
+  const isPreview = ["DRAFT", "PLANNING"].includes(event.status);
+  const pageUrl = `${origin}/events/${event.slug}`;
+  const ended = new Date(event.endsAt).getTime() < Date.now();
+  const where = [event.venue, event.scope === "CENTRAL" ? "All campuses" : campuses.map((c) => c.name).join(", "), event.mode !== "OFFLINE" ? "Online" : null]
+    .filter(Boolean).join(" · ") || "To be announced";
 
   return (
     <div>
+      {isPreview && (
+        <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm font-medium text-amber-900">
+          <Eye className="mr-1.5 inline h-4 w-4" />Preview: this page is not public yet. Only people with this link can see it.
+        </div>
+      )}
       <div className="relative">
-        <EventCover event={event} className="h-56 sm:h-72" />
+        <EventCover event={event} className="h-56 sm:h-80" />
       </div>
       <div className="mx-auto max-w-6xl px-4">
-        <div className="-mt-16 relative rounded-brand border border-border bg-card p-6 shadow-sm sm:p-8">
+        <div className="relative -mt-16 rounded-brand border border-border bg-card p-6 shadow-sm sm:p-8">
           <div className="flex flex-wrap gap-2">
             <StatusBadge status={event.status} />
-            <Badge tone="primary">{humanize(event.type)}</Badge>
+            <Badge tone="primary">{typeLabel(event.type)}</Badge>
             <ModeBadge mode={event.mode} />
             <Badge>{event.scope === "CENTRAL" ? "Central event" : "Campus event"}</Badge>
+            {campuses.map((c) => <Badge key={c.id} tone="gray"><MapPin className="h-3 w-3" />{c.name}</Badge>)}
           </div>
-          <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">{event.title}</h1>
-          {event.tagline && <p className="mt-2 text-lg text-muted">{event.tagline}</p>}
+          <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{event.title}</h1>
+              {event.tagline && <p className="mt-2 text-lg text-muted">{event.tagline}</p>}
+            </div>
+            {!ended && event.status !== "CANCELLED" && <Countdown startsAt={event.startsAt} endsAt={event.endsAt} />}
+          </div>
           <div className="mt-6 grid gap-4 text-sm sm:grid-cols-3">
             <Info icon={<CalendarDays className="h-4 w-4" />} label="When" value={fmtRange(event.startsAt, event.endsAt)} />
             <Info
               icon={event.mode === "ONLINE" ? <Video className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
               label="Where"
-              value={[event.venue, event.scope === "CENTRAL" ? "All campuses" : campuses.map((c) => c.name).join(", "), event.mode !== "OFFLINE" ? "Online" : null].filter(Boolean).join(" · ") || "To be announced"}
+              value={where}
+              link={event.venueMapUrl ? { href: event.venueMapUrl, label: "Open map" } : undefined}
             />
             <Info icon={<Users className="h-4 w-4" />} label="Seats" value={event.capacity ? `${regs ?? 0} / ${event.capacity} registered` : `${regs ?? 0} registered`} />
+          </div>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+            <div className="flex flex-wrap gap-2">
+              {event.status === "REGISTRATION_OPEN" && !registration && <LinkButton href="#register" size="sm">Register now</LinkButton>}
+              {event.livestreamUrl && <LinkButton href={event.livestreamUrl} external size="sm" variant="secondary"><Radio className="h-4 w-4" />Watch livestream</LinkButton>}
+              {event.meetingUrl && event.mode !== "OFFLINE" && registration && <LinkButton href={event.meetingUrl} external size="sm" variant="secondary"><Video className="h-4 w-4" />Join online</LinkButton>}
+              <AddToCalendar icsUrl={`/api/proxy/events/${event.slug}/calendar.ics`} googleUrl={googleCalendarUrl(event, pageUrl)} />
+            </div>
+            {!isPreview && <ShareButtons url={pageUrl} title={event.title} />}
           </div>
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-3">
-          <div className="space-y-8 lg:col-span-2">
+          <div className="space-y-10 lg:col-span-2">
             {event.description && (
               <section>
-                <h2 className="mb-3 text-lg font-semibold">About</h2>
+                <h2 className="mb-3 text-xl font-semibold">About</h2>
                 <div className="whitespace-pre-line leading-relaxed text-fg/90">{event.description}</div>
               </section>
             )}
 
+            {guests.length > 0 && <SpeakersSection guests={guests} />}
+
             {tracks.length > 0 && (
               <section>
-                <h2 className="mb-3 text-lg font-semibold">Tracks</h2>
+                <h2 className="mb-3 text-xl font-semibold">Tracks</h2>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {tracks.map((t) => (
                     <Card key={t.id} className="p-4"><p className="font-medium">{t.name}</p>{t.description && <p className="mt-1 text-sm text-muted">{t.description}</p>}</Card>
@@ -87,11 +144,11 @@ export default async function EventPage({ params }: Params) {
 
             {(event.sessions?.length ?? 0) > 0 && (
               <section>
-                <h2 className="mb-3 text-lg font-semibold">Schedule</h2>
-                <ol className="relative space-y-4 border-l border-border pl-6">
+                <h2 className="mb-3 text-xl font-semibold">Agenda</h2>
+                <ol className="relative space-y-5 border-l border-border pl-6">
                   {event.sessions!.map((s) => (
-                    <li key={s.id}>
-                      <span className="absolute -left-1.5 mt-1.5 h-3 w-3 rounded-full border-2 border-card bg-primary" />
+                    <li key={s.id} className="relative">
+                      <span className="absolute -left-[31px] top-1.5 h-3 w-3 rounded-full border-2 border-card bg-primary" />
                       <p className="flex items-center gap-1.5 text-xs text-muted"><Clock className="h-3 w-3" />{fmtDateTime(s.startsAt)}</p>
                       <p className="font-medium">{s.title}</p>
                       {(s.speaker || s.location) && <p className="text-sm text-muted">{[s.speaker, s.location].filter(Boolean).join(" · ")}</p>}
@@ -101,33 +158,9 @@ export default async function EventPage({ params }: Params) {
               </section>
             )}
 
-            {(event.guests?.length ?? 0) > 0 && (
-              <section>
-                <h2 className="mb-3 text-lg font-semibold">Speakers & guests</h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {event.guests!.map((g) => (
-                    <Card key={g.id} className="flex gap-4 p-4">
-                      {g.photoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={g.photoUrl} alt={g.name} className="h-16 w-16 shrink-0 rounded-full object-cover" />
-                      ) : (
-                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xl font-semibold text-primary">{g.name.slice(0, 1)}</div>
-                      )}
-                      <div>
-                        <p className="font-semibold">{g.name}</p>
-                        <p className="text-sm text-muted">{[g.designation, g.organization].filter(Boolean).join(", ")}</p>
-                        {g.bio && <p className="mt-2 line-clamp-3 text-sm text-fg/80">{g.bio}</p>}
-                        {g.linkedinUrl && <a href={g.linkedinUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-medium text-primary hover:underline">LinkedIn ↗</a>}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {leaderboard.length > 0 && (
               <section>
-                <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold"><Trophy className="h-5 w-5 text-accent" />Results</h2>
+                <h2 className="mb-3 flex items-center gap-2 text-xl font-semibold"><Trophy className="h-5 w-5 text-accent" />Results</h2>
                 <Card>
                   <Table>
                     <thead><tr><Th>Rank</Th><Th>Team</Th><Th>Award</Th></tr></thead>
@@ -145,7 +178,25 @@ export default async function EventPage({ params }: Params) {
               </section>
             )}
 
-            {album && (
+            {gallery.length > 0 && (
+              <section>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-xl font-semibold"><Images className="h-5 w-5 text-primary" />Gallery</h2>
+                  {album && <a href={album} target="_blank" rel="noreferrer" className="text-sm font-medium text-primary hover:underline">Full album ↗</a>}
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {gallery.slice(0, 12).map((m, i) => (
+                    <a key={m.id} href={m.url} target="_blank" rel="noreferrer" className={`group relative overflow-hidden rounded-lg ${i === 0 && m.isHighlight ? "col-span-2 row-span-2" : ""}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={m.url} alt={m.caption ?? m.title ?? "Event photo"} loading="lazy" className="aspect-square h-full w-full object-cover transition group-hover:scale-105" />
+                      {m.caption && <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-xs text-white">{m.caption}</span>}
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {gallery.length === 0 && album && (
               <section>
                 <Card className="flex items-center justify-between gap-4 p-5">
                   <div className="flex items-center gap-3"><Images className="h-6 w-6 text-primary" /><div><p className="font-medium">Event photos</p><p className="text-sm text-muted">See all the moments from this event.</p></div></div>
@@ -153,11 +204,40 @@ export default async function EventPage({ params }: Params) {
                 </Card>
               </section>
             )}
+
+            {sponsorsList.length > 0 && <SponsorsSection sponsors={sponsorsList} />}
+
+            {faqs.length > 0 && (
+              <section>
+                <h2 className="mb-3 text-xl font-semibold">Frequently asked questions</h2>
+                <div className="divide-y divide-border rounded-brand border border-border bg-card">
+                  {faqs.map((f, i) => (
+                    <details key={i} className="group px-5 py-4">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium [&::-webkit-details-marker]:hidden">
+                        {f.q}<span className="text-muted transition group-open:rotate-45">+</span>
+                      </summary>
+                      <p className="mt-2 whitespace-pre-line text-sm text-fg/80">{f.a}</p>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
           <aside className="space-y-6">
-            <RegistrationBox event={event} registration={registration} signedIn={!!me} />
+            <div id="register" className="scroll-mt-24">
+              <RegistrationBox event={event} registration={registration} signedIn={!!me} />
+            </div>
             {event.modules?.teams && registration && <TeamBox event={event} team={myTeam} />}
+            {(event.contactEmail || event.contactPhone) && (
+              <Card>
+                <CardHeader title="Questions?" description="Reach the organisers" />
+                <CardBody className="space-y-2 text-sm">
+                  {event.contactEmail && <a href={`mailto:${event.contactEmail}`} className="flex items-center gap-2 text-primary hover:underline"><Mail className="h-4 w-4" />{event.contactEmail}</a>}
+                  {event.contactPhone && <a href={`tel:${event.contactPhone}`} className="flex items-center gap-2 text-primary hover:underline"><Phone className="h-4 w-4" />{event.contactPhone}</a>}
+                </CardBody>
+              </Card>
+            )}
           </aside>
         </div>
       </div>
@@ -165,20 +245,73 @@ export default async function EventPage({ params }: Params) {
   );
 }
 
-function Info({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function SpeakersSection({ guests }: { guests: Guest[] }) {
+  return (
+    <section>
+      <h2 className="mb-3 text-xl font-semibold">Speakers & guests</h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {guests.map((g) => (
+          <Link key={g.id} href={`/speakers/${g.id}`} className="group flex gap-4 rounded-brand border border-border bg-card p-4 shadow-sm transition hover:border-primary/50 hover:shadow-md">
+            <GuestAvatar guest={g} size="h-20 w-20" />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-primary">{humanize(g.role ?? "SPEAKER")}</p>
+              <p className="font-semibold group-hover:text-primary">{g.name}</p>
+              <p className="text-sm text-muted">{[g.designation, g.organization].filter(Boolean).join(", ")}</p>
+              {g.talkTitle && <p className="mt-2 text-sm font-medium text-fg/90">“{g.talkTitle}”</p>}
+              {g.sessionAt && <p className="text-xs text-muted">{fmtDateTime(g.sessionAt)}</p>}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SponsorsSection({ sponsors }: { sponsors: Sponsor[] }) {
+  const order = SPONSOR_TIERS as readonly string[];
+  const tiers = [...new Set(sponsors.map((s) => s.tier ?? "PARTNER"))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  return (
+    <section>
+      <h2 className="mb-3 text-xl font-semibold">Sponsors & partners</h2>
+      <div className="space-y-5">
+        {tiers.map((tier) => (
+          <div key={tier}>
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{tier === "TITLE" && <Star className="h-3.5 w-3.5 text-accent" />}{humanize(tier)}{tier === "TITLE" ? " sponsor" : ""}</p>
+            <div className={`grid gap-3 ${tier === "TITLE" ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+              {sponsors.filter((s) => (s.tier ?? "PARTNER") === tier).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map((s) => {
+                const inner = s.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={s.logoUrl} alt={s.name} className={`${tier === "TITLE" ? "h-16" : "h-10"} max-w-full object-contain`} />
+                ) : <span className="font-semibold">{s.name}</span>;
+                const cls = "flex min-h-[80px] items-center justify-center rounded-brand border border-border bg-card p-4 transition hover:border-primary/50";
+                return s.website
+                  ? <a key={s.id} href={s.website} target="_blank" rel="noreferrer" className={cls} title={s.name}>{inner}</a>
+                  : <div key={s.id} className={cls} title={s.name}>{inner}</div>;
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Info({ icon, label, value, link }: { icon: React.ReactNode; label: string; value: string; link?: { href: string; label: string } }) {
   return (
     <div className="flex gap-3">
       <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div>
-      <div><p className="text-xs text-muted">{label}</p><p className="font-medium">{value}</p></div>
+      <div>
+        <p className="text-xs text-muted">{label}</p>
+        <p className="font-medium">{value}</p>
+        {link && <a href={link.href} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">{link.label} ↗</a>}
+      </div>
     </div>
   );
 }
 
 function RegistrationBox({ event, registration, signedIn }: { event: ElevateEvent; registration?: Registration; signedIn: boolean }) {
   const open = event.status === "REGISTRATION_OPEN";
-  const form = Array.isArray((event as unknown as { registrationForm?: unknown }).registrationForm)
-    ? ((event as unknown as { registrationForm: { id: string; label: string; type?: string; required?: boolean; options?: string[] }[] }).registrationForm)
-    : [];
+  const form = Array.isArray(event.registrationForm) ? event.registrationForm : [];
 
   return (
     <Card>

@@ -6,6 +6,7 @@ import { requireTenant } from "../plugins/tenant";
 import { assertManageable, canCheckIn, canManageEvent, findEvent, requireEventManager, requireUser } from "../lib/permissions";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
+import { notifyRegistration, safely } from "../lib/notify";
 
 interface FormField {
   id: string;
@@ -58,6 +59,7 @@ export function registrationRoutes(app: FastifyInstance) {
       ? await prisma.registration.update({ where: { id: existing.id }, data: { status, answers: answers as object } })
       : await prisma.registration.create({ data: { eventId: event.id, userId: user.id, status, answers: answers as object } });
     await logActivity(event.id, user.id, "registration.created", { status });
+    safely("registration", () => notifyRegistration(registration.id, status === "WAITLISTED" ? "waitlisted" : "confirmed"));
     return reply.status(201).send(registration);
   });
 
@@ -71,7 +73,10 @@ export function registrationRoutes(app: FastifyInstance) {
     // Promote the oldest waitlisted person when a seat frees up.
     if (event.capacity && reg.status !== "WAITLISTED") {
       const next = await prisma.registration.findFirst({ where: { eventId: event.id, status: "WAITLISTED" }, orderBy: { createdAt: "asc" } });
-      if (next) await prisma.registration.update({ where: { id: next.id }, data: { status: event.requiresApproval ? "REGISTERED" : "APPROVED" } });
+      if (next) {
+        await prisma.registration.update({ where: { id: next.id }, data: { status: event.requiresApproval ? "REGISTERED" : "APPROVED" } });
+        safely("registration.promoted", () => notifyRegistration(next.id, event.requiresApproval ? "confirmed" : "approved"));
+      }
     }
     await logActivity(event.id, user.id, "registration.cancelled", {});
     return updated;
@@ -156,6 +161,11 @@ export function registrationRoutes(app: FastifyInstance) {
       },
     });
     await logActivity(reg.eventId, req.auth!.user.id, "registration.status", { registrationId: reg.id, from: reg.status, to: status });
+    if (status !== reg.status && status === "APPROVED" && ["REGISTERED", "WAITLISTED"].includes(reg.status)) {
+      safely("registration.approved", () => notifyRegistration(reg.id, "approved"));
+    } else if (status !== reg.status && status === "WAITLISTED") {
+      safely("registration.waitlisted", () => notifyRegistration(reg.id, "waitlisted"));
+    }
     return updated;
   });
 

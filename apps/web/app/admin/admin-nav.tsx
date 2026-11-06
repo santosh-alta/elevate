@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarPlus, CalendarRange, LayoutDashboard, Settings } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarRange, LayoutDashboard, Settings, UsersRound } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
 const ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/events", label: "Events", icon: CalendarRange },
   { href: "/admin/events/new", label: "Create event", icon: CalendarPlus, exact: true },
+  { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/admin/guests", label: "Guest library", icon: UsersRound },
   { href: "/admin/settings", label: "Brand settings", icon: Settings },
 ];
 

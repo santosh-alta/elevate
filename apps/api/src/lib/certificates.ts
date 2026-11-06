@@ -4,6 +4,7 @@ import type { Certificate, CertificateType, Event, Tenant } from "@prisma/client
 import { prisma } from "../plugins/prisma";
 import { brandBaseUrl, settingsOf, themeOf, verifyUrl } from "./brand";
 import { certificateSerial } from "./codes";
+import { notifyCertificate, safely } from "./notify";
 
 const TITLES: Record<CertificateType, string> = {
   PARTICIPATION: "Certificate of Participation",
@@ -23,6 +24,15 @@ const AWARD_TO_TYPE: Record<string, CertificateType> = {
   SPECIAL_MENTION: "SPECIAL_MENTION",
 };
 
+const GUEST_ROLE_TO_TYPE: Record<string, CertificateType> = {
+  SPEAKER: "SPEAKER", CHIEF_GUEST: "SPEAKER", PANELIST: "SPEAKER", MODERATOR: "SPEAKER", INVESTOR: "SPEAKER",
+  JUDGE: "JUDGE", MENTOR: "MENTOR",
+};
+
+const GUEST_ROLE_LABEL: Record<string, string> = {
+  CHIEF_GUEST: "Chief Guest", PANELIST: "Panelist", MODERATOR: "Moderator", INVESTOR: "Investor Panel",
+};
+
 const AWARD_LABEL: Record<string, string> = {
   WINNER: "Winner",
   RUNNER_UP: "1st Runner-up",
@@ -31,7 +41,8 @@ const AWARD_LABEL: Record<string, string> = {
 };
 
 interface Recipient {
-  userId: string;
+  userId?: string;
+  guestId?: string;
   name: string;
   type: CertificateType;
   detail?: string;
@@ -73,14 +84,21 @@ export async function generateCertificates(eventId: string): Promise<{ created: 
   const judges = await prisma.judgeAssignment.findMany({ where: { eventId }, include: { user: true }, distinct: ["userId"] });
   for (const j of judges) recipients.push({ userId: j.userId, name: j.user.name, type: "JUDGE" });
 
-  // Speakers who have an Elevate account (matched by email).
-  const guests = await prisma.eventGuest.findMany({ where: { eventId, email: { not: null }, status: { notIn: ["DECLINED", "PROPOSED"] } } });
+  // Guests (speakers, chief guests, panelists, judges, mentors, investors) — with or without an Elevate account.
+  const guests = await prisma.eventGuest.findMany({ where: { eventId, status: { in: ["CONFIRMED", "ARRIVED", "THANKED"] } } });
   if (guests.length) {
-    const users = await prisma.user.findMany({ where: { email: { in: guests.map((g) => g.email!.toLowerCase()) } } });
+    const emails = guests.filter((g) => g.email).map((g) => g.email!.toLowerCase());
+    const users = emails.length ? await prisma.user.findMany({ where: { email: { in: emails } } }) : [];
     const byEmail = new Map(users.map((u) => [u.email, u]));
     for (const g of guests) {
-      const u = byEmail.get(g.email!.toLowerCase());
-      if (u) recipients.push({ userId: u.id, name: g.name, type: "SPEAKER", detail: g.designation ?? undefined });
+      const u = g.email ? byEmail.get(g.email.toLowerCase()) : undefined;
+      recipients.push({
+        guestId: g.id,
+        userId: u?.id,
+        name: g.name,
+        type: GUEST_ROLE_TO_TYPE[g.role] ?? "SPEAKER",
+        detail: [GUEST_ROLE_LABEL[g.role], g.talkTitle ? `"${g.talkTitle}"` : null].filter(Boolean).join(" — ") || undefined,
+      });
     }
   }
 
@@ -88,20 +106,33 @@ export async function generateCertificates(eventId: string): Promise<{ created: 
   const staff = await prisma.eventStaff.findMany({ where: { eventId, role: { in: ["VOLUNTEER", "MENTOR"] } }, include: { user: true } });
   for (const s of staff) recipients.push({ userId: s.userId, name: s.user.name, type: s.role === "MENTOR" ? "MENTOR" : "VOLUNTEER" });
 
+  // A judge who is also listed as a guest gets one JUDGE certificate (the guest's), not two.
+  const guestUserTypes = new Set(recipients.filter((r) => r.guestId && r.userId).map((r) => `${r.userId}:${r.type}`));
+  const finalRecipients = recipients.filter((r) => r.guestId || !guestUserTypes.has(`${r.userId}:${r.type}`));
+
   let created = 0;
-  for (const r of recipients) {
-    const existing = await prisma.certificate.findUnique({
-      where: { eventId_userId_type: { eventId, userId: r.userId, type: r.type } },
-    });
+  for (const r of finalRecipients) {
+    const existing =
+      (r.guestId && (await prisma.certificate.findUnique({ where: { eventId_guestId_type: { eventId, guestId: r.guestId, type: r.type } } }))) ||
+      (r.userId && (await prisma.certificate.findUnique({ where: { eventId_userId_type: { eventId, userId: r.userId, type: r.type } } }))) ||
+      null;
     if (existing) {
-      if (existing.recipientName !== r.name || existing.detail !== (r.detail ?? null)) {
-        await prisma.certificate.update({ where: { id: existing.id }, data: { recipientName: r.name, detail: r.detail ?? null } });
-      }
+      const patch = {
+        ...(existing.recipientName !== r.name && { recipientName: r.name }),
+        ...(existing.detail !== (r.detail ?? null) && { detail: r.detail ?? null }),
+        ...(r.guestId && !existing.guestId && { guestId: r.guestId }),
+        ...(r.userId && !existing.userId && { userId: r.userId }),
+      };
+      if (Object.keys(patch).length) await prisma.certificate.update({ where: { id: existing.id }, data: patch });
       continue;
     }
-    await prisma.certificate.create({
-      data: { eventId, userId: r.userId, type: r.type, recipientName: r.name, detail: r.detail, serial: certificateSerial() },
+    const cert = await prisma.certificate.create({
+      data: {
+        eventId, userId: r.userId ?? null, guestId: r.guestId ?? null, type: r.type,
+        recipientName: r.name, detail: r.detail, serial: certificateSerial(),
+      },
     });
+    safely("certificate.ready", () => notifyCertificate(cert.id));
     created++;
   }
   const total = await prisma.certificate.count({ where: { eventId, revokedAt: null } });

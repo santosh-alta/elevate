@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { DEFAULT_MODULES, EVENT_MODES, EVENT_TYPES, type EventModules, type EventType } from "@elevate/shared";
+import { DEFAULT_MODULES, EVENT_MODES, EVENT_TYPE_LABELS, type EventModules, type EventType } from "@elevate/shared";
 import { callApi } from "@/components/client/api";
 import { Button, Card, CardBody, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
-import { humanize, toLocalInput } from "@/lib/format";
+import { EVENT_TYPE_GROUPS, humanize, toLocalInput } from "@/lib/format";
+import { UploadField } from "@/components/client/uploader";
 import type { Campus, ElevateEvent } from "@/lib/types";
 
 const MODULE_HELP: Record<keyof EventModules, string> = {
@@ -17,6 +18,7 @@ const MODULE_HELP: Record<keyof EventModules, string> = {
   certificates: "Auto-generate certificates",
   feedback: "Post-event feedback form",
   budget: "Plan budget and track expenses",
+  sponsors: "Show sponsors & partners on the page",
 };
 
 export function EventForm({ campuses, event }: { campuses: Campus[]; event?: ElevateEvent }) {
@@ -29,6 +31,7 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isHack = modules.teams;
+  const typeHint = isHack ? "Teams, submissions and judging are switched on." : modules.guests ? "Guests, check-in and certificates are switched on." : undefined;
 
   return (
     <form
@@ -75,12 +78,16 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
         <CardBody className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" className="sm:col-span-2"><Input name="title" required minLength={3} defaultValue={event?.title} placeholder="e.g. Build for Bharat Hackathon 2026" /></Field>
           <Field label="Tagline" className="sm:col-span-2"><Input name="tagline" defaultValue={event?.tagline ?? ""} placeholder="One line that sells it" /></Field>
-          <Field label="Event type">
+          <Field label="Event type" hint={event ? "Type can't change after creation. Duplicate the event instead." : typeHint}>
             <Select value={type} disabled={!!event} onChange={(e) => { const t = e.target.value as EventType; setType(t); setModules({ ...DEFAULT_MODULES[t] }); }}>
-              {EVENT_TYPES.map((t) => <option key={t} value={t}>{humanize(t)}</option>)}
+              {EVENT_TYPE_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.types.map((t) => <option key={t} value={t}>{EVENT_TYPE_LABELS[t]}</option>)}
+                </optgroup>
+              ))}
             </Select>
           </Field>
-          <Field label="Cover image URL"><Input name="coverImageUrl" type="url" defaultValue={event?.coverImageUrl ?? ""} placeholder="https://…" /></Field>
+          <Field label="Cover image" hint="Wide image, 1600×600 or larger"><UploadField name="coverImageUrl" defaultValue={event?.coverImageUrl} fields={{ eventId: event?.id }} /></Field>
           <Field label="Description" className="sm:col-span-2"><Textarea name="description" rows={5} defaultValue={event?.description ?? ""} /></Field>
         </CardBody>
       </Card>

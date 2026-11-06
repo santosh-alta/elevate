@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { Api, EventTask } from "../../src/api";
+import { PhotoUploader } from "../../src/PhotoUploader";
 import { useSession } from "../../src/session";
 import { STATUS_COLORS } from "../../src/theme";
 import {
@@ -144,12 +145,13 @@ export default function EventOpsScreen() {
       </Card>
 
       <SectionHeader>Photos & media</SectionHeader>
+      <PhotoUploader eventId={eventId} />
       <Card>
         <Input label="Google Drive folder (all event photos)" value={driveValue} onChangeText={setDrive} placeholder="https://drive.google.com/drive/folders/…" autoCapitalize="none" keyboardType="url" />
         <Button title={event.driveFolderUrl ? "Update Drive link" : "Save Drive link"} icon="logo-google" onPress={saveDrive} loading={busy === "drive"} disabled={!isUrl(driveValue)} />
       </Card>
       <Card>
-        <Text style={{ fontWeight: "700", color: theme.colors.fg, marginBottom: 8 }}>Add a media link</Text>
+        <Text style={{ fontWeight: "700", color: theme.colors.fg, marginBottom: 8 }}>Add a media link (video, deck, poster)</Text>
         <Row style={{ flexWrap: "wrap", marginBottom: 12 }}>
           {MEDIA_KINDS.map((k) => {
             const active = k === mediaKind;

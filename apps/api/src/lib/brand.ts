@@ -20,15 +20,29 @@ export function settingsOf(tenant: Tenant): BrandSettings {
   return (tenant.settings ?? {}) as BrandSettings;
 }
 
-/** Public base URL of a brand's web app: primary verified domain, else first domain, else localhost. */
+/**
+ * Public base URL of a brand's web app:
+ * primary verified custom domain → WEB_PUBLIC_URL → first configured domain → localhost.
+ */
 export async function brandBaseUrl(tenantId: string): Promise<string> {
   const domains = await prisma.tenantDomain.findMany({
     where: { tenantId },
     orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
   });
-  const domain = domains.find((d) => d.verifiedAt) ?? domains[0];
-  if (!domain) return process.env.WEB_PUBLIC_URL ?? "http://localhost:3000";
+  const verified = domains.find((d) => d.verifiedAt && !d.hostname.endsWith(".localhost"));
+  if (verified) return `https://${verified.hostname}`;
+  if (process.env.WEB_PUBLIC_URL) return process.env.WEB_PUBLIC_URL.replace(/\/$/, "");
+  const domain = domains[0];
+  if (!domain) return "http://localhost:3000";
   return domain.hostname.endsWith(".localhost") ? `http://${domain.hostname}:3000` : `https://${domain.hostname}`;
+}
+
+export function apiBaseUrl(): string {
+  return (process.env.API_PUBLIC_URL ?? "http://localhost:4000").replace(/\/$/, "");
+}
+
+export async function eventPageUrl(event: { tenantId: string; slug: string }): Promise<string> {
+  return `${await brandBaseUrl(event.tenantId)}/events/${event.slug}`;
 }
 
 export function verifyUrl(baseUrl: string, serial: string): string {

@@ -38,6 +38,7 @@ const STATUS_TONES: Record<string, Tone> = {
   REGISTERED: "blue", APPROVED: "green", WAITLISTED: "amber", REJECTED: "red", CHECKED_IN: "teal", NO_SHOW: "gray",
   PROPOSED: "gray", INVITED: "blue", CONFIRMED: "green", DECLINED: "red", ARRIVED: "teal", THANKED: "purple",
   PLANNED: "gray", DRAFTED: "amber", POSTED: "green", SUGGESTED: "blue", EDITED: "amber",
+  PENDING: "amber", SENT: "green", FAILED: "red",
 };
 
 const LABELS: Record<string, string> = { LIVE: "● Live", REGISTRATION_OPEN: "Registration open", REGISTRATION_CLOSED: "Registration closed" };

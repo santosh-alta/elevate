@@ -1,12 +1,16 @@
 import Link from "next/link";
+import { Bell } from "lucide-react";
 import { requireTenant } from "@/lib/tenant";
 import { getMe, isStaff } from "@/lib/auth";
+import { apiList } from "@/lib/api";
+import type { AppNotification } from "@/lib/types";
 import { BrandLogo } from "./brand-logo";
 import { buttonClass } from "./ui/button";
 
 export async function SiteHeader() {
   const tenant = await requireTenant();
   const me = await getMe();
+  const unread = me ? (await apiList<AppNotification>("/me/notifications?unread=1")).filter((n) => !n.readAt).length : 0;
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
@@ -18,6 +22,10 @@ export async function SiteHeader() {
           <Link href="/events" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Events</Link>
           {me ? (
             <>
+              <Link href="/me#notifications" className={buttonClass("ghost", "sm", "relative px-2")} aria-label={unread ? `${unread} unread notifications` : "Notifications"}>
+                <Bell className="h-4 w-4" />
+                {unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unread > 9 ? "9+" : unread}</span>}
+              </Link>
               <Link href="/me" className={buttonClass("ghost", "sm")}>My space</Link>
               {isStaff(me) && <Link href="/admin" className={buttonClass("secondary", "sm")}>Admin</Link>}
             </>

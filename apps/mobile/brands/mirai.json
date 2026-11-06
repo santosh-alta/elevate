@@ -4,5 +4,6 @@
   "bundleId": "com.mirai.events",
   "scheme": "miraievents",
   "iconColor": "#0ea5e9",
-  "apiUrl": "http://localhost:4000"
+  "apiUrl": "http://localhost:4000",
+  "webUrl": "http://mirai.localhost:3000"
 }

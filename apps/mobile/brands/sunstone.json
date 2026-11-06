@@ -4,5 +4,6 @@
   "bundleId": "in.sunstone.events",
   "scheme": "sunstoneevents",
   "iconColor": "#f97316",
-  "apiUrl": "http://localhost:4000"
+  "apiUrl": "http://localhost:4000",
+  "webUrl": "http://sunstone.localhost:3000"
 }

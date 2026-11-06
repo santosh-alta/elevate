@@ -20,6 +20,7 @@ export async function callApi<T = unknown>(method: string, path: string, body?: 
 /**
  * Turns FormData into JSON. Name suffixes control types:
  *   name:number  name:bool (checkbox)  name:date (datetime-local → ISO)  name:array (multi-value)  name:json
+ *   name:csv ("a, b" → ["a", "b"])
  * Empty values are omitted unless the field has data-keep-empty.
  */
 export function formToJson(form: HTMLFormElement): Record<string, unknown> {
@@ -36,6 +37,7 @@ export function formToJson(form: HTMLFormElement): Record<string, unknown> {
     const [name, kind] = rawName.split(":");
     const values = fd.getAll(rawName).map((v) => (typeof v === "string" ? v : "")).filter((v) => v !== "");
     if (kind === "array") { setPath(out, name, values); continue; }
+    if (kind === "csv") { setPath(out, name, (values[0] ?? "").split(",").map((x) => x.trim()).filter(Boolean)); continue; }
     const v = values[0];
     if (v === undefined) continue;
     if (kind === "number") setPath(out, name, Number(v));

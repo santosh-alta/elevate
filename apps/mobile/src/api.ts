@@ -12,6 +12,7 @@ export interface BrandConfig {
   scheme: string;
   iconColor: string;
   apiUrl: string;
+  webUrl?: string;
 }
 
 export const brand: BrandConfig = (Constants.expoConfig?.extra?.brand as BrandConfig) ?? {
@@ -24,6 +25,36 @@ export const brand: BrandConfig = (Constants.expoConfig?.extra?.brand as BrandCo
 };
 
 export const API_BASE = `${brand.apiUrl.replace(/\/$/, "")}/v1`;
+export const WEB_BASE = brand.webUrl?.replace(/\/$/, "") ?? null;
+
+// ───────── Event types (mirrors packages/shared EVENT_TYPE_LABELS) ─────────
+
+export const EVENT_TYPE_LABELS: Record<string, string> = {
+  HACKATHON: "Hackathon",
+  SEMINAR: "Seminar",
+  WORKSHOP: "Workshop",
+  GUEST_LECTURE: "Guest lecture",
+  COMPETITION: "Competition",
+  BOOTCAMP: "Bootcamp",
+  WEBINAR: "Webinar",
+  CULTURAL: "Cultural",
+  ENTREPRENEURSHIP: "Entrepreneurship",
+  STARTUP_PITCH: "Startup pitch",
+  CONFERENCE: "Conference",
+  PANEL_DISCUSSION: "Panel discussion",
+  MEETUP: "Meetup",
+  CAREER_FAIR: "Career fair",
+  INDUSTRY_VISIT: "Industry visit",
+  ORIENTATION: "Orientation",
+  ALUMNI_MEET: "Alumni meet",
+  SPORTS: "Sports",
+  OTHER: "Other",
+};
+
+export function eventTypeLabel(type?: string | null): string {
+  if (!type) return "";
+  return EVENT_TYPE_LABELS[type] ?? type.charAt(0) + type.slice(1).toLowerCase().replace(/_/g, " ");
+}
 
 // ───────── Token storage ─────────
 
@@ -186,9 +217,77 @@ export interface EventSummary {
   counts?: { registrations?: number; teams?: number; [k: string]: number | undefined };
 }
 
+export interface EventGuestPublic {
+  id: string;
+  name: string;
+  designation?: string | null;
+  organization?: string | null;
+  photoUrl?: string | null;
+  role?: string;
+  talkTitle?: string | null;
+  sessionAt?: string | null;
+  linkedinUrl?: string | null;
+  profileId?: string | null;
+}
+
+export interface Sponsor {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  website?: string | null;
+  tier?: string;
+  sortOrder?: number;
+}
+
+export interface Faq {
+  q: string;
+  a: string;
+}
+
+export interface MediaItem {
+  id: string;
+  kind: string;
+  url: string;
+  title?: string | null;
+  caption?: string | null;
+  isHighlight?: boolean;
+  createdAt?: string;
+}
+
 export interface EventDetail extends EventSummary {
   sessions?: { id: string; title: string; speaker?: string | null; startsAt: string; endsAt: string; location?: string | null }[];
-  guests?: { id: string; name: string; designation?: string | null; organization?: string | null; photoUrl?: string | null; role?: string }[];
+  guests?: EventGuestPublic[];
+  sponsors?: Sponsor[];
+  faqs?: Faq[];
+  livestreamUrl?: string | null;
+  venueMapUrl?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  gallery?: MediaItem[];
+}
+
+export interface AppNotification {
+  id: string;
+  template: string;
+  subject: string;
+  body: string;
+  eventId?: string | null;
+  data?: Record<string, unknown>;
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface UploadResult {
+  url: string;
+  key?: string;
+  media?: MediaItem;
+}
+
+/** A file picked from the camera or gallery. */
+export interface LocalFile {
+  uri: string;
+  name: string;
+  mimeType: string;
 }
 
 export interface Registration {
@@ -293,6 +392,79 @@ function normaliseJudgeTeam(t: any): JudgeTeam {
   return { ...t, myScores, status };
 }
 
+function absoluteUrl(url: string): string {
+  if (/^https?:\/\//.test(url)) return url;
+  const root = brand.apiUrl.replace(/\/$/, "");
+  if (url.startsWith("/v1/")) return `${root}${url}`;
+  if (url.startsWith("/files/")) return `${API_BASE}${url}`;
+  return url.startsWith("/") ? `${root}${url}` : url;
+}
+
+function normaliseMedia(m: any): MediaItem {
+  return { ...m, url: absoluteUrl(String(m.url ?? "")) };
+}
+
+function normaliseEvent(e: any): EventDetail {
+  const asArray = (v: any) => (Array.isArray(v) ? v : []);
+  return {
+    ...e,
+    guests: asArray(e.guests).map((g: any) => ({ ...g, photoUrl: g.photoUrl ? absoluteUrl(g.photoUrl) : g.photoUrl })),
+    sponsors: asArray(e.sponsors)
+      .map((s: any) => ({ ...s, logoUrl: s.logoUrl ? absoluteUrl(s.logoUrl) : s.logoUrl }))
+      .sort((a: Sponsor, b: Sponsor) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    faqs: asArray(e.faqs).filter((f: any) => f && f.q),
+    gallery: asArray(e.gallery).map(normaliseMedia),
+  };
+}
+
+/**
+ * Multipart upload with progress. Uses XMLHttpRequest because fetch has no upload progress.
+ * Fields: file (+ optional eventId, kind, caption) → POST /uploads.
+ */
+async function uploadFile(
+  file: LocalFile,
+  fields: Record<string, string | undefined>,
+  onProgress?: (fraction: number) => void,
+): Promise<UploadResult> {
+  const form = new FormData();
+  if (Platform.OS === "web") {
+    const blob = await (await fetch(file.uri)).blob();
+    form.append("file", blob, file.name);
+  } else {
+    // React Native's FormData accepts { uri, name, type } for files.
+    form.append("file", { uri: file.uri, name: file.name, type: file.mimeType } as any);
+  }
+  for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== "") form.append(k, v);
+
+  return new Promise<UploadResult>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/uploads`);
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.setRequestHeader("X-Tenant", brand.slug);
+    if (cachedToken) xhr.setRequestHeader("Authorization", `Bearer ${cachedToken}`);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network", `Can't reach the server (${brand.apiUrl}).`));
+    xhr.onload = () => {
+      let data: any = null;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        data = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && data) {
+        onProgress?.(1);
+        resolve({ ...data, url: absoluteUrl(String(data.url ?? "")), media: data.media ? normaliseMedia(data.media) : undefined });
+      } else {
+        if (xhr.status === 401 && cachedToken) onUnauthorized?.();
+        reject(new ApiError(xhr.status, data?.error ?? "error", data?.message ?? `Upload failed (${xhr.status})`));
+      }
+    };
+    xhr.send(form);
+  });
+}
+
 // ───────── Endpoints ─────────
 
 export const Api = {
@@ -310,7 +482,10 @@ export const Api = {
 
   // Events
   events: async (query = "upcoming=1") => list<EventSummary>(await api(`/events?${query}`), "events"),
-  event: (idOrSlug: string) => api<EventDetail>(`/events/${encodeURIComponent(idOrSlug)}`),
+  event: async (idOrSlug: string) => normaliseEvent(await api<any>(`/events/${encodeURIComponent(idOrSlug)}`)),
+  calendarUrl: (idOrSlug: string) => `${API_BASE}/events/${encodeURIComponent(idOrSlug)}/calendar.ics`,
+  /** Public event page on the brand's website, when the brand has one configured. */
+  publicEventUrl: (slug: string) => (WEB_BASE ? `${WEB_BASE}/events/${encodeURIComponent(slug)}` : null),
   register: (eventId: string, answers: Record<string, unknown> = {}) =>
     api<Registration>(`/events/${eventId}/register`, { method: "POST", body: { answers } }),
   cancelRegistration: (eventId: string) => api(`/events/${eventId}/register`, { method: "DELETE" }),
@@ -355,6 +530,18 @@ export const Api = {
     api(`/events/${eventId}/drive`, { method: "PUT", body: { driveFolderUrl } }),
   addMedia: (eventId: string, body: { kind: string; url: string; title?: string }) =>
     api(`/events/${eventId}/media`, { method: "POST", body }),
+  eventMedia: async (eventId: string) =>
+    list<any>(await api(`/events/${eventId}/media`), "media")
+      .map(normaliseMedia)
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")),
+  uploadPhoto: (eventId: string, file: LocalFile, caption?: string, onProgress?: (f: number) => void) =>
+    uploadFile(file, { eventId, kind: "PHOTO", caption }, onProgress),
+
+  // Notifications (IN_APP)
+  notifications: async (unreadOnly = false) =>
+    list<AppNotification>(await api(`/me/notifications${unreadOnly ? "?unread=1" : ""}`), "notifications"),
+  markNotificationsRead: (ids?: string[]) =>
+    api("/me/notifications/read", { method: "POST", body: ids ? { ids } : {} }),
 };
 
 export const STAFF_ROLES: Role[] = ["BRAND_ADMIN", "CAMPUS_ADMIN", "EVENT_MANAGER"];

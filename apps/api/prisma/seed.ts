@@ -9,6 +9,7 @@ import { generateCertificates } from "../src/lib/certificates";
 import { generateLinkedInDrafts } from "../src/lib/linkedin";
 import { buildOutcome } from "../src/lib/outcome";
 
+process.env.ELEVATE_SEEDING = "1"; // no automatic emails for demo data
 const prisma = new PrismaClient();
 const DAY = 24 * 60 * 60 * 1000;
 const days = (n: number) => new Date(Date.now() + n * DAY);
@@ -428,6 +429,135 @@ async function main() {
     },
   });
 
+  // ───────── Sunstone: entrepreneurship event with full guest files, sponsor and FAQs ─────────
+  const sunAdmin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@sunstone.dev" } });
+  const founder = await prisma.guestProfile.create({
+    data: {
+      tenantId: sun.id,
+      name: "Nandini Rao",
+      email: "nandini@example-startup.com",
+      phone: "+91 98000 11111",
+      designation: "Co-founder & CEO",
+      organization: "Example Startup (Seed-funded edtech)",
+      bio: "Nandini started Example Startup from her college hostel in 2019 and has since raised a seed round. She mentors student founders on validating ideas and building early teams.",
+      photoUrl: "https://example.com/guests/nandini.jpg",
+      linkedinUrl: "https://www.linkedin.com/in/example-nandini",
+      websiteUrl: "https://example-startup.com",
+      city: "Bengaluru",
+      expertise: ["Startups", "Fundraising", "EdTech"],
+      notes: "Prefers morning sessions. Spoke at our 2025 orientation; very well received.",
+    },
+  });
+  const investor = await prisma.guestProfile.create({
+    data: {
+      tenantId: sun.id,
+      name: "Rahul Kapoor",
+      email: "rahul@example-ventures.com",
+      designation: "Partner",
+      organization: "Example Ventures",
+      bio: "Rahul invests in early-stage consumer and SaaS companies and has backed over 30 startups.",
+      linkedinUrl: "https://www.linkedin.com/in/example-rahul",
+      city: "Mumbai",
+      expertise: ["Venture capital", "SaaS"],
+    },
+  });
+  const ffStart = days(12);
+  const fireside = await prisma.event.create({
+    data: {
+      tenantId: sun.id,
+      slug: "founders-fireside-campus-to-funded",
+      title: "Founders' Fireside: From campus idea to funded startup",
+      tagline: "A founder and an investor on what it really takes to start up while in college",
+      description:
+        "An evening conversation with a founder who started up from her hostel room and an early-stage investor. " +
+        "Learn how to validate an idea, find co-founders, and what investors look for — followed by open Q&A and networking.",
+      type: "ENTREPRENEURSHIP",
+      scope: "CENTRAL",
+      mode: "HYBRID",
+      status: "REGISTRATION_OPEN",
+      venue: "Sunstone @ Mumbai, Auditorium",
+      venueMapUrl: "https://maps.google.com/?q=Mumbai",
+      meetingUrl: "https://meet.example.com/founders-fireside",
+      livestreamUrl: "https://youtube.com/@example/live",
+      contactEmail: "events@sunstone.in",
+      contactPhone: "+91 90000 00000",
+      startsAt: ffStart,
+      endsAt: new Date(ffStart.getTime() + 2 * 60 * 60 * 1000),
+      registrationOpensAt: days(-3),
+      registrationClosesAt: days(11),
+      capacity: 150,
+      modules: { ...DEFAULT_MODULES.ENTREPRENEURSHIP },
+      faqs: [
+        { q: "Who can attend?", a: "All Sunstone students. Online attendees get the joining link after registering." },
+        { q: "Will there be a certificate?", a: "Yes — everyone who checks in gets a participation certificate." },
+        { q: "Can I pitch my idea?", a: "Yes, there is a 20-minute open Q&A and networking slot at the end." },
+      ],
+      registrationForm: [
+        { id: "idea", label: "Do you have a startup idea? (one line)", type: "text", required: false },
+        { id: "mode", label: "How will you attend?", type: "select", required: true, options: ["In person", "Online"] },
+      ],
+      createdById: sunAdmin.id,
+      staff: { create: [{ userId: sunAdmin.id, role: "MANAGER" }] },
+      tasks: { create: checklist("ENTREPRENEURSHIP", ffStart, days(0)) },
+      sponsors: {
+        create: [
+          { name: "Example Incubator", tier: "TITLE", website: "https://incubator.example.com", logoUrl: "https://example.com/logos/incubator.png", sortOrder: 0 },
+          { name: "Example Bank", tier: "PARTNER", website: "https://bank.example.com", sortOrder: 1 },
+        ],
+      },
+      sessions: {
+        create: [
+          { title: "Fireside chat: campus to funded", speaker: "Nandini Rao, Rahul Kapoor", startsAt: ffStart, endsAt: new Date(ffStart.getTime() + 75 * 60 * 1000) },
+          { title: "Open Q&A and networking", startsAt: new Date(ffStart.getTime() + 75 * 60 * 1000), endsAt: new Date(ffStart.getTime() + 2 * 60 * 60 * 1000) },
+        ],
+      },
+      guests: {
+        create: [
+          {
+            profileId: founder.id, name: founder.name, email: founder.email, phone: founder.phone, designation: founder.designation,
+            organization: founder.organization, bio: founder.bio, photoUrl: founder.photoUrl, linkedinUrl: founder.linkedinUrl,
+            role: "SPEAKER", status: "CONFIRMED", talkTitle: "From hostel room to seed round",
+            talkAbstract: "The first 18 months of a student startup: finding the problem, the first 100 users and the first cheque.",
+            sessionAt: ffStart, hostUserId: sunAdmin.id, arrivalAt: new Date(ffStart.getTime() - 3 * 60 * 60 * 1000),
+            departureAt: new Date(ffStart.getTime() + 4 * 60 * 60 * 1000), travelNotes: "Flight BLR→BOM, arrives 1:30 pm. Pickup arranged.",
+            stayDetails: "Not required (same-day return)", dietary: "Vegetarian", avRequirements: "Lapel mic, HDMI for laptop",
+            consentRecording: true, honorarium: 15000, paymentStatus: "PENDING", invitedAt: days(-10), profileSubmittedAt: days(-6),
+            documents: [{ name: "Talk outline", url: "https://example.com/docs/nandini-outline.pdf", kind: "PRESENTATION" }],
+            sortOrder: 0,
+          },
+          {
+            profileId: investor.id, name: investor.name, email: investor.email, designation: investor.designation,
+            organization: investor.organization, bio: investor.bio, linkedinUrl: investor.linkedinUrl,
+            role: "INVESTOR", status: "INVITED", talkTitle: "What investors look for in student founders",
+            sessionAt: ffStart, hostUserId: sunAdmin.id, consentRecording: null, paymentStatus: "NOT_APPLICABLE", invitedAt: days(-4),
+            sortOrder: 1,
+          },
+        ],
+      },
+    },
+  });
+  for (const userId of students.sunstone.slice(0, 8)) {
+    await prisma.registration.create({
+      data: { eventId: fireside.id, userId, status: "APPROVED", answers: { mode: userId.length % 2 ? "In person" : "Online" } },
+    });
+  }
+  await prisma.eventActivity.create({ data: { eventId: fireside.id, actorId: sunAdmin.id, action: "event.created", data: { title: fireside.title } } });
+
+  // The guest library is reused across events: the founder also mentors at the PM guest lecture.
+  const pmLecture = await prisma.event.findFirstOrThrow({ where: { tenantId: sun.id, slug: "guest-lecture-product-management" } });
+  await prisma.eventGuest.create({
+    data: {
+      eventId: pmLecture.id, profileId: founder.id, name: founder.name, email: founder.email, designation: founder.designation,
+      organization: founder.organization, bio: founder.bio, linkedinUrl: founder.linkedinUrl, role: "PANELIST", status: "PROPOSED",
+    },
+  });
+  // Each brand keeps its own library: Alta has the GenAI workshop speaker on file too.
+  const altaWorkshop = await prisma.event.findFirstOrThrow({ where: { tenantId: alta.id, slug: "intro-to-genai-workshop" }, include: { guests: true } });
+  const ankit = await prisma.guestProfile.create({
+    data: { tenantId: alta.id, name: "Ankit Bose", email: "ankit@example.com", designation: "ML Engineer", organization: "Example AI Labs", expertise: ["GenAI", "Python"] },
+  });
+  await prisma.eventGuest.updateMany({ where: { eventId: altaWorkshop.id, email: "ankit@example.com" }, data: { profileId: ankit.id } });
+
   // Unused import guard (serials are generated inside generateCertificates).
   void certificateSerial;
 
@@ -438,6 +568,8 @@ async function main() {
     registrations: await prisma.registration.count(),
     certificates: await prisma.certificate.count(),
     linkedinDrafts: await prisma.linkedInPost.count(),
+    guestProfiles: await prisma.guestProfile.count(),
+    sponsors: await prisma.sponsor.count(),
   };
   console.log("Seeded:", counts);
   console.log("Sign in with OTP as admin@elevate.dev (platform admin), admin@altaschool.dev, judge@elevate.dev, volunteer@elevate.dev, student1@example.com");

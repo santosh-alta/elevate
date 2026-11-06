@@ -1,75 +1,137 @@
-import { Trash2 } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Clock, FileText, Mail, Pencil, Trash2, UserRound } from "lucide-react";
 import { apiList } from "@/lib/api";
-import type { ElevateEvent, Guest } from "@/lib/types";
-import { Button, Card, CardBody, CardHeader, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
+import { getOrigin } from "@/lib/tenant";
+import { GUEST_STATUS_LIST, fmtDateTime, humanize } from "@/lib/format";
+import type { ElevateEvent, Guest, Membership } from "@/lib/types";
+import { Badge, Card, EmptyState, LinkButton, Stat } from "@/components/ui";
 import { ApiButton } from "@/components/client/api-button";
-import { ApiForm } from "@/components/client/api-form";
 import { ApiSelect } from "@/components/client/api-select";
+import { CopyButton } from "@/components/client/misc";
+import { GuestAvatar } from "@/components/guest-avatar";
+import { GuestAdder } from "@/components/admin/guest-adder";
+import { GuestEditor } from "@/components/admin/guest-editor";
 
-const GUEST_STATUSES = ["PROPOSED", "INVITED", "CONFIRMED", "DECLINED", "ARRIVED", "THANKED"].map((s) => ({ value: s, label: s.charAt(0) + s.slice(1).toLowerCase() }));
-const GUEST_ROLES = ["SPEAKER", "CHIEF_GUEST", "PANELIST", "JUDGE"];
+const STATUS_OPTIONS = GUEST_STATUS_LIST.map((s) => ({ value: s, label: humanize(s) }));
 
-export async function GuestsTab({ event }: { event: ElevateEvent }) {
-  const guests = await apiList<Guest>(`/events/${event.id}/guests`);
-  return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+export async function loadStaff(eventId: string): Promise<{ id: string; name: string }[]> {
+  const [members, eventStaff] = await Promise.all([
+    apiList<Membership>("/admin/members"),
+    apiList<{ userId: string; user?: { id: string; name: string } }>(`/events/${eventId}/staff`),
+  ]);
+  const map = new Map<string, string>();
+  for (const m of members) if (m.user && m.role !== "STUDENT") map.set(m.user.id, m.user.name);
+  for (const s of eventStaff) if (s.user) map.set(s.user.id, s.user.name);
+  return [...map].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function GuestsTab({ event, guestId }: { event: ElevateEvent; guestId?: string }) {
+  const [guests, staff, origin] = await Promise.all([apiList<Guest>(`/events/${event.id}/guests`), loadStaff(event.id), getOrigin()]);
+  const hostName = (g: Guest) => g.host?.name ?? staff.find((s) => s.id === g.hostUserId)?.name;
+  const selected = guestId ? guests.find((g) => g.id === guestId) : undefined;
+
+  if (selected) {
+    return (
       <div className="space-y-4">
-        {guests.length ? guests.map((g) => (
-          <Card key={g.id} className="flex flex-col gap-4 p-4 sm:flex-row">
-            {g.photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={g.photoUrl} alt={g.name} className="h-20 w-20 shrink-0 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-full bg-amber-50 text-[10px] font-medium text-amber-700">Photo<br />pending</div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold">{g.name}</p>
-                  <p className="text-sm text-muted">{[g.designation, g.organization].filter(Boolean).join(", ") || "Designation pending"}</p>
-                  <p className="text-xs text-muted">{[g.role?.replace("_", " ").toLowerCase(), g.email, g.linkedinUrl ? "LinkedIn ✓" : null].filter(Boolean).join(" · ")}</p>
-                </div>
-                <div className="flex items-start gap-1">
-                  <ApiSelect path={`/guests/${g.id}`} field="status" value={g.status} options={GUEST_STATUSES} className="w-32" />
-                  <ApiButton method="DELETE" path={`/guests/${g.id}`} variant="ghost" size="sm" confirm={`Remove ${g.name}?`}><Trash2 className="h-4 w-4" /></ApiButton>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href={`/admin/events/${event.id}?tab=guests`} className="text-sm text-muted hover:text-fg">← All guests</Link>
+          <div className="flex flex-wrap gap-2">
+            <GuestActions guest={selected} event={event} origin={origin} />
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <GuestAvatar guest={selected} size="h-16 w-16" />
+          <div>
+            <h2 className="text-xl font-semibold">{selected.name}</h2>
+            <p className="text-sm text-muted">{humanize(selected.role ?? "SPEAKER")} · {[selected.designation, selected.organization].filter(Boolean).join(", ")}</p>
+          </div>
+        </div>
+        <div className="max-w-4xl"><GuestEditor guest={selected} eventId={event.id} staff={staff} /></div>
+      </div>
+    );
+  }
+
+  const count = (s: string) => guests.filter((g) => g.status === s).length;
+  const submitted = guests.filter((g) => g.profileSubmittedAt).length;
+
+  return (
+    <div className="space-y-6">
+      {guests.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat label="Guests" value={guests.length} />
+          <Stat label="Confirmed" value={count("CONFIRMED") + count("ARRIVED") + count("THANKED")} hint={`${count("INVITED")} invited, awaiting reply`} />
+          <Stat label="Profiles submitted" value={`${submitted}/${guests.length}`} hint="Photo, bio and travel" />
+          <Stat label="Thanked" value={count("THANKED")} />
+        </div>
+      )}
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        <div className="space-y-4">
+          {guests.length ? guests.map((g) => (
+            <Card key={g.id} className="p-4">
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <GuestAvatar guest={g} size="h-20 w-20" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <Link href={`/admin/events/${event.id}?tab=guests&guest=${g.id}`} className="font-semibold hover:text-primary">{g.name}</Link>
+                      <p className="text-sm text-muted">{[g.designation, g.organization].filter(Boolean).join(", ") || "Designation pending"}</p>
+                    </div>
+                    <div className="flex items-start gap-1">
+                      <ApiSelect path={`/guests/${g.id}`} field="status" value={g.status} options={STATUS_OPTIONS} className="w-32" />
+                      <ApiButton method="DELETE" path={`/guests/${g.id}`} variant="ghost" size="sm" confirm={`Remove ${g.name} from this event?`}><Trash2 className="h-4 w-4" /></ApiButton>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge tone="primary">{humanize(g.role ?? "SPEAKER")}</Badge>
+                    {g.profileSubmittedAt
+                      ? <Badge tone="green"><CheckCircle2 className="h-3 w-3" />Profile submitted</Badge>
+                      : <Badge tone="amber"><Clock className="h-3 w-3" />Awaiting profile</Badge>}
+                    {!g.photoUrl && <Badge tone="amber">Photo pending</Badge>}
+                    {!g.bio && <Badge tone="amber">Bio pending</Badge>}
+                    {g.invitedAt && <Badge tone="blue">Invited {fmtDateTime(g.invitedAt)}</Badge>}
+                    {g.consentRecording === false && <Badge tone="red">No recording</Badge>}
+                  </div>
+                  <div className="grid gap-1 text-xs text-muted sm:grid-cols-2">
+                    <p className="flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" />Host: {hostName(g) ?? <span className="text-amber-700">not assigned</span>}</p>
+                    {g.talkTitle && <p className="truncate">Talk: <span className="text-fg">{g.talkTitle}</span></p>}
+                    {g.arrivalAt && <p>Arrives {fmtDateTime(g.arrivalAt)}</p>}
+                    {g.sessionAt && <p>Session {fmtDateTime(g.sessionAt)}</p>}
+                  </div>
+                  <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+                    <LinkButton href={`/admin/events/${event.id}?tab=guests&guest=${g.id}`} size="sm" variant="outline"><Pencil className="h-4 w-4" />Open file</LinkButton>
+                    <GuestActions guest={g} event={event} origin={origin} />
+                  </div>
                 </div>
               </div>
-              {g.bio ? <p className="mt-2 line-clamp-2 text-sm text-fg/80">{g.bio}</p> : <p className="mt-2 text-xs text-amber-700">Bio pending</p>}
-              <details className="mt-2 text-sm">
-                <summary className="cursor-pointer text-xs font-medium text-primary">Update photo / bio</summary>
-                <ApiForm method="PATCH" path={`/guests/${g.id}`} className="mt-2 grid gap-2" resetOnSuccess={false}>
-                  <Input name="photoUrl" type="url" placeholder="Photo URL" defaultValue={g.photoUrl ?? ""} />
-                  <Input name="designation" placeholder="Designation" defaultValue={g.designation ?? ""} />
-                  <Textarea name="bio" placeholder="Short bio" defaultValue={g.bio ?? ""} />
-                  <Button size="sm" type="submit" className="justify-self-start">Save</Button>
-                </ApiForm>
-              </details>
-            </div>
-          </Card>
-        )) : <EmptyState title="No guests yet" description="Add speakers, chief guests or panelists to track invites, photos, bios and thank-you notes." />}
+            </Card>
+          )) : (
+            <EmptyState title="No guests yet" description="Add speakers, chief guests, founders or investors. Send them the invite and they fill their own photo, bio and travel details." />
+          )}
+        </div>
+        <GuestAdder eventId={event.id} staff={staff} />
       </div>
-      <Card className="h-fit">
-        <CardHeader title="Add guest" />
-        <CardBody>
-          <ApiForm path={`/events/${event.id}/guests`} className="space-y-3">
-            <Field label="Name"><Input name="name" required /></Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Role"><Select name="role" defaultValue="SPEAKER">{GUEST_ROLES.map((r) => <option key={r} value={r}>{r.replace("_", " ").toLowerCase()}</option>)}</Select></Field>
-              <Field label="Status"><Select name="status" defaultValue="PROPOSED">{GUEST_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</Select></Field>
-            </div>
-            <Field label="Designation"><Input name="designation" placeholder="CTO" /></Field>
-            <Field label="Organisation"><Input name="organization" /></Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Email"><Input name="email" type="email" /></Field>
-              <Field label="Phone"><Input name="phone" /></Field>
-            </div>
-            <Field label="Photo URL"><Input name="photoUrl" type="url" /></Field>
-            <Field label="LinkedIn"><Input name="linkedinUrl" type="url" /></Field>
-            <Field label="Bio"><Textarea name="bio" /></Field>
-            <Button type="submit" className="w-full">Add guest</Button>
-          </ApiForm>
-        </CardBody>
-      </Card>
     </div>
   );
 }
+
+function GuestActions({ guest, event, origin }: { guest: Guest; event: ElevateEvent; origin: string }) {
+  const portal = guest.portalToken ? `${origin}/guest/${guest.portalToken}` : null;
+  const after = new Date(event.startsAt) < new Date();
+  return (
+    <>
+      <ApiButton
+        path={`/guests/${guest.id}/invite`} size="sm" variant={guest.invitedAt ? "outline" : "primary"}
+        successMessage={guest.email ? "Invite queued" : undefined}
+        confirm={guest.email ? undefined : "This guest has no email. Add one first, or copy the portal link and share it yourself."}
+      >
+        <Mail className="h-4 w-4" />{guest.invitedAt ? "Resend invite" : "Send invite"}
+      </ApiButton>
+      {portal && <CopyButton text={portal} label="Copy portal link" />}
+      {(after || ["ARRIVED", "CONFIRMED"].includes(guest.status ?? "")) && guest.status !== "THANKED" && (
+        <ApiButton path={`/guests/${guest.id}/thank-you`} size="sm" variant="secondary" successMessage="Thank-you queued">Send thank-you</ApiButton>
+      )}
+      <LinkButton href={`/admin/events/${event.id}/guests/${guest.id}/brief`} size="sm" variant="ghost"><FileText className="h-4 w-4" />Guest brief</LinkButton>
+    </>
+  );
+}
+

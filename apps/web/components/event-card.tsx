@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, MapPin, Users, Video } from "lucide-react";
-import { eventCampuses, eventCount, fmtRange, humanize } from "@/lib/format";
+import { eventCampuses, eventCount, fmtRange, humanize, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge } from "./ui/badge";
 
@@ -12,7 +12,7 @@ export function EventCover({ event, className = "h-40" }: { event: ElevateEvent;
   return (
     <div className={`${className} relative w-full overflow-hidden bg-gradient-to-br from-primary to-accent`}>
       <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, white 0, transparent 40%), radial-gradient(circle at 80% 70%, white 0, transparent 35%)" }} />
-      <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-white/90">{humanize(event.type)}</span>
+      <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-white/90">{typeLabel(event.type)}</span>
     </div>
   );
 }

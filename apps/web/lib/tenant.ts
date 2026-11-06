@@ -7,7 +7,7 @@ import type { Tenant } from "./types";
 /** Host the visitor used (e.g. event.sunstone.in), forwarded by middleware. */
 export const getHost = cache(async (): Promise<string> => {
   const h = await headers();
-  return h.get("x-elevate-host") ?? h.get("host") ?? "";
+  return h.get("x-elevate-host") ?? h.get("x-forwarded-host") ?? h.get("host") ?? "";
 });
 
 /** Headers that tell the API which brand this request belongs to. */
@@ -45,4 +45,10 @@ export async function requireTenant(): Promise<Tenant> {
   const t = await getTenant();
   if (!t) notFound();
   return t;
+}
+
+/** Public origin of this brand site, e.g. https://event.sunstone.in */
+export async function getOrigin(): Promise<string> {
+  const host = await getHost();
+  return `${/^(localhost|127\.|[a-z0-9-]+\.localhost)/.test(host) ? "http" : "https"}://${host}`;
 }

@@ -21,10 +21,34 @@ export interface Membership { id: string; role: Role; campusId?: string | null; 
 export interface Me { user: User; membership: Membership | null }
 
 export interface EventSession { id: string; title: string; speaker?: string | null; startsAt: string; endsAt: string; location?: string | null }
+export interface GuestDocument { name: string; url: string; kind?: string }
 export interface Guest {
-  id: string; name: string; email?: string | null; designation?: string | null; organization?: string | null;
-  bio?: string | null; photoUrl?: string | null; linkedinUrl?: string | null; role?: string; status?: string;
+  id: string; eventId?: string; profileId?: string | null; name: string; email?: string | null; phone?: string | null;
+  designation?: string | null; organization?: string | null; bio?: string | null; photoUrl?: string | null;
+  linkedinUrl?: string | null; role?: string; status?: string;
+  talkTitle?: string | null; talkAbstract?: string | null; sessionAt?: string | null;
+  hostUserId?: string | null; host?: User | null; arrivalAt?: string | null; departureAt?: string | null;
+  travelNotes?: string | null; stayDetails?: string | null; dietary?: string | null; avRequirements?: string | null;
+  consentRecording?: boolean | null; honorarium?: string | number | null; paymentStatus?: string | null;
+  invoiceUrl?: string | null; mementoGiven?: boolean; invitedAt?: string | null; thankYouSentAt?: string | null;
+  documents?: GuestDocument[] | null; portalToken?: string; profileSubmittedAt?: string | null;
+  isPublic?: boolean; sortOrder?: number; event?: ElevateEvent; profile?: GuestProfile | null;
 }
+export interface GuestProfile {
+  id: string; name: string; email?: string | null; phone?: string | null; designation?: string | null;
+  organization?: string | null; bio?: string | null; photoUrl?: string | null; linkedinUrl?: string | null;
+  websiteUrl?: string | null; city?: string | null; expertise?: string[]; notes?: string | null;
+  appearances?: Guest[] | number; lastEvent?: ElevateEvent | null; _count?: Record<string, number>;
+}
+export interface Sponsor { id: string; name: string; logoUrl?: string | null; website?: string | null; tier?: string; sortOrder?: number }
+export interface Faq { q: string; a: string }
+export interface AppNotification {
+  id: string; template: string; subject: string; body?: string; channel?: string; status?: string;
+  toEmail?: string | null; user?: User | null; scheduledFor?: string; sentAt?: string | null; readAt?: string | null;
+  createdAt: string; error?: string | null; eventId?: string | null; data?: Record<string, unknown>;
+  ctaLabel?: string | null; ctaUrl?: string | null; event?: ElevateEvent | null;
+}
+export interface Announcement { id: string; title: string; body: string; channels?: string[]; sentAt?: string | null; createdAt: string }
 export interface Track { id: string; name: string; description?: string }
 
 export interface ElevateEvent {
@@ -42,6 +66,10 @@ export interface ElevateEvent {
   guests?: Guest[];
   _count?: Record<string, number>;
   counts?: Record<string, number>;
+  livestreamUrl?: string | null; venueMapUrl?: string | null; contactEmail?: string | null; contactPhone?: string | null;
+  faqs?: Faq[] | null; previewToken?: string; sponsors?: Sponsor[]; gallery?: Media[];
+  registrationForm?: { id: string; label: string; type?: string; required?: boolean; options?: string[] }[];
+  canManage?: boolean;
 }
 
 export interface Registration {
@@ -68,8 +96,11 @@ export interface Round { id: string; name: string; isOpen: boolean; closedAt?: s
 export interface JudgeAssignment { id: string; userId: string; roundId?: string | null; teamId?: string | null; user?: User; round?: Round | null; team?: Team | null }
 export interface LeaderboardRow { team: Team; avgWeighted: number; judgesScored: number; rank: number }
 
-export interface Media { id: string; kind: string; title?: string | null; url: string; createdAt?: string }
-export interface SocialPost { id: string; platform: string; status: string; caption?: string | null; url?: string | null; postedAt?: string | null }
+export interface Media {
+  id: string; kind: string; title?: string | null; url: string; createdAt?: string; caption?: string | null;
+  mimeType?: string | null; sizeBytes?: number | null; isHighlight?: boolean; approvedForSocial?: boolean;
+}
+export interface SocialPost { id: string; platform: string; status: string; caption?: string | null; url?: string | null; postedAt?: string | null; generatedBy?: string | null }
 
 export interface Certificate {
   id: string; serial: string; type: string; recipientName: string; detail?: string | null; issuedAt: string;

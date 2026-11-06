@@ -789,6 +789,7 @@ model Notification {
   sentAt       DateTime?
   readAt       DateTime?
   error        String?
+  attempts     Int                 @default(0)
   dedupKey     String?             @unique
   createdAt    DateTime            @default(now())
 

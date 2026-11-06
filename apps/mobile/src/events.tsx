@@ -1,10 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Image, Text, View } from "react-native";
-import { EventSummary } from "./api";
+import { EventSummary, eventTypeLabel } from "./api";
 import { useSession } from "./session";
 import { withAlpha } from "./theme";
-import { Badge, Card, Muted, Row, formatDate, humanize } from "./ui";
+import { Badge, Card, IconName, Muted, Row, formatDate, humanize } from "./ui";
 
 export function statusTone(status: string): "success" | "warning" | "primary" | "neutral" | "danger" {
   if (status === "REGISTRATION_OPEN" || status === "LIVE") return "success";
@@ -12,6 +12,29 @@ export function statusTone(status: string): "success" | "warning" | "primary" | 
   if (status === "CANCELLED") return "danger";
   if (status === "JUDGING" || status === "REGISTRATION_CLOSED") return "warning";
   return "neutral";
+}
+
+const TYPE_ICONS: Record<string, IconName> = {
+  HACKATHON: "code-slash",
+  COMPETITION: "trophy-outline",
+  STARTUP_PITCH: "rocket-outline",
+  ENTREPRENEURSHIP: "bulb-outline",
+  WORKSHOP: "construct-outline",
+  BOOTCAMP: "barbell-outline",
+  WEBINAR: "videocam-outline",
+  CONFERENCE: "business-outline",
+  PANEL_DISCUSSION: "chatbubbles-outline",
+  MEETUP: "people-outline",
+  CAREER_FAIR: "briefcase-outline",
+  INDUSTRY_VISIT: "bus-outline",
+  ORIENTATION: "compass-outline",
+  ALUMNI_MEET: "school-outline",
+  SPORTS: "football-outline",
+  CULTURAL: "musical-notes-outline",
+};
+
+export function eventTypeIcon(type: string): IconName {
+  return TYPE_ICONS[type] ?? "mic-outline";
 }
 
 export function modeLabel(e: EventSummary): string {
@@ -37,12 +60,12 @@ export function EventCard({ event, onPress }: { event: EventSummary; onPress: ()
             padding: 12,
           }}
         >
-          <Ionicons name={event.type === "HACKATHON" ? "code-slash" : "mic"} size={28} color={theme.colors.primary} />
+          <Ionicons name={eventTypeIcon(event.type)} size={28} color={theme.colors.primary} />
         </View>
       )}
       <View style={{ padding: 16, gap: 6 }}>
         <Row style={{ flexWrap: "wrap" }}>
-          <Badge label={humanize(event.type)} tone="primary" />
+          <Badge label={eventTypeLabel(event.type)} tone="primary" />
           <Badge label={humanize(event.status)} tone={statusTone(event.status)} />
         </Row>
         <Text style={{ fontSize: 18, fontWeight: "700", color: theme.colors.fg }}>{event.title}</Text>

@@ -9,5 +9,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // The upload proxy is excluded so large multipart bodies stream straight through (the proxy reads Host itself).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/proxy).*)"],
 };

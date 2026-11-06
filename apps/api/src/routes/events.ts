@@ -23,6 +23,8 @@ import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { canTransition, runCompletionAutomation } from "../lib/lifecycle";
 import { computeLeaderboard, defaultRoundId } from "../lib/judging";
+import { fmtDate, notifyAudience, safely } from "../lib/notify";
+import { newToken } from "./guests";
 
 const HIDDEN_FROM_PUBLIC: EventStatus[] = ["DRAFT", "PLANNING"];
 const DAY = 24 * 60 * 60 * 1000;
@@ -51,9 +53,29 @@ const updateEventSchema = createEventSchema
       )
       .optional(),
     meetingUrl: z.string().url().nullable().optional(),
+    livestreamUrl: z.string().url().nullable().optional(),
+    venueMapUrl: z.string().url().nullable().optional(),
+    contactEmail: z.string().email().nullable().optional(),
+    contactPhone: z.string().nullable().optional(),
+    venue: z.string().nullable().optional(),
+    coverImageUrl: z.string().url().nullable().optional(),
   });
 
-async function uniqueSlug(tenantId: string, title: string): Promise<string> {
+/** Checklist rows for a new event: the brand's templates for the type, else the defaults. */
+export async function checklistFor(tenantId: string, type: (typeof EVENT_TYPES)[number], startsAt: Date) {
+  const templates = await prisma.taskTemplate.findMany({ where: { tenantId, eventType: type }, orderBy: { sortOrder: "asc" } });
+  const checklist = templates.length ? templates : DEFAULT_CHECKLISTS[type];
+  return checklist.map((t, i) => ({
+    phase: t.phase,
+    title: t.title,
+    sortOrder: i,
+    dueAt: new Date(startsAt.getTime() + t.dueOffsetDays * DAY),
+  }));
+}
+
+export const COMPETITION_TYPES = ["HACKATHON", "COMPETITION", "STARTUP_PITCH"];
+
+export async function uniqueSlug(tenantId: string, title: string): Promise<string> {
   const base = slugify(title);
   let slug = base;
   for (let i = 2; await prisma.event.findUnique({ where: { tenantId_slug: { tenantId, slug } } }); i++) {
@@ -114,13 +136,20 @@ export function eventRoutes(app: FastifyInstance) {
       prisma.event.count({ where }),
     ]);
     reply.header("X-Total-Count", String(total));
-    return items.map((e) => ({ ...e, outcome: undefined, campuses: e.campuses.map((c) => ({ campus: c.campus })) }));
+    return items.map((e) => ({
+      ...e,
+      outcome: undefined,
+      previewToken: staff ? e.previewToken : undefined,
+      campuses: e.campuses.map((c) => ({ campus: c.campus })),
+    }));
   });
 
   app.get<{ Params: { idOrSlug: string } }>("/events/:idOrSlug", async (req) => {
     const base = await findEvent(req, req.params.idOrSlug);
     const manager = await canManageEvent(req, base);
-    if (!manager && HIDDEN_FROM_PUBLIC.includes(base.status)) throw notFound("Event");
+    const { preview } = z.object({ preview: z.string().optional() }).parse(req.query);
+    const previewing = !!preview && preview === base.previewToken;
+    if (!manager && !previewing && HIDDEN_FROM_PUBLIC.includes(base.status)) throw notFound("Event");
 
     const event = await prisma.event.findUniqueOrThrow({
       where: { id: base.id },
@@ -128,11 +157,16 @@ export function eventRoutes(app: FastifyInstance) {
         campuses: { include: { campus: { select: { id: true, name: true, code: true, city: true } } } },
         sessions: { orderBy: { startsAt: "asc" } },
         guests: manager
-          ? { orderBy: { createdAt: "asc" } }
+          ? { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }
           : {
-              where: { status: { in: ["CONFIRMED", "ARRIVED", "THANKED"] } },
-              select: { id: true, name: true, designation: true, organization: true, bio: true, photoUrl: true, linkedinUrl: true, role: true },
+              where: { isPublic: true, status: { in: previewing ? ["PROPOSED", "INVITED", "CONFIRMED", "ARRIVED", "THANKED"] : ["CONFIRMED", "ARRIVED", "THANKED"] } },
+              orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+              select: {
+                id: true, profileId: true, name: true, designation: true, organization: true, bio: true, photoUrl: true, linkedinUrl: true,
+                role: true, talkTitle: true, talkAbstract: true, sessionAt: true,
+              },
             },
+        sponsors: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] },
         rubric: { orderBy: { sortOrder: "asc" } },
         _count: { select: { registrations: true, teams: true } },
       },
@@ -151,8 +185,17 @@ export function eventRoutes(app: FastifyInstance) {
       myTeam = tm?.team ?? null;
     }
 
+    const gallery = await prisma.mediaAsset.findMany({
+      where: { eventId: event.id, kind: "PHOTO" },
+      orderBy: [{ isHighlight: "desc" }, { createdAt: "desc" }],
+      take: 60,
+      select: { id: true, url: true, caption: true, title: true, isHighlight: true, createdAt: true },
+    });
+
     return {
       ...event,
+      gallery,
+      previewToken: manager ? event.previewToken : undefined,
       outcome: manager ? event.outcome : undefined,
       campuses: event.campuses.map((c) => ({ campus: c.campus })),
       canManage: manager,
@@ -178,12 +221,8 @@ export function eventRoutes(app: FastifyInstance) {
     await validateCampuses(tenant.id, input.campusIds);
 
     const modules = { ...DEFAULT_MODULES[input.type], ...(input.modules ?? {}) };
-    const templates = await prisma.taskTemplate.findMany({
-      where: { tenantId: tenant.id, eventType: input.type },
-      orderBy: { sortOrder: "asc" },
-    });
-    const checklist = templates.length ? templates : DEFAULT_CHECKLISTS[input.type];
-    const isCompetition = input.type === "HACKATHON" || input.type === "COMPETITION";
+    const checklist = await checklistFor(tenant.id, input.type, input.startsAt);
+    const isCompetition = COMPETITION_TYPES.includes(input.type);
     const config = {
       ...(isCompetition ? { minTeamSize: 2, maxTeamSize: 4, tracks: [] } : {}),
       ...(input.config ?? {}),
@@ -197,17 +236,11 @@ export function eventRoutes(app: FastifyInstance) {
         config: config as Prisma.InputJsonValue,
         tenantId: tenant.id,
         slug: await uniqueSlug(tenant.id, input.title),
+        previewToken: newToken(),
         createdById: auth.user.id,
         campuses: { create: campusIds.map((campusId) => ({ campusId })) },
         staff: { create: [{ userId: auth.user.id, role: "MANAGER" }] },
-        tasks: {
-          create: checklist.map((t, i) => ({
-            phase: t.phase,
-            title: t.title,
-            sortOrder: i,
-            dueAt: new Date(input.startsAt.getTime() + t.dueOffsetDays * DAY),
-          })),
-        },
+        tasks: { create: checklist },
         ...(isCompetition && {
           rubric: { create: DEFAULT_RUBRIC.map((c, i) => ({ ...c, sortOrder: i })) },
           rounds: { create: [{ name: "Final", sortOrder: 0, isOpen: false }] },
@@ -244,6 +277,19 @@ export function eventRoutes(app: FastifyInstance) {
       });
     });
     await logActivity(event.id, req.auth!.user.id, "event.updated", { fields: Object.keys(input) });
+
+    // Tell registrants when the time or place changes on a published event.
+    if (!HIDDEN_FROM_PUBLIC.includes(updated.status) && updated.status !== "CANCELLED" && updated.endsAt > new Date()) {
+      const changes: string[] = [];
+      if (updated.startsAt.getTime() !== event.startsAt.getTime() || updated.endsAt.getTime() !== event.endsAt.getTime()) {
+        changes.push(`New time: ${fmtDate(updated.startsAt)}`);
+      }
+      if ((updated.venue ?? "") !== (event.venue ?? "")) changes.push(`New venue: ${updated.venue ?? "to be announced"}`);
+      if ((updated.meetingUrl ?? "") !== (event.meetingUrl ?? "")) changes.push(`New joining link: ${updated.meetingUrl ?? "to be shared"}`);
+      if (changes.length) {
+        safely("event.updated", () => notifyAudience(event.id, "event.updated", { changes, dedupSuffix: String(updated.updatedAt.getTime()) }));
+      }
+    }
     return updated;
   });
 
@@ -256,6 +302,7 @@ export function eventRoutes(app: FastifyInstance) {
     const updated = await prisma.event.update({ where: { id: event.id }, data: { status } });
     await logActivity(event.id, req.auth!.user.id, "status.changed", { from: event.status, to: status });
     if (status === "COMPLETED") runCompletionAutomation(event.id, req.log);
+    if (status === "CANCELLED") safely("event.cancelled", () => notifyAudience(event.id, "event.cancelled"));
     return updated;
   });
 
