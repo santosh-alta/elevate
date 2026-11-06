@@ -113,3 +113,61 @@ In development (`NODE_ENV !== "production"`), the OTP is returned in the respons
 | GET | `/platform/tenants` / POST | platform admin |
 
 Errors use `{ error: string, message: string }` with the usual HTTP codes.
+
+---
+
+# v1.1 additions (guests, event page, uploads, notifications)
+
+## Event page
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/events/:idOrSlug?preview=<previewToken>` | – | A valid preview token shows DRAFT/PLANNING events (used for "Preview page" links). Detail now includes `sponsors[]`, `faqs[]`, `livestreamUrl`, `venueMapUrl`, `contactEmail`, `contactPhone`, `gallery[]` (PHOTO media, highlights first), public guests with `talkTitle`, `sessionAt`, `role` and `profileId`; staff also get `previewToken` |
+| GET | `/events/:idOrSlug/calendar.ics` | – | iCalendar file (VEVENT with title, description, location or meeting link, URL) |
+| POST | `/events/:id/clone` | staff | `{ title?, startsAt?, endsAt? }` → new DRAFT event copying details, modules, config, form, rubric, sessions (shifted), sponsors, guests (status PROPOSED) and a fresh checklist |
+| GET | `/events/calendar?from=&to=` | staff | Events in range (all statuses) for the admin calendar |
+| GET/POST | `/events/:id/sponsors` | GET – / POST staff `{ name, logoUrl?, website?, tier?, sortOrder? }` |
+| PATCH/DELETE | `/sponsors/:id` | staff |
+
+`PATCH /events/:id` also accepts `faqs`, `livestreamUrl`, `venueMapUrl`, `contactEmail`, `contactPhone`.
+The web app builds the public page as `/events/<slug>`; creating an event makes that page immediately (visible publicly from ANNOUNCED on, or with the preview token before).
+
+## Guests (the guest "file")
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/guest-profiles?q=` | staff | Brand guest library with `appearances` count and last event |
+| POST | `/guest-profiles` | staff | Create a profile |
+| GET/PATCH | `/guest-profiles/:id` | staff | Profile with every appearance (event, role, talk, status) |
+| POST | `/events/:id/guests` | staff | Accepts `profileId` (copies profile fields) or raw fields; creates or links a GuestProfile by email/name. All new EventGuest fields are accepted |
+| PATCH | `/guests/:id` | staff | All EventGuest fields; `syncProfile: true` also writes public fields back to the profile |
+| GET | `/guests/:id/brief` | staff | Guest brief JSON: guest, profile, event, sessions, host contact, logistics, checklist items mentioning guests, documents |
+| POST | `/guests/:id/invite` | staff | Queues the invite email (with the portal link) and sets status INVITED and `invitedAt` |
+| POST | `/guests/:id/thank-you` | staff | Queues the thank-you email (with certificate link if issued), sets status THANKED and `thankYouSentAt` |
+| GET | `/guest-portal/:token` | – (token) | What the guest sees: event basics and their editable fields |
+| PUT | `/guest-portal/:token` | – (token) | Guest submits `{ name, designation, organization, bio, linkedinUrl, photoUrl, talkTitle, talkAbstract, arrivalAt, departureAt, dietary, avRequirements, consentRecording, phone }` → sets `profileSubmittedAt`, status CONFIRMED if it was INVITED, logs activity |
+| POST | `/guest-portal/:token/upload` | – (token) | Multipart photo upload, returns `{ url }` |
+| GET | `/speakers/:guestId` | – | Public speaker page data (public fields only, plus their public events in this brand) |
+
+Certificates: guests receive SPEAKER/JUDGE/MENTOR certificates even without a user account (`Certificate.guestId`).
+
+## Uploads (photos, posters, documents)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/uploads` | user | Multipart `file` (images, PDF, up to 15 MB) + optional `eventId`, `kind`, `caption`. When `eventId` + `kind` are given and the caller is staff/volunteer on the event, a MediaAsset is created. Returns `{ url, key, media? }` |
+| GET | `/files/*` | – | Serves stored files (local driver). In production the S3 driver returns public URLs instead |
+| PATCH | `/media/:id` | staff | `{ caption, isHighlight, approvedForSocial, kind }` |
+
+## Notifications
+Every outgoing message is a `Notification` row (outbox). A worker inside the API sends due rows every 30 s: EMAIL through SMTP (`SMTP_URL`) or logs it in development; IN_APP rows are just stored.
+Automatic messages: `registration.confirmed` (with ticket and calendar link), `registration.waitlisted`, `registration.approved`, `event.reminder.24h`, `event.reminder.1h`, `event.cancelled`, `event.updated` (time or venue changed), `feedback.request` (on COMPLETED), `certificate.ready`, `linkedin.ready`, `guest.invite`, `guest.thank_you`, `guest.reminder` (2 days before, if profile not submitted), `task.overdue` (daily digest to assignees). Announcements with channels EMAIL/IN_APP fan out to registrants.
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/me/notifications?unread=1` | user → IN_APP rows |
+| POST | `/me/notifications/read` | user `{ ids?: string[] }` (none = all) |
+| GET | `/events/:id/notifications` | staff → outbox rows for the event with status |
+| POST | `/events/:id/announcements/:announcementId/send` | staff → fan out now |
+
+## Social media captions
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/events/:id/social/suggest` | staff `{ platforms?: [...] }` → creates or refreshes DRAFTED SocialPost rows with a caption per platform (AI if a key is set, else template), using event outcome, guests, winners and brand hashtags |
