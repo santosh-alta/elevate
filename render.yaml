@@ -29,7 +29,7 @@ services:
       # This service's own address, e.g. https://elevate-api.onrender.com
       - key: API_PUBLIC_URL
         sync: false
-      # The website's Vercel address, e.g. https://elevate-alta.vercel.app
+      # The website's Vercel address, e.g. https://alta-events.vercel.app
       - key: WEB_PUBLIC_URL
         sync: false
       # Brands point their custom domain at Vercel, which hosts the website

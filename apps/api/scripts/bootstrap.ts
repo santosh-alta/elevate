@@ -4,7 +4,7 @@
  *
  * Run (with DATABASE_URL pointing at the production database):
  *   npm run bootstrap -w @elevate/api -- --brand altaschool --admin you@altaschool.tech --name "Your Name" \
- *     --domain event.altaschool.tech --temp-domain elevate-alta.vercel.app
+ *     --domain event.altaschool.tech --temp-domain alta-events.vercel.app
  *
  *   --domain       the brand's own domain; stays unverified until its DNS records are verified in Admin → Settings
  *   --temp-domain  an address we control (e.g. *.vercel.app); marked verified so the site and emails work right away

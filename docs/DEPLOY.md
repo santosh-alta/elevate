@@ -52,7 +52,7 @@ just change `SMTP_URL`.
 ## 4. Create the website on Vercel
 
 1. vercel.com → **Add New** → **Project** → import **elevate** from GitHub.
-2. **Project Name:** `elevate-alta` (this becomes the temporary address `elevate-alta.vercel.app`).
+2. **Project Name:** `alta-events` (this becomes the temporary address `alta-events.vercel.app`).
 3. **Root Directory:** click **Edit** → choose `apps/web`. Framework: **Next.js** (detected automatically).
 4. **Environment Variables:** `API_URL` = your Render address, e.g. `https://elevate-api.onrender.com` (no `/v1`).
 5. Click **Deploy**. Note the address Vercel gives you under **Domains**.
@@ -60,7 +60,7 @@ just change `SMTP_URL`.
 ## 5. Connect the two
 
 1. Render → **elevate-api** → **Environment** → set `WEB_PUBLIC_URL` to the Vercel address, e.g.
-   `https://elevate-alta.vercel.app` → **Save** (Render redeploys).
+   `https://alta-events.vercel.app` → **Save** (Render redeploys).
 
 ## 6. Create Alta and your admin account
 
@@ -69,14 +69,14 @@ Render → **elevate-api** → **Shell**, then run (with your own email and name
 ```bash
 npm run bootstrap -w @elevate/api -- --brand altaschool \
   --admin you@altaschool.tech --name "Your Name" --platform \
-  --domain event.altaschool.tech --temp-domain elevate-alta.vercel.app
+  --domain event.altaschool.tech --temp-domain alta-events.vercel.app
 ```
 
-This creates the Alta brand with its theme and contact details, makes `elevate-alta.vercel.app` open Alta's site, and
+This creates the Alta brand with its theme and contact details, makes `alta-events.vercel.app` open Alta's site, and
 makes you an admin. It never deletes anything, so you can run it again safely (for example to add another admin).
 **Never run `db:seed` against this database:** it wipes everything and loads demo data.
 
-Open `https://elevate-alta.vercel.app/admin`, enter your email, and sign in with the code that arrives.
+Open `https://alta-events.vercel.app/admin`, enter your email, and sign in with the code that arrives.
 
 ## 7. Sign-in: Google, GitHub and email code
 
@@ -90,15 +90,15 @@ needed on Vercel. People who use different methods with the same email end up in
 2. **APIs & Services** → **OAuth consent screen** → **External** → app name "Alta School of Technology Events", support
    email → scopes `openid`, `email`, `profile` → **Publish app**.
 3. **Credentials** → **Create credentials** → **OAuth client ID** → **Web application** → **Authorized redirect URIs**:
-   - `https://elevate-alta.vercel.app/api/auth/google/callback`
+   - `https://alta-events.vercel.app/api/auth/google/callback`
    - later also `https://event.altaschool.tech/api/auth/google/callback`
 4. Put the Client ID and secret on Render as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 **GitHub**
 1. github.com → your photo → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**
    (or the same under an organization's settings, so it isn't tied to one person).
-2. Application name "Alta School of Technology Events"; Homepage URL `https://elevate-alta.vercel.app`;
-   Authorization callback URL `https://elevate-alta.vercel.app/api/auth/github/callback` → **Register application**.
+2. Application name "Alta School of Technology Events"; Homepage URL `https://alta-events.vercel.app`;
+   Authorization callback URL `https://alta-events.vercel.app/api/auth/github/callback` → **Register application**.
 3. **Generate a new client secret**. Put the Client ID and secret on Render as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
 
 A GitHub OAuth App allows only one callback address. When Alta moves to `event.altaschool.tech`, change the callback URL
