@@ -96,7 +96,7 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
             <MapPin className="h-3.5 w-3.5" />
             {event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.name).join(" + ") || "Campus event"}
           </p>
-          {regs !== undefined && <p className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{regs} registered</p>}
+          {!!regs && <p className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{regs} registered</p>}
         </div>
       </div>
     </Link>
