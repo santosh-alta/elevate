@@ -10,7 +10,7 @@ import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
-import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage } from "@/lib/format";
+import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
 import type { ElevateEvent, Guest, Media, Registration, Sponsor, Team, Winner } from "@/lib/types";
 import { EventCover, ModeBadge } from "@/components/event-card";
@@ -102,6 +102,13 @@ export default async function EventPage({ params, searchParams }: Params) {
     .filter(Boolean).join(" · ") || "To be announced";
   const registerHref = `/events/${event.slug}/register`;
   const isTeamEvent = !!event.modules?.teams;
+  // After the event: what happened (recorded figures for events run before the site, else registrations).
+  const people = participantCount(event);
+  const teamCount = Number(event.config?.teams ?? 0) || (isTeamEvent ? eventCount(event, "teams") ?? 0 : 0);
+  const prizePool = typeof event.config?.prizePool === "string" ? event.config.prizePool : null;
+  const outcomeLine = ended && people
+    ? [`${people.toLocaleString("en-IN")} participants`, teamCount && `${teamCount} teams`, prizePool && `${prizePool} prize pool`].filter(Boolean).join(" · ")
+    : null;
 
   const nav: { id: string; label: string }[] = [
     ...(winners.length ? [{ id: "winners", label: "Winners" }] : []),
@@ -188,8 +195,12 @@ export default async function EventPage({ params, searchParams }: Params) {
             />
             <Info
               icon={<Users className="h-4 w-4" />}
-              label={isTeamEvent && event.config?.maxTeamSize ? `Teams of ${[event.config.minTeamSize, event.config.maxTeamSize].filter(Boolean).join("–")}` : "Seats"}
-              value={event.capacity ? `${regs ?? 0} / ${event.capacity} registered` : `${regs ?? 0} registered`}
+              {...(outcomeLine
+                ? { label: "Participation", value: outcomeLine }
+                : {
+                    label: isTeamEvent && event.config?.maxTeamSize ? `Teams of ${[event.config.minTeamSize, event.config.maxTeamSize].filter(Boolean).join("–")}` : "Seats",
+                    value: event.capacity ? `${regs ?? 0} / ${event.capacity} registered` : `${regs ?? 0} registered`,
+                  })}
             />
           </div>
           {!!event.tags?.length && (
