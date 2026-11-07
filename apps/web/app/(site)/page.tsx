@@ -8,6 +8,7 @@ import { EventIcon } from "@/components/event-icon";
 import type { ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
 import { EmptyState, LinkButton } from "@/components/ui";
+import { HeroVideo } from "@/components/hero-video";
 
 export default async function HomePage() {
   const tenant = await requireTenant();
@@ -27,12 +28,13 @@ export default async function HomePage() {
   return (
     <>
       <section className="relative isolate overflow-hidden bg-hero-bg text-hero-fg">
+        <HeroVideo url={theme.heroVideoUrl} />
         <div
           aria-hidden
           className="absolute inset-0 -z-10 opacity-60"
           style={{ backgroundImage: "radial-gradient(60% 80% at 100% 0%, rgb(var(--gradient-from) / 0.35), transparent 60%), radial-gradient(50% 70% at 85% 100%, rgb(var(--gradient-to) / 0.25), transparent 60%)" }}
         />
-        {theme.iconUrl && (
+        {theme.iconUrl && !theme.heroVideoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={theme.iconUrl} alt="" aria-hidden className="pointer-events-none absolute -right-16 top-1/2 -z-10 hidden h-[130%] max-h-[560px] w-auto -translate-y-1/2 opacity-[0.12] md:block" />
         )}

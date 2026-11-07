@@ -275,6 +275,15 @@ export interface BrandTheme {
   /** Two-colour brand gradient for bars and accents */
   gradient?: [string, string];
   tagline?: string;
+  /** YouTube link played muted and looping behind the home page hero (e.g. an event aftermovie) */
+  heroVideoUrl?: string;
+}
+
+/** YouTube video id from a watch, share, shorts or embed link (or a bare id). */
+export function youTubeId(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/) ?? url.match(/^([\w-]{11})$/);
+  return m?.[1] ?? null;
 }
 
 export const DEFAULT_THEME: BrandTheme = {
@@ -341,6 +350,7 @@ export const ALTA_THEME: ThemeInput = {
   radius: 10,
   gradient: ["#22ACD1", "#08C191"],
   tagline: "Creating Builders for an AI World",
+  heroVideoUrl: "https://www.youtube.com/watch?v=64gpl6Nd1-w", // Hackwarts'26 aftermovie (ALTA Pune)
 };
 
 /** Alta School of Technology contact details, footer links and certificate signatory. */

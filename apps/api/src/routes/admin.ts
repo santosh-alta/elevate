@@ -38,6 +38,7 @@ const themeSchema = z.object({
   radius: z.number().int().min(0).max(32).optional(),
   gradient: z.tuple([hex, hex]).nullable().optional(),
   tagline: z.string().trim().max(160).nullable().optional(),
+  heroVideoUrl: z.string().trim().url().nullable().optional(),
 });
 
 const hostnameSchema = z

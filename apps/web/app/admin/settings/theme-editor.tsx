@@ -155,6 +155,9 @@ export function ThemeEditor({ tenant }: { tenant: Tenant }) {
             <Field label="Tagline" hint="Home page headline, footer and emails. The last word is highlighted.">
               <Input value={theme.tagline ?? ""} onChange={(e) => set({ tagline: e.target.value || undefined })} placeholder="Learn, build and grow at our events." maxLength={120} />
             </Field>
+            <Field label="Home page background video (optional)" hint="A YouTube link, e.g. an event aftermovie. Plays muted and on loop behind the home page headline.">
+              <Input value={theme.heroVideoUrl ?? ""} onChange={(e) => set({ heroVideoUrl: e.target.value || undefined })} placeholder="https://www.youtube.com/watch?v=…" />
+            </Field>
             <Field label={`Corner radius (${theme.radius ?? 12}px)`}>
               <input type="range" min={0} max={24} value={theme.radius ?? 12} onChange={(e) => set({ radius: Number(e.target.value) })} className="mt-2 w-full accent-[rgb(var(--accent))]" />
             </Field>
