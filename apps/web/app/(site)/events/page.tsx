@@ -30,8 +30,17 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   if (sp.tag) qs.set("tag", sp.tag);
   if (sp.type) qs.set("type", sp.type);
   if (sp.campusId) qs.set("campusId", sp.campusId);
-  if (sp.when !== "all") qs.set("upcoming", "1");
-  const [list, tags] = await Promise.all([apiList<ElevateEvent>(`/events?${qs}`), getTags()]);
+  const when = sp.when === "all" || sp.when === "past" ? sp.when : "upcoming";
+  if (when === "upcoming") qs.set("upcoming", "1");
+  if (when === "past") qs.set("past", "1");
+  let [list, tags] = await Promise.all([apiList<ElevateEvent>(`/events?${qs}`), getTags()]);
+  // Nothing coming up: show past events rather than an empty page.
+  let showingPast = false;
+  if (when === "upcoming" && !list.length) {
+    qs.delete("upcoming"); qs.set("past", "1");
+    list = await apiList<ElevateEvent>(`/events?${qs}`);
+    showingPast = list.length > 0;
+  }
 
   // The API filters; repeat the cheap checks here so older API versions still behave.
   const q = sp.q?.toLowerCase();
@@ -71,6 +80,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         </Select>
         <Select name="when" defaultValue={sp.when ?? "upcoming"} aria-label="When">
           <option value="upcoming">Upcoming</option>
+          <option value="past">Past events</option>
           <option value="all">All events</option>
         </Select>
         <Button type="submit" variant="cta">Search</Button>
@@ -132,6 +142,9 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
             <Link href="/events" className="text-sm font-medium text-primary underline decoration-accent decoration-2 underline-offset-4">Clear filters</Link>
           )}
         </div>
+        {showingPast && (
+          <p className="mb-4 rounded-brand bg-primary/5 p-3 text-sm text-fg">No upcoming events right now. Here&apos;s what we&apos;ve run so far; new events will appear here first.</p>
+        )}
         {events.length ? (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{events.map((e) => <EventCard key={e.id} event={e} />)}</div>
         ) : (
