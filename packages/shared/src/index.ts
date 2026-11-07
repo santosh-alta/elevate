@@ -127,7 +127,38 @@ export const DEFAULT_MODULES: Record<EventType, EventModules> = {
 // ───────── Checklist templates (defaults; brands can override in TaskTemplate) ─────────
 
 export type TaskPhase = "PRE" | "DURING" | "POST";
-export interface ChecklistItem { phase: TaskPhase; title: string; dueOffsetDays: number }
+
+/** Who looks after a checklist task. People join teams in Admin → Team & roles. */
+export const WORK_TEAMS = ["OWNER", "OPERATIONS", "SOCIAL_MEDIA"] as const;
+export type WorkTeam = (typeof WORK_TEAMS)[number];
+export const WORK_TEAM_LABELS: Record<WorkTeam, string> = {
+  OWNER: "Event owner",
+  OPERATIONS: "Operations",
+  SOCIAL_MEDIA: "Social media",
+};
+
+export interface ChecklistItem {
+  phase: TaskPhase;
+  title: string;
+  dueOffsetDays: number;
+  /** Defaults from the title (see taskTeamFor) */
+  team?: WorkTeam;
+  /** A link (e.g. the Instagram post) must be added before the task can be marked done */
+  proof?: boolean;
+}
+
+/** Best-guess team for a task title, used when a checklist item doesn't say. */
+export function taskTeamFor(title: string): WorkTeam {
+  const t = title.toLowerCase();
+  if (/(announce|poster|creative|social|stor(y|ies)|reel|instagram|linkedin post|photo|video|media coverage|recap)/.test(t)) return "SOCIAL_MEDIA";
+  if (/(venue|\bav\b|tech check|wi-?fi|power|food|travel|stay|transport|memento|goodies|welcome guest|receive guest|check-in|setup|standee|backdrop|escort)/.test(t)) return "OPERATIONS";
+  return "OWNER";
+}
+
+/** Whether a task needs a proof link before it's done (announcements and published posts). */
+export function taskNeedsProof(title: string): boolean {
+  return /(announce|publish social|social media posts|live stories|recap post|post on)/i.test(title);
+}
 
 const POST_COMMON: ChecklistItem[] = [
   { phase: "POST", title: "Upload event photos (Drive folder link)", dueOffsetDays: 1 },
@@ -136,6 +167,30 @@ const POST_COMMON: ChecklistItem[] = [
   { phase: "POST", title: "Send LinkedIn post suggestions to participants", dueOffsetDays: 2 },
   { phase: "POST", title: "Send feedback form", dueOffsetDays: 1 },
   { phase: "POST", title: "Publish outcome report", dueOffsetDays: 5 },
+];
+
+/** Offline seminar / guest session: the ALTA seminar workflow (plan → engage → capture → share). */
+const SEMINAR_FLOW: ChecklistItem[] = [
+  { phase: "PRE", team: "OWNER", title: "Confirm guest and send brief (audience, topic, duration, AV needs; slides by D-1)", dueOffsetDays: -7 },
+  { phase: "PRE", team: "SOCIAL_MEDIA", proof: true, title: "Announce the event on Instagram and LinkedIn (add post link)", dueOffsetDays: -7 },
+  { phase: "PRE", team: "OWNER", title: "Open registration and share the attendance QR", dueOffsetDays: -7 },
+  { phase: "PRE", team: "OPERATIONS", title: "Run-of-show with timings; anchor / host assigned", dueOffsetDays: -3 },
+  { phase: "PRE", team: "OPERATIONS", title: "Venue setup with ALTA-branded graphics (backdrop, standee, screen slide)", dueOffsetDays: -1 },
+  { phase: "PRE", team: "OPERATIONS", title: "Tech check (mic, projector, clicker, slides loaded, backup laptop)", dueOffsetDays: -1 },
+  { phase: "DURING", team: "OPERATIONS", title: "Welcome guest at the gate; escort to green room with water or tea", dueOffsetDays: 0 },
+  { phase: "DURING", team: "SOCIAL_MEDIA", title: "Full media coverage (photos and video) from guest entry", dueOffsetDays: 0 },
+  { phase: "DURING", team: "OWNER", title: "Welcome address, guest introduction and felicitation", dueOffsetDays: 0 },
+  { phase: "DURING", team: "OWNER", title: "Main session, student interaction and Q&A", dueOffsetDays: 0 },
+  { phase: "DURING", team: "OPERATIONS", title: "Vote of thanks and guest goodies (memento and certificate)", dueOffsetDays: 0 },
+  { phase: "DURING", team: "SOCIAL_MEDIA", title: "Group and individual photos with the guest", dueOffsetDays: 0 },
+  { phase: "DURING", team: "SOCIAL_MEDIA", proof: true, title: "Guest interview (2–3 min) and student reactions recorded (add video link)", dueOffsetDays: 0 },
+  { phase: "DURING", team: "OWNER", title: "Feedback form sent to students within the hour", dueOffsetDays: 0 },
+  { phase: "DURING", team: "OPERATIONS", title: "Guest escorted out; transport arranged", dueOffsetDays: 0 },
+  { phase: "POST", team: "OWNER", title: "Thank-you message or email to the guest", dueOffsetDays: 1 },
+  { phase: "POST", team: "SOCIAL_MEDIA", title: "Upload event photos to the gallery", dueOffsetDays: 1 },
+  { phase: "POST", team: "SOCIAL_MEDIA", proof: true, title: "Recap posts: reel and photo carousel, guest tagged on LinkedIn and Instagram (add post links)", dueOffsetDays: 2 },
+  { phase: "POST", team: "OWNER", title: "Generate and send certificates", dueOffsetDays: 2 },
+  { phase: "POST", team: "OWNER", title: "Internal report (attendance count, feedback score, content links)", dueOffsetDays: 2 },
 ];
 
 const GUEST_EVENT: ChecklistItem[] = [
@@ -222,8 +277,8 @@ const CONTEST: ChecklistItem[] = [
 export const DEFAULT_CHECKLISTS: Record<EventType, ChecklistItem[]> = {
   HACKATHON: HACKATHON,
   COMPETITION: HACKATHON,
-  SEMINAR: GUEST_EVENT,
-  GUEST_LECTURE: GUEST_EVENT,
+  SEMINAR: SEMINAR_FLOW,
+  GUEST_LECTURE: SEMINAR_FLOW,
   WORKSHOP: GUEST_EVENT,
   WEBINAR: GUEST_EVENT,
   BOOTCAMP: GENERIC,
@@ -231,7 +286,7 @@ export const DEFAULT_CHECKLISTS: Record<EventType, ChecklistItem[]> = {
   ENTREPRENEURSHIP: ENTREPRENEURSHIP,
   STARTUP_PITCH: HACKATHON,
   CONFERENCE: ENTREPRENEURSHIP,
-  PANEL_DISCUSSION: GUEST_EVENT,
+  PANEL_DISCUSSION: SEMINAR_FLOW,
   MEETUP: GENERIC,
   CAREER_FAIR: ENTREPRENEURSHIP,
   INDUSTRY_VISIT: GENERIC,
@@ -239,7 +294,7 @@ export const DEFAULT_CHECKLISTS: Record<EventType, ChecklistItem[]> = {
   ALUMNI_MEET: GUEST_EVENT,
   SPORTS: GENERIC,
   TECH_FEST: ENTREPRENEURSHIP,
-  INDUSTRY_SEMINAR: GUEST_EVENT,
+  INDUSTRY_SEMINAR: SEMINAR_FLOW,
   CODING_CONTEST: CONTEST,
   QUIZ: CONTEST,
   OTHER: GENERIC,

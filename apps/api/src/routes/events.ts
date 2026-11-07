@@ -11,12 +11,15 @@ import {
   EVENT_TYPE_LABELS,
   REVIEWER_ROLES,
   createEventSchema,
+  taskNeedsProof,
+  taskTeamFor,
 } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
 import {
   canManageEvent,
   findEvent,
+  hasRole,
   isOrganizer,
   isStaff,
   requireBrandAdmin,
@@ -55,6 +58,7 @@ const updateEventSchema = createEventSchema
   .omit({ type: true })
   .partial()
   .extend({
+    ownerId: z.string().nullable().optional(),
     driveFolderUrl: z.string().url().nullable().optional(),
     registrationForm: z
       .array(
@@ -103,15 +107,23 @@ function validateFee(fee: { feeAmount?: number | null; earlyBirdAmount?: number 
 }
 
 /** Checklist rows for a new event: the brand's templates for the type, else the defaults. */
-export async function checklistFor(tenantId: string, type: (typeof EVENT_TYPES)[number], startsAt: Date) {
+export async function checklistFor(tenantId: string, type: (typeof EVENT_TYPES)[number], startsAt: Date, ownerId?: string) {
   const templates = await prisma.taskTemplate.findMany({ where: { tenantId, eventType: type }, orderBy: { sortOrder: "asc" } });
-  const checklist = templates.length ? templates : DEFAULT_CHECKLISTS[type];
-  return checklist.map((t, i) => ({
-    phase: t.phase,
-    title: t.title,
-    sortOrder: i,
-    dueAt: new Date(startsAt.getTime() + t.dueOffsetDays * DAY),
-  }));
+  const checklist: { phase: "PRE" | "DURING" | "POST"; title: string; dueOffsetDays: number; team?: string | null; proof?: boolean; proofRequired?: boolean }[] =
+    templates.length ? templates : DEFAULT_CHECKLISTS[type];
+  return checklist.map((t, i) => {
+    const team = t.team ?? taskTeamFor(t.title);
+    return {
+      phase: t.phase,
+      title: t.title,
+      sortOrder: i,
+      dueAt: new Date(startsAt.getTime() + t.dueOffsetDays * DAY),
+      team,
+      proofRequired: t.proof ?? t.proofRequired ?? taskNeedsProof(t.title),
+      // The owner's own tasks are assigned to them; team tasks stay with the team until someone picks them up.
+      ...(team === "OWNER" && ownerId && { assigneeId: ownerId }),
+    };
+  });
 }
 
 export const COMPETITION_TYPES = ["HACKATHON", "COMPETITION", "STARTUP_PITCH"];
@@ -213,17 +225,37 @@ export function eventRoutes(app: FastifyInstance) {
           campuses: { include: { campus: { select: { id: true, name: true, code: true } } } },
           category: CATEGORY_SELECT,
           _count: { select: { registrations: true, teams: true } },
+          ...(staff && { owner: { select: { id: true, name: true } } }),
         },
       }),
       prisma.event.count({ where }),
     ]);
     reply.header("X-Total-Count", String(total));
+    // Staff see each event's checklist health: done, overdue, and tasks missing their proof link.
+    const checklist = new Map<string, { total: number; done: number; overdue: number; proofMissing: number }>();
+    if (staff && items.length) {
+      const tasks = await prisma.eventTask.findMany({
+        where: { eventId: { in: items.map((e) => e.id) } },
+        select: { eventId: true, status: true, dueAt: true, proofRequired: true, evidenceUrl: true },
+      });
+      const now = new Date();
+      for (const t of tasks) {
+        const c = checklist.get(t.eventId) ?? { total: 0, done: 0, overdue: 0, proofMissing: 0 };
+        const finished = t.status === "DONE" || t.status === "SKIPPED";
+        c.total++;
+        if (finished) c.done++;
+        else if (t.dueAt && t.dueAt < now) c.overdue++;
+        if (t.proofRequired && t.status !== "SKIPPED" && !t.evidenceUrl) c.proofMissing++;
+        checklist.set(t.eventId, c);
+      }
+    }
     return items.map((e) => ({
       ...e,
       ...eventMeta(e),
       outcome: undefined,
       previewToken: staff ? e.previewToken : undefined,
       campuses: e.campuses.map((c) => ({ campus: c.campus })),
+      ...(staff && { checklist: checklist.get(e.id) ?? { total: 0, done: 0, overdue: 0, proofMissing: 0 } }),
     }));
   });
 
@@ -253,6 +285,7 @@ export function eventRoutes(app: FastifyInstance) {
         rubric: { orderBy: { sortOrder: "asc" } },
         category: CATEGORY_SELECT,
         _count: { select: { registrations: true, teams: true } },
+        ...(manager && { owner: { select: { id: true, name: true } } }),
       },
     });
 
@@ -383,7 +416,7 @@ export function eventRoutes(app: FastifyInstance) {
       ...(input.modules ?? {}),
     };
     const tags = normalizeTags(input.tags, category?.defaultTags);
-    const checklist = await checklistFor(tenant.id, input.type, input.startsAt);
+    const checklist = await checklistFor(tenant.id, input.type, input.startsAt, auth.user.id);
     const isCompetition = COMPETITION_TYPES.includes(input.type);
     const isContest = CONTEST_TYPES.includes(input.type);
     const config = {
@@ -407,6 +440,7 @@ export function eventRoutes(app: FastifyInstance) {
         slug: await uniqueSlug(tenant.id, input.title),
         previewToken: newToken(),
         createdById: auth.user.id,
+        ownerId: auth.user.id,
         ...(organizer && { approvalStatus: "DRAFT" as const, paidAllowed: false }),
         campuses: { create: campusIds.map((campusId) => ({ campusId })) },
         staff: { create: [{ userId: auth.user.id, role: "MANAGER" }] },
@@ -427,6 +461,14 @@ export function eventRoutes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>("/events/:id", async (req) => {
     const event = await requireEventManager(req, req.params.id);
     const input = updateEventSchema.parse(req.body);
+    if (input.ownerId !== undefined && input.ownerId !== event.ownerId) {
+      // Only admins or the current owner hand an event over, and only to someone on the brand's team.
+      if (!hasRole(req, ["BRAND_ADMIN"]) && req.auth!.user.id !== event.ownerId) throw forbidden("Only an admin or the current owner can change the owner");
+    }
+    if (input.ownerId && input.ownerId !== event.ownerId) {
+      const m = await prisma.membership.findUnique({ where: { tenantId_userId: { tenantId: event.tenantId, userId: input.ownerId } } });
+      if (!m || m.role === "STUDENT") throw badRequest("The new owner must be on the team (not a regular user)");
+    }
     const { campusIds, modules, config, registrationForm, pageSections, parentEventId, categoryId, tags, ...fields } = input;
     // A brand type must be based on the event's type (the type itself can't change after creation).
     const category = categoryId ? await resolveCategory(event.tenantId, categoryId, event.type) : null;

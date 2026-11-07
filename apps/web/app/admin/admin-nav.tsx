@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, CalendarPlus, CalendarRange, ClipboardCheck, LayoutDashboard, Settings, UsersRound } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarRange, ClipboardCheck, ListChecks, LayoutDashboard, Settings, UsersRound } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
 type Who = { staff: boolean; reviewer: boolean; admin: boolean };
 const ITEMS: { href: string; label: string; organizerLabel?: string; icon: typeof CalendarDays; exact?: boolean; show: (w: Who) => boolean }[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true, show: (w) => w.staff },
   { href: "/admin/review", label: "Review queue", icon: ClipboardCheck, show: (w) => w.reviewer },
+  { href: "/admin/tasks", label: "My tasks", icon: ListChecks, show: (w) => w.staff },
   { href: "/admin/events", label: "Events", organizerLabel: "My events", icon: CalendarRange, show: () => true },
   { href: "/admin/events/new", label: "Create event", icon: CalendarPlus, exact: true, show: () => true },
   { href: "/admin/calendar", label: "Calendar", icon: CalendarDays, show: (w) => w.staff },

@@ -170,11 +170,12 @@ export function eventPageRoutes(app: FastifyInstance) {
         categoryId: src.categoryId, tags: src.tags,
         clonedFromId: src.id,
         createdById: req.auth!.user.id,
+        ownerId: req.auth!.user.id,
         // A copy made by an organizer needs its own approval and stays free like any organizer event.
         ...(isOrganizer(req) && { approvalStatus: "DRAFT" as const, paidAllowed: false, feeAmount: null, earlyBirdAmount: null }),
         campuses: { create: full.campuses.map((c) => ({ campusId: c.campusId })) },
         staff: { create: [{ userId: req.auth!.user.id, role: "MANAGER" }] },
-        tasks: { create: await checklistFor(src.tenantId, src.type, startsAt) },
+        tasks: { create: await checklistFor(src.tenantId, src.type, startsAt, req.auth!.user.id) },
         rubric: {
           create: full.rubric.filter((c) => !c.roundId).map(({ name, description, maxScore, weight, sortOrder }) => ({ name, description, maxScore, weight, sortOrder })),
         },

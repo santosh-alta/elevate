@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { resolveTxt } from "node:dns/promises";
 import { z } from "zod";
 import { redactSettings } from "../lib/payments";
-import { ROLES } from "@elevate/shared";
+import { ROLES, WORK_TEAMS } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { clearTenantCache, requireTenant } from "../plugins/tenant";
 import { requireBrandAdmin, requirePlatformAdmin } from "../lib/permissions";
@@ -139,6 +139,7 @@ export function adminRoutes(app: FastifyInstance) {
         campusId: z.string().optional(),
         batch: z.string().optional(),
         rollNo: z.string().optional(),
+        teams: z.array(z.enum(WORK_TEAMS)).optional(),
       })
       .parse(req.body);
     if (body.campusId && !(await prisma.campus.findFirst({ where: { id: body.campusId, tenantId: tenant.id } }))) {
@@ -150,8 +151,8 @@ export function adminRoutes(app: FastifyInstance) {
       (await prisma.user.findUnique({ where: { email } })) ?? (await prisma.user.create({ data: { email, name: body.name } }));
     const m = await prisma.membership.upsert({
       where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
-      create: { tenantId: tenant.id, userId: user.id, role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo },
-      update: { role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo },
+      create: { tenantId: tenant.id, userId: user.id, role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo, teams: body.teams ?? [] },
+      update: { role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo, ...(body.teams && { teams: body.teams }) },
       include: { user: true, campus: true },
     });
     return reply.status(201).send(m);
@@ -163,7 +164,10 @@ export function adminRoutes(app: FastifyInstance) {
     const m = await prisma.membership.findFirst({ where: { id: req.params.membershipId, tenantId: tenant.id } });
     if (!m) throw notFound("Member");
     const body = z
-      .object({ role: z.enum(ROLES).optional(), campusId: z.string().nullable().optional(), batch: z.string().optional(), rollNo: z.string().optional() })
+      .object({
+        role: z.enum(ROLES).optional(), campusId: z.string().nullable().optional(), batch: z.string().optional(), rollNo: z.string().optional(),
+        teams: z.array(z.enum(WORK_TEAMS)).optional(),
+      })
       .parse(req.body);
     if (m.userId === auth.user.id && body.role && body.role !== "BRAND_ADMIN" && !auth.user.isPlatformAdmin) {
       throw badRequest("You can't remove your own admin role");

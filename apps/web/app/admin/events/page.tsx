@@ -7,7 +7,7 @@ import { requireTenant } from "@/lib/tenant";
 import { getMe, isOrganizerOnly } from "@/lib/auth";
 import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtRange, humanize, isFamily, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
-import { Badge, Button, Card, EmptyState, Input, LinkButton, Select, StatusBadge, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, LinkButton, Progress, Select, StatusBadge, Table, Td, Th } from "@/components/ui";
 
 export const metadata = { title: "Events" };
 
@@ -61,11 +61,14 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
       <Card>
         {events.length ? (
           <Table>
-            <thead><tr><Th>Event</Th><Th>Type</Th><Th>Tags</Th><Th>Where</Th><Th>When</Th><Th>Regs</Th><Th>Status</Th></tr></thead>
+            <thead><tr><Th>Event</Th><Th>Type</Th><Th>Tags</Th><Th>Where</Th><Th>When</Th><Th>Regs</Th><Th>Checklist</Th><Th>Status</Th></tr></thead>
             <tbody>
               {events.map((e) => (
                 <tr key={e.id} className="hover:bg-bg">
-                  <Td><Link href={`/admin/events/${e.id}`} className="font-medium hover:text-primary">{e.title}</Link></Td>
+                  <Td>
+                    <Link href={`/admin/events/${e.id}`} className="font-medium hover:text-primary">{e.title}</Link>
+                    {e.owner && <p className="text-xs text-muted">Owner: {e.owner.name}</p>}
+                  </Td>
                   <Td>
                     <Badge tone={e.category ? "highlight" : "primary"}>{eventLabel(e)}</Badge>
                     <span className="mt-1 block text-xs text-muted">{familyLabel(eventFamily(e))}</span>
@@ -83,6 +86,21 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
                   <Td className="text-muted">{e.scope === "CENTRAL" ? "Central (HQ)" : eventCampuses(e).map((c) => c.code || c.name).join(" + ")} · {humanize(e.mode)}</Td>
                   <Td className="whitespace-nowrap text-muted">{fmtRange(e.startsAt, e.endsAt)}</Td>
                   <Td className="tabular-nums">{eventCount(e, "registrations") ?? "—"}</Td>
+                  <Td className="min-w-[9rem]">
+                    {e.checklist && e.checklist.total > 0 ? (
+                      <Link href={`/admin/events/${e.id}?tab=checklist`} className="block">
+                        <span className="flex items-center gap-2">
+                          <Progress value={(e.checklist.done / e.checklist.total) * 100} />
+                          <span className="text-xs tabular-nums text-muted">{e.checklist.done}/{e.checklist.total}</span>
+                        </span>
+                        {(e.checklist.overdue > 0 || e.checklist.proofMissing > 0) && (
+                          <span className="mt-0.5 block text-xs font-medium text-red-600">
+                            {[e.checklist.overdue && `${e.checklist.overdue} overdue`, e.checklist.proofMissing && `${e.checklist.proofMissing} proof missing`].filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                      </Link>
+                    ) : <span className="text-xs text-muted">—</span>}
+                  </Td>
                   <Td>
                     <StatusBadge status={e.status} />
                     {e.approvalStatus && e.approvalStatus !== "APPROVED" && (

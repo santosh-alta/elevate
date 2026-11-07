@@ -19,7 +19,7 @@ export interface User {
   githubUrl?: string | null; portfolioUrl?: string | null; college?: string | null; degree?: string | null;
   graduationYear?: number | null; city?: string | null; profileCompletedAt?: string | null;
 }
-export interface Membership { id: string; role: Role; campusId?: string | null; campus?: Campus | null; user?: User }
+export interface Membership { id: string; role: Role; campusId?: string | null; campus?: Campus | null; user?: User; teams?: string[] }
 export interface Me { user: User; membership: Membership | null }
 
 export interface EventSession { id: string; title: string; speaker?: string | null; startsAt: string; endsAt: string; location?: string | null }
@@ -71,7 +71,9 @@ export interface ElevateEvent {
   livestreamUrl?: string | null; venueMapUrl?: string | null; contactEmail?: string | null; contactPhone?: string | null;
   faqs?: Faq[] | null; previewToken?: string;
   approvalStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED"; approvalNote?: string | null;
-  submittedAt?: string | null; reviewedAt?: string | null; paidAllowed?: boolean; createdById?: string | null; sponsors?: Sponsor[]; gallery?: Media[];
+  submittedAt?: string | null; reviewedAt?: string | null; paidAllowed?: boolean; createdById?: string | null;
+  ownerId?: string | null; owner?: { id: string; name: string } | null;
+  checklist?: { total: number; done: number; overdue: number; proofMissing: number }; sponsors?: Sponsor[]; gallery?: Media[];
   registrationForm?: { id: string; label: string; type?: string; required?: boolean; options?: string[] }[];
   canManage?: boolean;
   // v1.2
@@ -169,6 +171,8 @@ export interface Team {
 export interface Task {
   id: string; phase: "PRE" | "DURING" | "POST"; title: string; notes?: string | null; status: string;
   dueAt?: string | null; assigneeId?: string | null; assignee?: User | null; evidenceUrl?: string | null;
+  team?: string | null; proofRequired?: boolean; eventId?: string;
+  event?: { id: string; slug: string; title: string; startsAt: string; status: string };
 }
 
 export interface Criterion { id?: string; name: string; description?: string | null; maxScore: number; weight: number; roundId?: string | null; sortOrder?: number }

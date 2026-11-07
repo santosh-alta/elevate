@@ -78,6 +78,7 @@ export default async function EventCommandCentre({ params, searchParams }: Props
             </div>
             <h1 className="mt-2 text-2xl font-semibold">{event.title}</h1>
             <p className="text-sm text-muted">{fmtRange(event.startsAt, event.endsAt)}{event.venue ? ` · ${event.venue}` : ""}</p>
+            {event.owner && <p className="text-sm text-muted">Owner: <Link href={`/admin/events/${event.id}?tab=checklist`} className="font-medium text-fg hover:underline">{event.owner.name}</Link></p>}
           </div>
           <div className="flex flex-wrap items-start justify-end gap-2">
             <Link

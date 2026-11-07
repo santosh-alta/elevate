@@ -1,6 +1,7 @@
 import { CheckCircle2, Clock } from "lucide-react";
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from "@elevate/shared";
 import { ApiSelect } from "@/components/client/api-select";
+import { TeamToggles } from "@/components/admin/team-toggles";
 import { apiList } from "@/lib/api";
 import { isBrandAdmin, requireStaffPage } from "@/lib/auth";
 import { requireTenant } from "@/lib/tenant";
@@ -127,7 +128,7 @@ async function Members({ campuses }: { campuses: Campus[] }) {
       <Card>
         {members.length ? (
           <Table>
-            <thead><tr><Th>Name</Th><Th>Role</Th><Th>Campus</Th></tr></thead>
+            <thead><tr><Th>Name</Th><Th>Role</Th><Th>Teams</Th><Th>Campus</Th></tr></thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.id}>
@@ -135,6 +136,7 @@ async function Members({ campuses }: { campuses: Campus[] }) {
                   <Td>
                     <ApiSelect path={`/admin/members/${m.id}`} field="role" value={m.role} options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))} />
                   </Td>
+                  <Td><TeamToggles membershipId={m.id} teams={m.teams ?? []} /></Td>
                   <Td className="text-muted">{m.campus?.name ?? campuses.find((c) => c.id === m.campusId)?.name ?? "All"}</Td>
                 </tr>
               ))}
@@ -142,7 +144,11 @@ async function Members({ campuses }: { campuses: Campus[] }) {
           </Table>
         ) : <div className="p-5"><EmptyState title="No staff yet" description="Add admins, moderators, organizers, volunteers and judges." /></div>}
         <div className="border-t border-border p-5">
-          <p className="text-sm font-medium">What each role can do</p>
+          <p className="text-sm font-medium">Teams</p>
+          <p className="mt-1 text-sm text-muted">
+            Checklist tasks belong to the event owner, Operations or Social media. People in a team see its tasks under <span className="font-medium">My tasks</span> for every event and can tick them off; posts need the post link as proof.
+          </p>
+          <p className="mt-4 text-sm font-medium">What each role can do</p>
           <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
             {ROLES.map((r) => (
               <div key={r}><dt className="inline font-medium">{ROLE_LABELS[r]}: </dt><dd className="inline text-muted">{ROLE_DESCRIPTIONS[r]}</dd></div>

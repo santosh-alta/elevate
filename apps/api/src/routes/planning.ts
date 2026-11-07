@@ -1,8 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/prisma";
-import { assertManageable, requireEventManager } from "../lib/permissions";
-import { notFound } from "../lib/errors";
+import type { FastifyRequest } from "fastify";
+import type { Event, EventTask } from "@prisma/client";
+import { WORK_TEAMS } from "@elevate/shared";
+import { assertManageable, canManageEvent, isStaff, requireEventManager, requireStaff } from "../lib/permissions";
+import { requireTenant } from "../plugins/tenant";
+import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { fanOutAnnouncement } from "../lib/notify";
 
@@ -16,7 +20,41 @@ const expenseSchema = z.object({
   receiptUrl: z.string().url().optional(),
 });
 
+/** Event managers can do anything with a task; team members can work on tasks assigned to them or their team. */
+async function taskAccess(req: FastifyRequest, task: EventTask & { event: Event }): Promise<"manage" | "work"> {
+  if (!req.auth) throw forbidden();
+  const tenant = requireTenant(req);
+  if (task.event.tenantId !== tenant.id) throw notFound("Task");
+  if (await canManageEvent(req, task.event)) return "manage";
+  const teams = req.auth.membership?.teams ?? [];
+  if (isStaff(req) || req.auth.membership?.role === "ORGANIZER") {
+    if (task.assigneeId === req.auth.user.id || (task.team && teams.includes(task.team))) return "work";
+  }
+  throw forbidden("This task belongs to another team");
+}
+
 export function planningRoutes(app: FastifyInstance) {
+  /** Open tasks for me: assigned to me or to one of my teams, across this brand's events. */
+  app.get("/me/tasks", async (req) => {
+    const auth = requireStaff(req);
+    const tenant = requireTenant(req);
+    const { scope } = z.object({ scope: z.enum(["open", "all"]).default("open") }).parse(req.query);
+    const teams = auth.membership?.teams ?? [];
+    return prisma.eventTask.findMany({
+      where: {
+        event: { tenantId: tenant.id, status: { notIn: ["CANCELLED", "ARCHIVED"] } },
+        OR: [{ assigneeId: auth.user.id }, ...(teams.length ? [{ team: { in: teams } }] : [])],
+        ...(scope === "open" && { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } }),
+      },
+      orderBy: [{ dueAt: "asc" }, { sortOrder: "asc" }],
+      take: 300,
+      include: {
+        assignee: { select: { id: true, name: true } },
+        event: { select: { id: true, slug: true, title: true, startsAt: true, status: true } },
+      },
+    });
+  });
+
   // ───────── Tasks ─────────
   app.get<{ Params: { id: string } }>("/events/:id/tasks", async (req) => {
     const event = await requireEventManager(req, req.params.id);
@@ -36,6 +74,8 @@ export function planningRoutes(app: FastifyInstance) {
         notes: z.string().optional(),
         dueAt: z.coerce.date().optional(),
         assigneeId: z.string().optional(),
+        team: z.enum(WORK_TEAMS).optional(),
+        proofRequired: z.boolean().optional(),
       })
       .parse(req.body);
     const last = await prisma.eventTask.findFirst({ where: { eventId: event.id }, orderBy: { sortOrder: "desc" } });
@@ -49,10 +89,12 @@ export function planningRoutes(app: FastifyInstance) {
   app.patch<{ Params: { taskId: string } }>("/tasks/:taskId", async (req) => {
     const task = await prisma.eventTask.findUnique({ where: { id: req.params.taskId }, include: { event: true } });
     if (!task) throw notFound("Task");
-    await assertManageable(req, task.event);
+    const access = await taskAccess(req, task);
     const body = z
       .object({
         status: taskStatus.optional(),
+        team: z.enum(WORK_TEAMS).nullable().optional(),
+        proofRequired: z.boolean().optional(),
         title: z.string().min(1).optional(),
         notes: z.string().nullable().optional(),
         assigneeId: z.string().nullable().optional(),
@@ -61,6 +103,18 @@ export function planningRoutes(app: FastifyInstance) {
         phase: phase.optional(),
       })
       .parse(req.body);
+    if (access === "work") {
+      // Team members update progress, proof and notes, and can take a task; the rest is for event managers.
+      const allowed = ["status", "evidenceUrl", "notes", "assigneeId"];
+      const extra = Object.keys(body).filter((k) => !allowed.includes(k));
+      if (extra.length) throw forbidden("Only the event's managers can change that");
+      if (body.assigneeId && body.assigneeId !== req.auth!.user.id) throw forbidden("You can assign tasks to yourself only");
+    }
+    const proofRequired = body.proofRequired ?? task.proofRequired;
+    const evidence = body.evidenceUrl !== undefined ? body.evidenceUrl : task.evidenceUrl;
+    if (proofRequired && !evidence && (body.status ?? task.status) === "DONE") {
+      throw badRequest("Add the proof link (e.g. the Instagram or LinkedIn post) before marking this done");
+    }
     const completing = body.status && body.status !== task.status;
     const updated = await prisma.eventTask.update({
       where: { id: task.id },

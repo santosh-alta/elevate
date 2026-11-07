@@ -93,6 +93,7 @@ model User {
   updatedAt       DateTime @updatedAt
 
   memberships      Membership[]
+  ownedEvents      Event[]           @relation("EventOwner")
   registrations    Registration[]
   teamMemberships  TeamMember[]
   judgeAssignments JudgeAssignment[]
@@ -139,6 +140,8 @@ model Membership {
   campusId  String?
   batch     String? // e.g. "2025-29"
   rollNo    String?
+  /// Work teams this staff member belongs to, e.g. ["SOCIAL_MEDIA"] (see WORK_TEAMS)
+  teams     String[] @default([])
   createdAt DateTime @default(now())
 
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -270,6 +273,9 @@ model Event {
   /// Cached outcome summary, regenerated on demand
   outcome              Json?
   createdById          String?
+  /// Who is accountable for the event (defaults to its creator; admins can reassign)
+  ownerId              String?
+  owner                User?       @relation("EventOwner", fields: [ownerId], references: [id])
   /// Organizer-created events must be approved before they can be published
   approvalStatus       ApprovalStatus @default(APPROVED)
   /// Reviewer's note, shown to the organizer (e.g. why it was sent back)
@@ -378,6 +384,8 @@ model TaskTemplate {
   /// Due date offset in days relative to event start (negative = before)
   dueOffsetDays Int       @default(0)
   sortOrder     Int       @default(0)
+  team          String?
+  proofRequired Boolean   @default(false)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -397,6 +405,10 @@ model EventTask {
   sortOrder   Int        @default(0)
   /// Optional evidence link (poster, drive, booking confirmation)
   evidenceUrl String?
+  /// Team responsible (OWNER, OPERATIONS, SOCIAL_MEDIA)
+  team          String?
+  /// evidenceUrl must be set before the task can be marked done
+  proofRequired Boolean @default(false)
 
   event    Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id])
