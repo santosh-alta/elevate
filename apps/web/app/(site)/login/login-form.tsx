@@ -2,15 +2,11 @@
 
 import { useState } from "react";
 import { Button, Field, Input } from "@/components/ui";
-import { callApi } from "@/components/client/api";
 
-/** New accounts start with the email's first part as their name; ask for the real one once. */
-const needsName = (u: { name?: string; email?: string } | undefined) => !!u?.email && (!u.name || u.name === u.email.split("@")[0]);
 
 export function LoginForm({ next }: { next: string }) {
-  const [step, setStep] = useState<"email" | "code" | "name">("email");
+  const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [devCode, setDevCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,29 +17,6 @@ export function LoginForm({ next }: { next: string }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.message ?? "Something went wrong");
     return data;
-  }
-
-  if (step === "name") {
-    return (
-      <form
-        className="space-y-4"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true); setError(null);
-          try {
-            await callApi("PATCH", "/me", { name: name.trim() });
-            window.location.href = next;
-          } catch (err) { setError((err as Error).message); setBusy(false); }
-        }}
-      >
-        <p className="text-sm text-muted">You&apos;re signed in. One last thing: what&apos;s your name?</p>
-        <Field label="Full name" hint="Exactly as it should appear on your certificates.">
-          <Input required autoFocus minLength={2} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya Sharma" />
-        </Field>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button type="submit" className="w-full" disabled={busy || name.trim().length < 2}>{busy ? "Saving…" : "Continue"}</Button>
-      </form>
-    );
   }
 
   return step === "email" ? (
@@ -71,8 +44,8 @@ export function LoginForm({ next }: { next: string }) {
         setBusy(true); setError(null);
         try {
           const data = await post("/api/auth/verify", { email, code });
-          if (needsName(data.user)) { setStep("name"); setBusy(false); return; }
-          window.location.href = next;
+          // First sign-in: the one-time profile page, then on to where they were going.
+          window.location.href = data.user?.profileCompletedAt ? next : `/profile?next=${encodeURIComponent(next)}`;
         } catch (err) { setError((err as Error).message); setBusy(false); }
       }}
     >

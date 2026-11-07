@@ -53,3 +53,10 @@ export async function requireUser(next: string): Promise<Me> {
   if (!me) redirect(`/login?next=${encodeURIComponent(next)}`);
   return me;
 }
+
+/** Signed in and has filled in the one-time profile page (name, mobile, college). */
+export async function requireProfile(next: string): Promise<Me> {
+  const me = await requireUser(next);
+  if (!me.user.profileCompletedAt) redirect(`/profile?next=${encodeURIComponent(next)}`);
+  return me;
+}

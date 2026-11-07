@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CalendarDays, MapPin } from "lucide-react";
 import { apiGet, apiList } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
 import { eventFee, fmtDateTime, fmtRange } from "@/lib/format";
 import type { ElevateEvent, Payment, ProblemStatement, Registration } from "@/lib/types";
 import { Card, CardBody, EmptyState, LinkButton } from "@/components/ui";
@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RegisterPage({ params }: Props) {
   const { slug } = await params;
-  const me = await requireUser(`/events/${slug}/register`);
+  const me = await requireProfile(`/events/${slug}/register`);
   const event = await apiGet<ElevateEvent>(`/events/${encodeURIComponent(slug)}`);
   if (!event) notFound();
   const regs = await apiList<Registration>("/me/registrations");

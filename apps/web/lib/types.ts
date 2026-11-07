@@ -16,6 +16,8 @@ export interface Tenant {
 export interface User {
   id: string; email: string; name: string; phone?: string | null; avatarUrl?: string | null;
   linkedinUrl?: string | null; isPlatformAdmin?: boolean;
+  githubUrl?: string | null; portfolioUrl?: string | null; college?: string | null; degree?: string | null;
+  graduationYear?: number | null; city?: string | null; profileCompletedAt?: string | null;
 }
 export interface Membership { id: string; role: Role; campusId?: string | null; campus?: Campus | null; user?: User }
 export interface Me { user: User; membership: Membership | null }

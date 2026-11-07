@@ -313,7 +313,12 @@ export function registrationRoutes(app: FastifyInstance) {
       where: { eventId: event.id, ...(status && { status: status as never }) },
       orderBy: { createdAt: "asc" },
       include: {
-        user: { select: { id: true, name: true, email: true, phone: true, linkedinUrl: true } },
+        user: {
+          select: {
+            id: true, name: true, email: true, phone: true, linkedinUrl: true, githubUrl: true, portfolioUrl: true,
+            college: true, degree: true, graduationYear: true, city: true,
+          },
+        },
         payment: { select: { id: true, status: true, amount: true, currency: true, receiptNo: true } },
       },
     });
@@ -334,11 +339,15 @@ export function registrationRoutes(app: FastifyInstance) {
 
     if (format === "csv") {
       const form = (event.registrationForm ?? []) as unknown as FormField[];
-      const header = ["Name", "Email", "Phone", "Campus", "Batch", "Roll no", "Status", "Team", "Payment", "Registered at", "Checked in at", ...form.map((f) => f.label)];
+      const header = [
+        "Name", "Email", "Phone", "College", "Course", "Graduation year", "City", "LinkedIn", "GitHub", "Portfolio",
+        "Campus", "Batch", "Roll no", "Status", "Team", "Payment", "Registered at", "Checked in at", ...form.map((f) => f.label),
+      ];
       const lines = rows.map((r) => {
         const answers = (r.answers ?? {}) as Record<string, unknown>;
         return [
-          r.user.name, r.user.email, r.user.phone, r.campus, r.batch, r.rollNo, r.status, r.team?.name, r.payment ? `${r.payment.status} ${r.payment.receiptNo}` : "", r.createdAt, r.checkedInAt,
+          r.user.name, r.user.email, r.user.phone, r.user.college, r.user.degree, r.user.graduationYear, r.user.city,
+          r.user.linkedinUrl, r.user.githubUrl, r.user.portfolioUrl, r.campus, r.batch, r.rollNo, r.status, r.team?.name, r.payment ? `${r.payment.status} ${r.payment.receiptNo}` : "", r.createdAt, r.checkedInAt,
           ...form.map((f) => answers[f.id]),
         ].map(csvCell).join(",");
       });

@@ -13,6 +13,13 @@ import type { Tenant, User } from "@prisma/client";
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ACTIVE_CODES = 5;
 
+/** Accepts a username or a full profile link and returns a full link. */
+function profileUrl(v: string | null | undefined, base: string, host: RegExp): string | null | undefined {
+  if (!v) return v;
+  if (host.test(v)) return /^https?:\/\//i.test(v) ? v : `https://${v.replace(/^\/+/, "")}`;
+  return base + v.replace(/^@/, "").replace(/\/+$/, "");
+}
+
 export function authRoutes(app: FastifyInstance) {
   app.get("/tenant", async (req) => {
     const tenant = requireTenant(req);
@@ -223,15 +230,41 @@ export function authRoutes(app: FastifyInstance) {
 
   app.patch("/me", async (req) => {
     const { user } = requireUser(req);
+    const year = new Date().getFullYear();
+    const text = (max: number) => z.string().trim().max(max).nullable().optional().transform((v) => (v === "" ? null : v));
     const body = z
       .object({
-        name: z.string().min(1).optional(),
-        phone: z.string().optional(),
+        name: z.string().trim().min(2).max(120).optional(),
+        phone: z
+          .string()
+          .trim()
+          .transform((v) => v.replace(/[\s()-]/g, ""))
+          .refine((v) => v === "" || /^\+?\d{10,15}$/.test(v), "Enter a valid mobile number")
+          .transform((v) => (v === "" ? null : /^\d{10}$/.test(v) ? `+91${v}` : v.startsWith("+") ? v : `+${v}`))
+          .nullable()
+          .optional(),
         avatarUrl: z.string().url().optional(),
-        linkedinUrl: z.string().url().optional(),
-        githubUrl: z.string().url().optional(),
+        college: text(160),
+        degree: text(120),
+        city: text(80),
+        graduationYear: z.coerce.number().int().min(1950).max(year + 8).nullable().optional(),
+        linkedinUrl: text(200).transform((v) => profileUrl(v, "https://www.linkedin.com/in/", /linkedin\.com\//i)),
+        githubUrl: text(200).transform((v) => profileUrl(v, "https://github.com/", /github\.com\//i)),
+        portfolioUrl: text(200).transform((v) => (v && !/^https?:\/\//i.test(v) ? `https://${v}` : v)),
+        /** Sent by the one-time profile page: marks the profile as done. */
+        completeProfile: z.boolean().optional(),
       })
       .parse(req.body);
-    return prisma.user.update({ where: { id: user.id }, data: body });
+    const { completeProfile, ...data } = body;
+    if (completeProfile) {
+      const next = { ...user, ...data };
+      if (!next.name || next.name === user.email.split("@")[0]) throw badRequest("Please enter your full name");
+      if (!next.phone) throw badRequest("Please enter your mobile number");
+      if (!next.college) throw badRequest("Please enter your college or organisation");
+    }
+    return prisma.user.update({
+      where: { id: user.id },
+      data: { ...data, ...(completeProfile && !user.profileCompletedAt && { profileCompletedAt: new Date() }) },
+    });
   });
 }

@@ -25,12 +25,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ provider: strin
   if (params.get("error") || !code) return fail("login-cancelled");
   if (!saved.state || saved.state !== params.get("state") || saved.provider !== provider) return fail("login-expired");
 
-  const r = await apiFetch<{ token: string }>(`/auth/${provider}`, {
+  const r = await apiFetch<{ token: string; user?: { profileCompletedAt?: string | null } }>(`/auth/${provider}`, {
     method: "POST",
     body: JSON.stringify({ code, redirectUri: `${origin}/api/auth/${provider}/callback` }),
   });
   if (!r.ok || !r.data?.token) return go(`${origin}/login?error=login-failed&message=${encodeURIComponent(r.error ?? "")}&next=${encodeURIComponent(next)}`);
-  const res = go(`${origin}${next}`);
+  const res = go(r.data.user?.profileCompletedAt ? `${origin}${next}` : `${origin}/profile?next=${encodeURIComponent(next)}`);
   res.cookies.set(TOKEN_COOKIE, r.data.token, {
     httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30,
   });

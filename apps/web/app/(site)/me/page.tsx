@@ -4,7 +4,7 @@ import { Award, Bell, CreditCard, Download, Linkedin, Ticket, Users } from "luci
 import { formatMoney } from "@elevate/shared";
 import { PaymentStatusBadge } from "@/components/payment-status";
 import { apiList } from "@/lib/api";
-import { requireUser } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
 import { getHost, requireTenant } from "@/lib/tenant";
 import { fmtDate, fmtDateTime, fmtRange, humanize } from "@/lib/format";
 import type { AppNotification, Certificate, LinkedInPost, Payment, Registration, Team } from "@/lib/types";
@@ -16,7 +16,7 @@ import { LinkedInDraft } from "./linkedin-draft";
 export const metadata: Metadata = { title: "My space" };
 
 export default async function MePage() {
-  const me = await requireUser("/me");
+  const me = await requireProfile("/me");
   const tenant = await requireTenant();
   const host = await getHost();
   const origin = `${/^(localhost|127\.|[a-z0-9-]+\.localhost)/.test(host) ? "http" : "https"}://${host}`;
@@ -46,15 +46,7 @@ export default async function MePage() {
           <p className="text-sm text-muted">Welcome back</p>
           <h1 className="text-3xl font-bold">{me.user.name}</h1>
           <p className="text-sm text-muted">{me.user.email}{me.membership?.campus ? ` · ${me.membership.campus.name}` : ""}</p>
-          <details className="mt-2 text-sm" open={me.user.name === me.user.email.split("@")[0]}>
-            <summary className="cursor-pointer text-primary hover:underline">
-              {me.user.name === me.user.email.split("@")[0] ? "Add your full name for certificates" : "Edit name"}
-            </summary>
-            <ApiForm method="PATCH" path="/me" resetOnSuccess={false} successMessage="Saved" className="mt-2 flex max-w-md gap-2">
-              <Input name="name" required minLength={2} defaultValue={me.user.name === me.user.email.split("@")[0] ? "" : me.user.name} placeholder="Full name, as on certificates" />
-              <Button type="submit" size="sm">Save</Button>
-            </ApiForm>
-          </details>
+          <Link href="/profile?next=/me" className="mt-1 inline-block text-sm text-primary hover:underline">Edit profile</Link>
         </div>
         <form action="/api/auth/logout" method="post"><Button variant="outline" size="sm">Sign out</Button></form>
       </div>

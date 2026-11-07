@@ -75,6 +75,15 @@ model User {
   avatarUrl       String?
   linkedinUrl     String?
   githubUrl       String?
+  /// College, university or organisation
+  college         String?
+  /// Course or degree, e.g. "B.Tech CSE"
+  degree          String?
+  graduationYear  Int?
+  city            String?
+  portfolioUrl    String?
+  /// Set when the person has filled in the one-time profile page after first sign-in
+  profileCompletedAt DateTime?
   isPlatformAdmin Boolean  @default(false)
   /// Google account id ("sub") once the user has signed in with Google
   googleSub       String?  @unique
