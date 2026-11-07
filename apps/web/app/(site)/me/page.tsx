@@ -198,12 +198,19 @@ export default async function MePage() {
 
       {past.length > 0 && (
         <section>
-          <SectionTitle title="Past events — tell us how it went" />
+          <SectionTitle title="Past events" />
           <div className="grid gap-4 sm:grid-cols-2">
             {past.map((r) => (
               <Card key={r.id}>
                 <CardHeader title={r.event!.title} description={fmtDate(r.event!.startsAt)} />
-                <CardBody>
+                <CardBody className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    <LinkButton href={`/events/${r.event!.slug}#gallery`} size="sm" variant="outline">Event page &amp; photos</LinkButton>
+                    <a href={`/api/proxy/events/${r.eventId}/gallery.zip`} className="inline-flex h-8 items-center gap-1.5 rounded-brand px-3 text-sm font-medium text-primary hover:bg-primary/5">
+                      <Download className="h-4 w-4" />Download photos (ZIP)
+                    </a>
+                  </div>
+                  <p className="text-sm font-medium">Tell us how it went</p>
                   <ApiForm path={`/events/${r.eventId}/feedback`} className="space-y-3" successMessage="Thanks for your feedback!">
                     <div className="grid grid-cols-2 gap-3">
                       <Select name="rating:number" required defaultValue="">

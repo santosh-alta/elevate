@@ -8,7 +8,7 @@ import { EVENT_FAMILIES, SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
 import { EventIcon } from "@/components/event-icon";
 import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
-import { getMe, isStaff } from "@/lib/auth";
+import { getMe } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
 import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
@@ -51,7 +51,6 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   };
 }
 
-const ATTENDED = ["APPROVED", "REGISTERED", "CHECKED_IN"];
 
 export default async function EventPage({ params, searchParams }: Params) {
   const { slug } = await params;
@@ -92,7 +91,6 @@ export default async function EventPage({ params, searchParams }: Params) {
   const isPreview = ["DRAFT", "PLANNING"].includes(event.status);
   const pageUrl = `${origin}/events/${event.slug}`;
   const ended = new Date(event.endsAt).getTime() < Date.now();
-  const canDownloadZip = galleryPage.items.length > 0 && (isStaff(me) || (!!registration && ATTENDED.includes(registration.status)));
   // Venue first; add the campus only when the venue doesn't already name it (e.g. venue "ADYPU, Pune" + campus ADYPU).
   const venueText = (event.venue ?? "").toLowerCase();
   const namedInVenue = (c: { name: string; code?: string | null }) => {
@@ -306,7 +304,6 @@ export default async function EventPage({ params, searchParams }: Params) {
                 id="gallery" title="Gallery" icon={<Images className="h-5 w-5 text-primary" />}
                 action={
                   <div className="flex flex-wrap items-center gap-3 text-sm">
-                    {canDownloadZip && <a href={`/api/proxy/events/${event.id}/gallery.zip`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline"><Download className="h-4 w-4" />Download all (ZIP)</a>}
                     {album && <a href={album} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">Full album ↗</a>}
                   </div>
                 }
