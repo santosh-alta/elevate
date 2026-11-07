@@ -292,6 +292,22 @@ export const ALTA_THEME: ThemeInput = {
   tagline: "Creating Builders for an AI World",
 };
 
+/** Alta School of Technology contact details, footer links and certificate signatory. */
+export const ALTA_SETTINGS = {
+  website: "https://www.altaschool.tech",
+  supportEmail: "connect@altaschool.tech",
+  phone: "+91-7065333888",
+  address: "SCO 27, AIHP (Highway Side), Institutional Area, Sector 32, Gurugram, Haryana 122001",
+  linkedinOrgUrl: "https://www.linkedin.com/company/alta-school-of-technology",
+  social: {
+    instagram: "https://www.instagram.com/alta.school.of.technology",
+    linkedin: "https://www.linkedin.com/company/alta-school-of-technology",
+    youtube: "https://www.youtube.com/@AltaSchoolofTechnology",
+  },
+  signatories: [{ name: "Ashish Munjal", title: "Founder" }],
+  hashtags: ["AltaSchoolOfTechnology", "AltaHacks", "TechEducation"],
+};
+
 // ───────── Request schemas ─────────
 
 export const createEventSchema = z.object({

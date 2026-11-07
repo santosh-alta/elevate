@@ -154,6 +154,7 @@ export async function renderEmailHtml(
     `<p style="margin:0 0 10px;font-size:14px;font-weight:700">${website ? link(website, website.replace(/^https?:\/\//, "").replace(/\/$/, "")) : esc(tenant.name)}</p>`,
     contact ? `<p style="margin:0 0 16px;font-size:13px">${contact}</p>` : "",
     socials ? `<p style="margin:0 0 18px;font-size:13px">${socials}</p>` : "",
+    settings.address ? `<p style="margin:0 0 18px;font-size:12px;opacity:0.75">${esc(settings.address)}</p>` : "",
     theme.tagline ? `<p style="margin:0 0 18px;font-size:12px;opacity:0.75">${esc(theme.tagline)}</p>` : "",
     `<p style="margin:0 0 6px;font-size:12px;opacity:0.75">You're receiving this because you have an account or event registration with ${esc(tenant.name)}.</p>`,
     `<p style="margin:0;font-size:12px">${link(`${base}/me#notifications`, "Unsubscribe or manage notifications", "text-decoration:underline")}</p>`,

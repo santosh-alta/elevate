@@ -3,7 +3,7 @@
  * Run: npm run seed -w @elevate/api   (wipes existing data first)
  */
 import { PrismaClient, type EventType, type Prisma } from "@prisma/client";
-import { ALTA_THEME, DEFAULT_CHECKLISTS, DEFAULT_CRITERIA_LIBRARY, DEFAULT_MODULES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
+import { ALTA_SETTINGS, ALTA_THEME, DEFAULT_CHECKLISTS, DEFAULT_CRITERIA_LIBRARY, DEFAULT_MODULES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
 import { certificateSerial, teamInviteCode } from "../src/lib/codes";
 import { generateCertificates } from "../src/lib/certificates";
 import { generateLinkedInDrafts } from "../src/lib/linkedin";
@@ -20,7 +20,7 @@ const BRANDS = [
     name: "Alta School of Technology",
     domains: ["event.altaschool.tech", "altaschool.localhost"],
     theme: ALTA_THEME,
-    settings: { hashtags: ["AltaSchoolOfTechnology", "AltaHacks", "TechEducation"], supportEmail: "events@altaschool.tech", website: "https://altaschool.tech" },
+    settings: ALTA_SETTINGS,
     campuses: [
       { name: "Bengaluru Campus", code: "BLR", city: "Bengaluru" },
       { name: "Pune Campus", code: "PUN", city: "Pune" },

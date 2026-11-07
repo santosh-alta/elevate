@@ -15,6 +15,7 @@ export const metadata = { title: "Brand settings" };
 
 const TABS = [
   { key: "theme", label: "Theme" },
+  { key: "contact", label: "Contact & certificates" },
   { key: "campuses", label: "Campuses" },
   { key: "members", label: "Team & roles" },
   { key: "domains", label: "Custom domains" },
@@ -35,6 +36,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {!isBrandAdmin(me) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Only brand admins can change these settings.</p>}
       <Tabs tabs={TABS} active={active} baseHref="/admin/settings" />
       {active === "theme" && <ThemeEditor tenant={tenant} />}
+      {active === "contact" && <ContactSettings settings={tenant.settings as Record<string, unknown>} />}
       {active === "campuses" && <Campuses />}
       {active === "members" && <Members campuses={tenant.campuses} />}
       {active === "domains" && <Domains />}
@@ -149,5 +151,37 @@ function DnsRow({ type, name, value }: { type: string; name: string; value: stri
       <Td className="break-all font-mono text-xs">{value}</Td>
       <Td><CopyButton text={value} /></Td>
     </tr>
+  );
+}
+
+function ContactSettings({ settings }: { settings: Record<string, unknown> }) {
+  const str = (k: string) => (typeof settings[k] === "string" ? (settings[k] as string) : "");
+  const social = (settings.social ?? {}) as Record<string, string>;
+  const signatories = (Array.isArray(settings.signatories) ? settings.signatories : []) as { name?: string; title?: string }[];
+  return (
+    <Card>
+      <CardHeader title="Contact details and certificate signatories" description="Shown in email footers, the website footer and on certificates." />
+      <CardBody>
+        <ApiForm method="PATCH" path="/admin/theme" resetOnSuccess={false} successMessage="Saved" className="grid gap-4 sm:grid-cols-2">
+          <label className="space-y-1 text-sm"><span className="font-medium">Website</span><Input name="settings.website" type="url" defaultValue={str("website")} placeholder="https://www.yourbrand.com" /></label>
+          <label className="space-y-1 text-sm"><span className="font-medium">Contact email</span><Input name="settings.supportEmail" type="email" defaultValue={str("supportEmail")} /></label>
+          <label className="space-y-1 text-sm"><span className="font-medium">Phone</span><Input name="settings.phone" defaultValue={str("phone")} placeholder="+91-…" /></label>
+          <label className="space-y-1 text-sm sm:col-span-2"><span className="font-medium">Address</span><Input name="settings.address" defaultValue={str("address")} /></label>
+          {(["linkedin", "instagram", "youtube", "facebook", "x"] as const).map((k) => (
+            <label key={k} className="space-y-1 text-sm"><span className="font-medium">{k === "x" ? "X (Twitter)" : humanize(k)} link</span><Input name={`settings.social.${k}`} type="url" defaultValue={social[k] ?? ""} placeholder="https://" /></label>
+          ))}
+          <div className="space-y-3 sm:col-span-2">
+            <p className="text-sm font-medium">Certificate signatories <span className="font-normal text-muted">(up to 3; leave a row empty to skip it)</span></p>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="grid gap-3 sm:grid-cols-2">
+                <Input name={`settings.signatories.${i}.name`} defaultValue={signatories[i]?.name ?? ""} placeholder="Name, e.g. Ashish Munjal" aria-label={`Signatory ${i + 1} name`} />
+                <Input name={`settings.signatories.${i}.title`} defaultValue={signatories[i]?.title ?? ""} placeholder="Title, e.g. Founder" aria-label={`Signatory ${i + 1} title`} />
+              </div>
+            ))}
+          </div>
+          <div className="sm:col-span-2"><Button type="submit">Save</Button></div>
+        </ApiForm>
+      </CardBody>
+    </Card>
   );
 }

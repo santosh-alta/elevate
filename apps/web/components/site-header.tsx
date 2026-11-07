@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, Globe, Linkedin, Mail } from "lucide-react";
+import { Bell, Globe, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
 import { resolveTheme } from "@elevate/shared";
 import { requireTenant } from "@/lib/tenant";
 import { getMe, isStaff } from "@/lib/auth";
@@ -56,13 +56,16 @@ function siteLinks(tenant: Tenant) {
   const social = (s.social ?? {}) as Record<string, string>;
   const website = (s.website as string | undefined) ?? social.website;
   const linkedin = s.linkedinOrgUrl ?? social.linkedin;
-  return { email: s.supportEmail, website, linkedin };
+  const phone = s.phone as string | undefined;
+  const address = s.address as string | undefined;
+  return { email: s.supportEmail, website, linkedin, phone, address, instagram: social.instagram, youtube: social.youtube };
 }
 
 export async function SiteFooter() {
   const tenant = await requireTenant();
   const theme = resolveTheme(tenant.theme);
-  const { email, website, linkedin } = siteLinks(tenant);
+  const { email, website, linkedin, phone, address, instagram, youtube } = siteLinks(tenant);
+  const linkCls = "inline-flex items-center gap-2 text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline";
   const tagline = theme.tagline ?? (tenant.settings.tagline as string | undefined);
   return (
     <footer className="mt-20 bg-hero-bg text-hero-fg">
@@ -80,14 +83,22 @@ export async function SiteFooter() {
             <li><Link href="/me" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">My tickets &amp; certificates</Link></li>
           </ul>
         </nav>
-        {(email || website || linkedin) && (
+        {(email || website || linkedin || phone || address) && (
           <div className="space-y-3 text-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-hero-fg/80">Contact</p>
             <ul className="space-y-2">
               {email && <li><a href={`mailto:${email}`} className="inline-flex items-center gap-2 text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline"><Mail className="h-4 w-4" />{email}</a></li>}
               {website && <li><a href={website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline"><Globe className="h-4 w-4" />{website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a></li>}
-              {linkedin && <li><a href={linkedin} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline"><Linkedin className="h-4 w-4" />LinkedIn</a></li>}
+              {phone && <li><a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className={linkCls}><Phone className="h-4 w-4" />{phone}</a></li>}
+              {address && <li className="flex gap-2 text-hero-fg/80"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span>{address}</span></li>}
             </ul>
+            {(linkedin || instagram || youtube) && (
+              <div className="flex gap-3 pt-1">
+                {linkedin && <a href={linkedin} target="_blank" rel="noreferrer" aria-label="LinkedIn" className={linkCls}><Linkedin className="h-5 w-5" /></a>}
+                {instagram && <a href={instagram} target="_blank" rel="noreferrer" aria-label="Instagram" className={linkCls}><Instagram className="h-5 w-5" /></a>}
+                {youtube && <a href={youtube} target="_blank" rel="noreferrer" aria-label="YouTube" className={linkCls}><Youtube className="h-5 w-5" /></a>}
+              </div>
+            )}
           </div>
         )}
       </div>

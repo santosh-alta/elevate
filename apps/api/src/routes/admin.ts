@@ -186,6 +186,14 @@ export function adminRoutes(app: FastifyInstance) {
             emailFrom: z.string().email().optional(),
             supportEmail: z.string().email().optional(),
             social: z.record(z.string()).optional(),
+            website: z.string().url().optional(),
+            phone: z.string().trim().max(40).optional(),
+            address: z.string().trim().max(300).optional(),
+            // Web forms send rows as { "0": {...}, "1": {...} }; accept that as well as an array.
+            signatories: z
+              .preprocess((v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v).sort().map((k) => (v as Record<string, unknown>)[k]) : v), z.array(z.object({ name: z.string().trim().max(80).optional(), title: z.string().trim().max(80).optional(), signatureUrl: assetUrl.optional() }))
+              .max(3))
+              .optional(),
             payments: z
               .object({
                 razorpayKeyId: z.string().trim().optional(),

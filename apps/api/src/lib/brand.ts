@@ -12,6 +12,8 @@ export interface BrandSettings {
   /** Public website shown in email footers, e.g. "https://altaschool.tech" */
   website?: string;
   phone?: string;
+  /** Postal address shown in email and site footers */
+  address?: string;
   /** Profile URLs by network: instagram, facebook, linkedin, x, youtube */
   social?: Record<string, string>;
   /** Default certificate signatories (a CertificateTemplate's design.signatories wins) */

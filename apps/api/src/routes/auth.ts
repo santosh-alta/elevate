@@ -25,7 +25,10 @@ export function authRoutes(app: FastifyInstance) {
       slug: tenant.slug,
       name: tenant.name,
       theme: themeOf(tenant),
-      settings: { hashtags: s.hashtags ?? [], linkedinOrgUrl: s.linkedinOrgUrl, supportEmail: s.supportEmail, social: s.social ?? {} },
+      settings: {
+        hashtags: s.hashtags ?? [], linkedinOrgUrl: s.linkedinOrgUrl, supportEmail: s.supportEmail, social: s.social ?? {},
+        website: s.website, phone: s.phone, address: s.address, signatories: s.signatories ?? [],
+      },
       campuses,
     };
   });
