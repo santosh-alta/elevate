@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
-    "brand:apply": "tsx scripts/apply-brand.ts"
+    "brand:apply": "tsx scripts/apply-brand.ts",
+    "bootstrap": "tsx scripts/bootstrap.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",

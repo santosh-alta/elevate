@@ -3,7 +3,7 @@
 One event operations platform for all our brands (Alta School of Technology, Sunstone, Mirai, …), with a white-label
 web app and mobile app per brand.
 
-Plan and product design: [docs/PLAN.md](docs/PLAN.md) · API contract: [docs/API.md](docs/API.md)
+Plan and product design: [docs/PLAN.md](docs/PLAN.md) · API contract: [docs/API.md](docs/API.md) · Going live: [docs/DEPLOY.md](docs/DEPLOY.md)
 
 | App | Path | Stack |
 |---|---|---|

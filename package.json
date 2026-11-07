@@ -2,7 +2,11 @@
   "name": "elevate",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["apps/api", "apps/web", "packages/shared"],
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/shared"
+  ],
   "scripts": {
     "db:up": "docker compose up -d db",
     "db:migrate": "npm run prisma:migrate -w @elevate/api",
@@ -11,5 +15,11 @@
     "dev:web": "npm run dev -w @elevate/web",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@neon/config": "^1.13.0",
+    "@neon/env": "^2.1.0"
+  }
 }

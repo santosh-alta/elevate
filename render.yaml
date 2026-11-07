@@ -1,0 +1,58 @@
+# Render blueprint for the Elevate API (the website runs on Vercel; see docs/DEPLOY.md).
+# Render → New → Blueprint → pick this repo. Values marked `sync: false` are asked for on first deploy.
+services:
+  - type: web
+    name: elevate-api
+    runtime: node
+    region: singapore # same region as the Neon database
+    plan: starter # needed for the uploads disk and the pre-deploy migration step
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run prisma:generate -w @elevate/api
+    preDeployCommand: cd apps/api && npx prisma migrate deploy
+    startCommand: npm start -w @elevate/api
+    healthCheckPath: /health
+    disk:
+      name: uploads
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Neon's DIRECT connection string (the one without "-pooler" in the host)
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # This service's own address, e.g. https://elevate-api.onrender.com
+      - key: API_PUBLIC_URL
+        sync: false
+      # The website's Vercel address, e.g. https://elevate-alta.vercel.app
+      - key: WEB_PUBLIC_URL
+        sync: false
+      # Brands point their custom domain at Vercel, which hosts the website
+      - key: CNAME_TARGET
+        value: cname.vercel-dns.com
+      - key: STORAGE_DRIVER
+        value: local
+      - key: STORAGE_DIR
+        value: /var/data/storage
+      - key: DISPLAY_TZ
+        value: Asia/Kolkata
+      # Email, e.g. smtps://user:pass@smtp.example.com:465 (without it, no emails are sent)
+      - key: SMTP_URL
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      # Fallback Razorpay keys (each brand can also set its own in Admin → Settings)
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      # Optional: AI-written LinkedIn drafts
+      - key: ANTHROPIC_API_KEY
+        sync: false
