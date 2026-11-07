@@ -45,8 +45,19 @@ export function eventCount(e: ElevateEvent, key: string): number | undefined {
  */
 export function participantCount(e: ElevateEvent): number {
   const regs = eventCount(e, "registrations") ?? 0;
-  const recorded = Number(e.config?.participants ?? 0);
+  const recorded = Number(e.config?.participants ?? 0) || Number(e.config?.registered ?? 0);
   return regs || (Number.isFinite(recorded) ? recorded : 0);
+}
+
+/** "186 participants" or "285 registered": registrations on the site, else what was recorded for older events. */
+export function turnoutLabel(e: ElevateEvent): string | null {
+  const regs = eventCount(e, "registrations") ?? 0;
+  if (regs) return `${regs.toLocaleString("en-IN")} registered`;
+  const participants = Number(e.config?.participants ?? 0);
+  if (participants) return `${participants.toLocaleString("en-IN")} participants`;
+  const registered = Number(e.config?.registered ?? 0);
+  if (registered) return `${registered.toLocaleString("en-IN")} registered`;
+  return null;
 }
 
 export function toLocalInput(d?: string | null): string {

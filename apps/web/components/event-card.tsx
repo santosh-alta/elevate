@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, MapPin, Users, Video } from "lucide-react";
-import { eventCampuses, eventCount, eventLabel, fmtRange, humanize, participantCount } from "@/lib/format";
+import { eventCampuses, eventLabel, fmtRange, humanize, turnoutLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge } from "./ui/badge";
 
@@ -67,8 +67,7 @@ export function ModeBadge({ mode }: { mode: ElevateEvent["mode"] }) {
 
 export function EventCard({ event, href }: { event: ElevateEvent; href?: string }) {
   const campuses = eventCampuses(event);
-  const regs = eventCount(event, "registrations");
-  const people = participantCount(event);
+  const turnout = turnoutLabel(event);
   const teams = Number(event.config?.teams ?? 0);
   return (
     <Link
@@ -98,10 +97,10 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
             <MapPin className="h-3.5 w-3.5" />
             {event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.name).join(" + ") || "Campus event"}
           </p>
-          {!!people && (
+          {turnout && (
             <p className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5" />
-              {regs ? `${regs} registered` : `${people} participants${teams ? ` · ${teams} teams` : ""}`}
+              {turnout}{teams ? ` · ${teams} teams` : ""}
             </p>
           )}
         </div>

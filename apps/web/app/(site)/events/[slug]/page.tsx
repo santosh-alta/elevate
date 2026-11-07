@@ -10,7 +10,7 @@ import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
-import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount } from "@/lib/format";
+import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount, turnoutLabel } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
 import type { ElevateEvent, Guest, Media, Registration, Sponsor, Team, Winner } from "@/lib/types";
 import { EventCover, ModeBadge } from "@/components/event-card";
@@ -107,7 +107,7 @@ export default async function EventPage({ params, searchParams }: Params) {
   const teamCount = Number(event.config?.teams ?? 0) || (isTeamEvent ? eventCount(event, "teams") ?? 0 : 0);
   const prizePool = typeof event.config?.prizePool === "string" ? event.config.prizePool : null;
   const outcomeLine = ended && people
-    ? [`${people.toLocaleString("en-IN")} participants`, teamCount && `${teamCount} teams`, prizePool && `${prizePool} prize pool`].filter(Boolean).join(" · ")
+    ? [turnoutLabel(event), teamCount && `${teamCount} teams`, prizePool && `${prizePool} prize pool`].filter(Boolean).join(" · ")
     : null;
 
   const nav: { id: string; label: string }[] = [
