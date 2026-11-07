@@ -3,12 +3,13 @@ import { z } from "zod";
 import { prisma } from "../plugins/prisma";
 import type { FastifyRequest } from "fastify";
 import type { Event, EventTask } from "@prisma/client";
-import { WORK_TEAMS } from "@elevate/shared";
 import { assertManageable, canManageEvent, isStaff, requireEventManager, requireStaff } from "../lib/permissions";
 import { requireTenant } from "../plugins/tenant";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
-import { fanOutAnnouncement } from "../lib/notify";
+import { enqueue, fanOutAnnouncement, fmtDate, safely } from "../lib/notify";
+import { brandBaseUrl } from "../lib/brand";
+import { WORK_TEAMS, WORK_TEAM_LABELS, type WorkTeam } from "@elevate/shared";
 
 const phase = z.enum(["PRE", "DURING", "POST"]);
 const taskStatus = z.enum(["TODO", "IN_PROGRESS", "DONE", "BLOCKED", "SKIPPED"]);
@@ -31,6 +32,38 @@ async function taskAccess(req: FastifyRequest, task: EventTask & { event: Event 
     if (task.assigneeId === req.auth.user.id || (task.team && teams.includes(task.team))) return "work";
   }
   throw forbidden("This task belongs to another team");
+}
+
+/** Emails of the people who lead a team in this brand (copied on that team's task emails). */
+export async function teamLeadEmails(tenantId: string, team: string | null | undefined): Promise<string[]> {
+  if (!team) return [];
+  const leads = await prisma.membership.findMany({ where: { tenantId, leadTeams: { has: team } }, include: { user: { select: { email: true } } } });
+  return leads.map((l) => l.user.email);
+}
+
+/** "You've been given a task" email + in-app note to the assignee, with the team lead(s) in CC. */
+function notifyTaskAssigned(task: EventTask, event: Event, assignedBy: { id: string; name: string }) {
+  if (!task.assigneeId || task.assigneeId === assignedBy.id) return;
+  const assigneeId = task.assigneeId;
+  safely("task.assigned", async () => {
+    const team = task.team && task.team in WORK_TEAM_LABELS ? WORK_TEAM_LABELS[task.team as WorkTeam] : null;
+    const lines = [
+      `${assignedBy.name} assigned you a task for "${event.title}" (${fmtDate(event.startsAt)}):`,
+      task.title,
+      [task.dueAt && `Due: ${fmtDate(task.dueAt)}`, team && `Team: ${team}`].filter(Boolean).join(" · "),
+      task.proofRequired ? "When it's done, add the link (e.g. the Instagram or LinkedIn post) as proof, then mark it done." : "",
+    ].filter(Boolean);
+    await enqueue({
+      tenantId: event.tenantId, eventId: event.id, userId: assigneeId, channels: ["EMAIL", "IN_APP"],
+      template: "task.assigned",
+      subject: `New task: ${task.title.length > 70 ? `${task.title.slice(0, 67)}…` : task.title}`,
+      body: lines.join("\n\n"),
+      ctaLabel: "Open my tasks",
+      ctaUrl: `${await brandBaseUrl(event.tenantId)}/admin/tasks`,
+      cc: await teamLeadEmails(event.tenantId, task.team),
+      dedupKey: `task.assigned:${task.id}:${assigneeId}:${Date.now()}`,
+    });
+  });
 }
 
 export function planningRoutes(app: FastifyInstance) {
@@ -83,6 +116,7 @@ export function planningRoutes(app: FastifyInstance) {
       data: { ...body, eventId: event.id, sortOrder: (last?.sortOrder ?? 0) + 1 },
     });
     await logActivity(event.id, req.auth!.user.id, "task.created", { taskId: task.id, title: task.title });
+    notifyTaskAssigned(task, event, req.auth!.user);
     return reply.status(201).send(task);
   });
 
@@ -116,6 +150,7 @@ export function planningRoutes(app: FastifyInstance) {
       throw badRequest("Add the proof link (e.g. the Instagram or LinkedIn post) before marking this done");
     }
     const completing = body.status && body.status !== task.status;
+    const reassigned = body.assigneeId !== undefined && body.assigneeId !== task.assigneeId;
     const updated = await prisma.eventTask.update({
       where: { id: task.id },
       data: {
@@ -123,6 +158,7 @@ export function planningRoutes(app: FastifyInstance) {
         ...(completing && { completedAt: body.status === "DONE" ? new Date() : null }),
       },
     });
+    if (reassigned) notifyTaskAssigned(updated, task.event, req.auth!.user);
     if (completing) {
       await logActivity(task.eventId, req.auth!.user.id, body.status === "DONE" ? "task.done" : "task.status", {
         taskId: task.id,

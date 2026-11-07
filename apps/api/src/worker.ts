@@ -32,10 +32,11 @@ export async function sendDueNotifications(log?: FastifyBaseLogger): Promise<num
     });
     if (!claimed.count) continue;
     try {
-      const data = (n.data ?? {}) as { ctaLabel?: string; ctaUrl?: string };
+      const data = (n.data ?? {}) as { ctaLabel?: string; ctaUrl?: string; cc?: string[] };
       const result = await sendEmail({
         from: fromAddress(n.tenant),
         to: n.toEmail!,
+        ...(data.cc?.length && { cc: data.cc }),
         subject: n.subject,
         text: data.ctaUrl && !n.body.includes(data.ctaUrl) ? `${n.body}\n\n${data.ctaLabel ?? "Open"}: ${data.ctaUrl}` : n.body,
         html: await renderEmailHtml(n.tenant, n.subject, n.body, { label: data.ctaLabel, url: data.ctaUrl }),

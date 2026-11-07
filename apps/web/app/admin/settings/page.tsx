@@ -136,7 +136,7 @@ async function Members({ campuses }: { campuses: Campus[] }) {
                   <Td>
                     <ApiSelect path={`/admin/members/${m.id}`} field="role" value={m.role} options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))} />
                   </Td>
-                  <Td><TeamToggles membershipId={m.id} teams={m.teams ?? []} /></Td>
+                  <Td><TeamToggles membershipId={m.id} teams={m.teams ?? []} leadTeams={m.leadTeams ?? []} /></Td>
                   <Td className="text-muted">{m.campus?.name ?? campuses.find((c) => c.id === m.campusId)?.name ?? "All"}</Td>
                 </tr>
               ))}
@@ -146,7 +146,7 @@ async function Members({ campuses }: { campuses: Campus[] }) {
         <div className="border-t border-border p-5">
           <p className="text-sm font-medium">Teams</p>
           <p className="mt-1 text-sm text-muted">
-            Checklist tasks belong to the event owner, Operations or Social media. People in a team see its tasks under <span className="font-medium">My tasks</span> for every event and can tick them off; posts need the post link as proof.
+            Checklist tasks belong to the event owner, Operations or Social media. People in a team see its tasks under <span className="font-medium">My tasks</span> for every event and can tick them off; posts need the post link as proof. Click the crown to make someone the team&apos;s lead: leads are copied on every email about their team&apos;s tasks.
           </p>
           <p className="mt-4 text-sm font-medium">What each role can do</p>
           <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">

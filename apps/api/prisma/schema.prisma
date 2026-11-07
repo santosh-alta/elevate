@@ -142,6 +142,8 @@ model Membership {
   rollNo    String?
   /// Work teams this staff member belongs to, e.g. ["SOCIAL_MEDIA"] (see WORK_TEAMS)
   teams     String[] @default([])
+  /// Teams this person leads (CC'd on that team's task emails); always a subset of teams
+  leadTeams String[] @default([])
   createdAt DateTime @default(now())
 
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)

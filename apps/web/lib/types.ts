@@ -19,7 +19,7 @@ export interface User {
   githubUrl?: string | null; portfolioUrl?: string | null; college?: string | null; degree?: string | null;
   graduationYear?: number | null; city?: string | null; profileCompletedAt?: string | null;
 }
-export interface Membership { id: string; role: Role; campusId?: string | null; campus?: Campus | null; user?: User; teams?: string[] }
+export interface Membership { id: string; role: Role; campusId?: string | null; campus?: Campus | null; user?: User; teams?: string[]; leadTeams?: string[] }
 export interface Me { user: User; membership: Membership | null }
 
 export interface EventSession { id: string; title: string; speaker?: string | null; startsAt: string; endsAt: string; location?: string | null }

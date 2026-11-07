@@ -26,6 +26,8 @@ export interface EnqueueInput {
   data?: Record<string, unknown>;
   scheduledFor?: Date;
   dedupKey?: string;
+  /** Extra recipients copied on the email (e.g. team leads) */
+  cc?: string[];
 }
 
 export async function enqueue(input: EnqueueInput): Promise<Notification[]> {
@@ -51,7 +53,10 @@ export async function enqueue(input: EnqueueInput): Promise<Notification[]> {
             template: input.template,
             subject: input.subject,
             body: input.body,
-            data: { ...(input.data ?? {}), ctaLabel: input.ctaLabel, ctaUrl: input.ctaUrl } as Prisma.InputJsonValue,
+            data: {
+              ...(input.data ?? {}), ctaLabel: input.ctaLabel, ctaUrl: input.ctaUrl,
+              ...(channel === "EMAIL" && input.cc?.length && { cc: input.cc.filter((c) => c.toLowerCase() !== email) }),
+            } as Prisma.InputJsonValue,
             scheduledFor: input.scheduledFor ?? new Date(),
             dedupKey: input.dedupKey ? `${input.dedupKey}:${channel}` : null,
             ...(inApp && { status: "SENT", sentAt: new Date() }),

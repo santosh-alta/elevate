@@ -7,6 +7,7 @@ export interface OutgoingEmail {
   text: string;
   html: string;
   replyTo?: string;
+  cc?: string[];
 }
 
 export type SendResult = { status: "SENT" } | { status: "SKIPPED"; reason: string };

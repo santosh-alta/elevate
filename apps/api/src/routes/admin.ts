@@ -140,8 +140,11 @@ export function adminRoutes(app: FastifyInstance) {
         batch: z.string().optional(),
         rollNo: z.string().optional(),
         teams: z.array(z.enum(WORK_TEAMS)).optional(),
+        leadTeams: z.array(z.enum(WORK_TEAMS)).optional(),
       })
       .parse(req.body);
+    // A lead is always a member of the team they lead.
+    const teams = body.leadTeams ? [...new Set([...(body.teams ?? []), ...body.leadTeams])] : body.teams;
     if (body.campusId && !(await prisma.campus.findFirst({ where: { id: body.campusId, tenantId: tenant.id } }))) {
       throw badRequest("Unknown campus");
     }
@@ -151,8 +154,8 @@ export function adminRoutes(app: FastifyInstance) {
       (await prisma.user.findUnique({ where: { email } })) ?? (await prisma.user.create({ data: { email, name: body.name } }));
     const m = await prisma.membership.upsert({
       where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
-      create: { tenantId: tenant.id, userId: user.id, role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo, teams: body.teams ?? [] },
-      update: { role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo, ...(body.teams && { teams: body.teams }) },
+      create: { tenantId: tenant.id, userId: user.id, role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo, teams: teams ?? [], leadTeams: body.leadTeams ?? [] },
+      update: { role: body.role, campusId: body.campusId, batch: body.batch, rollNo: body.rollNo, ...(teams && { teams }), ...(body.leadTeams && { leadTeams: body.leadTeams }) },
       include: { user: true, campus: true },
     });
     return reply.status(201).send(m);
@@ -167,12 +170,23 @@ export function adminRoutes(app: FastifyInstance) {
       .object({
         role: z.enum(ROLES).optional(), campusId: z.string().nullable().optional(), batch: z.string().optional(), rollNo: z.string().optional(),
         teams: z.array(z.enum(WORK_TEAMS)).optional(),
+        leadTeams: z.array(z.enum(WORK_TEAMS)).optional(),
       })
       .parse(req.body);
     if (m.userId === auth.user.id && body.role && body.role !== "BRAND_ADMIN" && !auth.user.isPlatformAdmin) {
       throw badRequest("You can't remove your own admin role");
     }
-    return prisma.membership.update({ where: { id: m.id }, data: body });
+    // Keep leads inside their teams: leading adds the team; leaving a team drops its lead.
+    const teams = body.teams ?? m.teams;
+    const leadTeams = body.leadTeams ?? m.leadTeams;
+    const data = {
+      ...body,
+      ...((body.teams || body.leadTeams) && {
+        teams: [...new Set([...teams, ...(body.leadTeams ?? [])])],
+        leadTeams: leadTeams.filter((t) => (body.leadTeams ? true : teams.includes(t))),
+      }),
+    };
+    return prisma.membership.update({ where: { id: m.id }, data });
   });
 
   // ───────── Theme ─────────

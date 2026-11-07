@@ -33,6 +33,7 @@ export async function ChecklistTab({ event }: { event: ElevateEvent }) {
   const now = new Date();
   const canChangeOwner = isBrandAdmin(me) || me?.user.id === event.ownerId;
   const teamPeople = (team: string) => staff.filter((m) => m.teams?.includes(team)).map((m) => m.user!.name);
+  const teamLeads = (team: string) => staff.filter((m) => m.leadTeams?.includes(team)).map((m) => m.user!.name);
 
   const byTeam = WORK_TEAMS.map((team) => {
     const list = tasks.filter((t) => (t.team ?? "OWNER") === team);
@@ -67,7 +68,8 @@ export async function ChecklistTab({ event }: { event: ElevateEvent }) {
                     <span className="text-xs tabular-nums text-muted">{x.done}/{x.total}</span>
                   </div>
                   <div className="mt-2"><Progress value={(x.done / x.total) * 100} /></div>
-                  <p className="mt-2 truncate text-xs text-muted" title={names.join(", ")}>{names.length ? names.join(", ") : "No one in this team yet"}</p>
+                  {x.team !== "OWNER" && teamLeads(x.team).length > 0 && <p className="mt-2 text-xs"><span className="text-muted">Lead:</span> <span className="font-medium">{teamLeads(x.team).join(", ")}</span></p>}
+                  <p className={`${x.team !== "OWNER" && teamLeads(x.team).length ? "mt-0.5" : "mt-2"} truncate text-xs text-muted`} title={names.join(", ")}>{names.length ? names.join(", ") : "No one in this team yet"}</p>
                   {(x.overdue > 0 || x.proofMissing > 0) && (
                     <p className="mt-1 text-xs font-medium text-red-600">
                       {[x.overdue && `${x.overdue} overdue`, x.proofMissing && `${x.proofMissing} proof link${x.proofMissing > 1 ? "s" : ""} missing`].filter(Boolean).join(" · ")}
