@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
 import { computeLeaderboard, defaultRoundId } from "./judging";
+import { revenueFor } from "./payments";
 
 /** Builds the outcome report for an event and caches it in Event.outcome. */
 export async function buildOutcome(eventId: string) {
@@ -89,6 +90,7 @@ export async function buildOutcome(eventId: string) {
       planned: Number(expenses._sum.planned ?? 0),
       actual: Number(expenses._sum.actual ?? 0),
     },
+    revenue: { ...(await revenueFor({ eventId })), currency: event.currency },
     tasks: {
       total: count(tasks),
       done: tasks.find((t) => t.status === "DONE")?._count ?? 0,

@@ -20,6 +20,7 @@ export async function SiteHeader() {
         </Link>
         <nav className="flex items-center gap-1 text-sm">
           <Link href="/events" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Events</Link>
+          <Link href="/winners" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Winners</Link>
           {me ? (
             <>
               <Link href="/me#notifications" className={buttonClass("ghost", "sm", "relative px-2")} aria-label={unread ? `${unread} unread notifications` : "Notifications"}>
@@ -44,6 +45,10 @@ export async function SiteFooter() {
     <footer className="mt-20 border-t border-border bg-card">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-4 py-8 text-sm text-muted sm:flex-row">
         <span>© {new Date().getFullYear()} {tenant.name}</span>
+        <nav className="flex gap-4">
+          <Link href="/events" className="hover:text-fg">Events</Link>
+          <Link href="/winners" className="hover:text-fg">Winners hall of fame</Link>
+        </nav>
         <span className="text-xs">Powered by Elevate</span>
       </div>
     </footer>

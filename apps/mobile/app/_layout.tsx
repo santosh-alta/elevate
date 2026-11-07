@@ -26,6 +26,8 @@ function RootStack() {
         <Stack.Screen name="judge/score" options={{ title: "Score team" }} />
         <Stack.Screen name="ops/index" options={{ title: "Event ops" }} />
         <Stack.Screen name="ops/[eventId]" options={{ title: "Event ops" }} />
+        <Stack.Screen name="team/[eventId]" options={{ title: "My team" }} />
+        <Stack.Screen name="gallery/[eventId]" options={{ title: "Photos" }} />
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
       </Stack>
     </>

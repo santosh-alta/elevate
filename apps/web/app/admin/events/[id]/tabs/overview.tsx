@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { EVENT_STATUS_FLOW, EVENT_STATUSES } from "@elevate/shared";
+import { EVENT_STATUS_FLOW, EVENT_STATUSES, formatMoney } from "@elevate/shared";
 import { apiGet, apiList } from "@/lib/api";
 import { fmtDateTime, humanize } from "@/lib/format";
 import type { Activity, ElevateEvent, Task } from "@/lib/types";
@@ -81,7 +81,19 @@ export async function OverviewTab({ event }: { event: ElevateEvent }) {
         </CardBody>
       </Card>
 
-      {dash ? <StatGrid data={dash} skip={["tasks", "event", "activity", "recentActivity", "id"]} /> : (
+      {(() => {
+        const rev = dash?.revenue as { paid?: number; pending?: number; refunded?: number; count?: number } | undefined;
+        if (!rev || !(rev.paid || rev.pending || rev.refunded || rev.count)) return null;
+        return (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="Revenue collected" value={formatMoney(rev.paid ?? 0, event.currency ?? "INR")} />
+            <Stat label="Pending payments" value={formatMoney(rev.pending ?? 0, event.currency ?? "INR")} />
+            <Stat label="Refunded" value={formatMoney(rev.refunded ?? 0, event.currency ?? "INR")} />
+            <Stat label="Paid registrations" value={rev.count ?? 0} />
+          </div>
+        );
+      })()}
+      {dash ? <StatGrid data={dash} skip={["tasks", "event", "activity", "recentActivity", "id", "revenue"]} /> : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {Object.entries(event._count ?? event.counts ?? {}).map(([k, v]) => <Stat key={k} label={humanize(k)} value={v} />)}
         </div>

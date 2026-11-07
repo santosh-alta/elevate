@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type RGB } from "pdf-lib";
 import QRCode from "qrcode";
-import type { Certificate, CertificateType, Event, Tenant } from "@prisma/client";
+import type { Certificate, CertificateType, Event, RegistrationStatus, Tenant } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
 import { brandBaseUrl, settingsOf, themeOf, verifyUrl } from "./brand";
 import { certificateSerial } from "./codes";
@@ -8,7 +8,8 @@ import { notifyCertificate, safely } from "./notify";
 
 const TITLES: Record<CertificateType, string> = {
   PARTICIPATION: "Certificate of Participation",
-  WINNER: "Certificate of Excellence — Winner",
+  FINALIST: "Certificate of Achievement — Finalist",
+  WINNER: "Certificate of Excellence",
   RUNNER_UP: "Certificate of Excellence — Runner-up",
   SPECIAL_MENTION: "Certificate of Merit — Special Mention",
   JUDGE: "Certificate of Appreciation — Judge",
@@ -17,10 +18,11 @@ const TITLES: Record<CertificateType, string> = {
   MENTOR: "Certificate of Appreciation — Mentor",
 };
 
+// Winners and both runners-up get a WINNER certificate; the detail line says which place.
 const AWARD_TO_TYPE: Record<string, CertificateType> = {
   WINNER: "WINNER",
-  RUNNER_UP: "RUNNER_UP",
-  SECOND_RUNNER_UP: "RUNNER_UP",
+  RUNNER_UP: "WINNER",
+  SECOND_RUNNER_UP: "WINNER",
   SPECIAL_MENTION: "SPECIAL_MENTION",
 };
 
@@ -35,8 +37,8 @@ const GUEST_ROLE_LABEL: Record<string, string> = {
 
 const AWARD_LABEL: Record<string, string> = {
   WINNER: "Winner",
-  RUNNER_UP: "1st Runner-up",
-  SECOND_RUNNER_UP: "2nd Runner-up",
+  RUNNER_UP: "1st runner-up",
+  SECOND_RUNNER_UP: "2nd runner-up",
   SPECIAL_MENTION: "Special Mention",
 };
 
@@ -57,27 +59,50 @@ export async function generateCertificates(eventId: string): Promise<{ created: 
   const modules = (event.modules ?? {}) as Record<string, boolean>;
   const recipients: Recipient[] = [];
 
-  // Participation: checked-in attendees (or everyone registered when check-in isn't used).
-  const regs = await prisma.registration.findMany({
-    where: {
-      eventId,
-      status: modules.checkin === false ? { in: ["REGISTERED", "APPROVED", "CHECKED_IN"] } : "CHECKED_IN",
-    },
-    include: { user: true },
-  });
-  for (const r of regs) recipients.push({ userId: r.userId, name: r.user.name, type: "PARTICIPATION" });
+  const config = (event.config ?? {}) as { certifyAllRegistered?: boolean; finalistTeamIds?: string[] };
 
   // Awards from published team results.
   const awarded = await prisma.team.findMany({
     where: { eventId, award: { not: null } },
     include: { members: { include: { user: true } } },
   });
+  const awardedUsers = new Set<string>();
   for (const team of awarded) {
     const type = AWARD_TO_TYPE[team.award!];
     if (!type) continue;
     for (const m of team.members) {
+      awardedUsers.add(m.userId);
       recipients.push({ userId: m.userId, name: m.user.name, type, detail: `${AWARD_LABEL[team.award!]} — Team ${team.name}` });
     }
+  }
+
+  // Finalists: teams shortlisted into the last judging round (or named when results were published) that didn't win.
+  const lastRound = await prisma.judgingRound.findFirst({ where: { eventId }, orderBy: { sortOrder: "desc" }, include: { teams: true } });
+  const finalistIds = new Set([...(lastRound?.restrictTeams ? lastRound.teams.map((t) => t.teamId) : []), ...(config.finalistTeamIds ?? [])]);
+  for (const t of awarded) finalistIds.delete(t.id);
+  if (finalistIds.size) {
+    const finalists = await prisma.team.findMany({ where: { eventId, id: { in: [...finalistIds] } }, include: { members: { include: { user: true } } } });
+    for (const team of finalists) {
+      for (const m of team.members) {
+        if (awardedUsers.has(m.userId)) continue;
+        awardedUsers.add(m.userId);
+        recipients.push({ userId: m.userId, name: m.user.name, type: "FINALIST", detail: `Finalist — Team ${team.name}` });
+      }
+    }
+  }
+
+  // Participation for everyone else who took part: online events count APPROVED, offline ones only CHECKED_IN
+  // (unless check-in isn't used or config.certifyAllRegistered is set).
+  const statuses: RegistrationStatus[] =
+    modules.checkin === false || config.certifyAllRegistered
+      ? ["REGISTERED", "APPROVED", "CHECKED_IN"]
+      : event.mode === "ONLINE"
+        ? ["APPROVED", "CHECKED_IN"]
+        : ["CHECKED_IN"];
+  const regs = await prisma.registration.findMany({ where: { eventId, status: { in: statuses } }, include: { user: true } });
+  for (const r of regs) {
+    if (awardedUsers.has(r.userId)) continue;
+    recipients.push({ userId: r.userId, name: r.user.name, type: "PARTICIPATION" });
   }
 
   // Judges.

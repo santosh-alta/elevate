@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
 import { eventCampuses, fmtRange, typeLabel } from "@/lib/format";
-import type { ElevateEvent } from "@/lib/types";
+import type { ElevateEvent, Payment } from "@/lib/types";
 import { Badge, StatusBadge, Tabs } from "@/components/ui";
 import { ModeBadge } from "@/components/event-card";
 import { OverviewTab } from "./tabs/overview";
@@ -20,9 +20,11 @@ import { ReportTab } from "./tabs/report";
 import { EventForm } from "../event-form";
 import { EventPageTab } from "./tabs/event-page";
 import { NotificationsTab } from "./tabs/notifications";
+import { ProblemsTab } from "./tabs/problems";
+import { PaymentsTab } from "./tabs/payments";
 import { CloneEventButton } from "@/components/admin/clone-event-button";
 
-type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; guest?: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; guest?: string; round?: string; status?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
@@ -32,11 +34,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function EventCommandCentre({ params, searchParams }: Props) {
   const { id } = await params;
-  const { tab = "overview", guest } = await searchParams;
+  const { tab = "overview", guest, round, status } = await searchParams;
   const event = await apiGet<ElevateEvent>(`/events/${id}`);
   if (!event) notFound();
   const tenant = await requireTenant();
   const m = event.modules ?? {};
+  // Payments tab: when the event charges a fee, or has any payments recorded (e.g. fee removed later).
+  const hasPayments = !!event.feeAmount || !!event.fee || (await apiList<Payment>(`/events/${event.id}/payments`)).length > 0;
 
   const tabs = [
     { key: "overview", label: "Overview" },
@@ -44,6 +48,8 @@ export default async function EventCommandCentre({ params, searchParams }: Props
     { key: "page", label: "Event page" },
     ...(m.guests ? [{ key: "guests", label: "Guests" }] : []),
     { key: "registrations", label: "Registrations" },
+    ...(hasPayments ? [{ key: "payments", label: "Payments" }] : []),
+    ...(m.teams || m.submissions ? [{ key: "problems", label: "Problem statements" }] : []),
     ...(m.teams || m.judging ? [{ key: "judging", label: "Teams & judging" }] : []),
     { key: "media", label: "Media & social" },
     ...(m.certificates !== false ? [{ key: "certificates", label: "Certificates" }] : []),
@@ -90,12 +96,19 @@ export default async function EventCommandCentre({ params, searchParams }: Props
       {active === "page" && <EventPageTab event={event} />}
       {active === "notifications" && <NotificationsTab event={event} />}
       {active === "registrations" && <RegistrationsTab event={event} />}
-      {active === "judging" && <JudgingTab event={event} />}
+      {active === "judging" && <JudgingTab event={event} roundId={round} />}
+      {active === "problems" && <ProblemsTab event={event} />}
+      {active === "payments" && <PaymentsTab event={event} status={status} />}
       {active === "media" && <MediaTab event={event} />}
       {active === "certificates" && <CertificatesTab event={event} />}
       {active === "linkedin" && <LinkedInTab event={event} />}
       {active === "report" && <ReportTab event={event} tenant={tenant} />}
-      {active === "details" && <div className="max-w-4xl"><EventForm campuses={tenant.campuses} event={event} /></div>}
+      {active === "details" && <DetailsTab event={event} campuses={tenant.campuses} />}
     </div>
   );
+}
+
+async function DetailsTab({ event, campuses }: { event: ElevateEvent; campuses: import("@/lib/types").Campus[] }) {
+  const fests = event.type === "TECH_FEST" ? [] : await apiList<ElevateEvent>("/events?type=TECH_FEST");
+  return <div className="max-w-4xl"><EventForm campuses={campuses} event={event} parents={fests.map((f) => ({ id: f.id, title: f.title }))} /></div>;
 }

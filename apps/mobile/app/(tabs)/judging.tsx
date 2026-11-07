@@ -43,8 +43,13 @@ export default function JudgingScreen() {
                   <Muted>{formatDate(e.startsAt, false)}</Muted>
                   <Row style={{ flexWrap: "wrap" }}>
                     <Badge label={humanize(e.status)} tone={e.status === "JUDGING" ? "success" : "neutral"} />
-                    {openRound ? <Badge label={`${openRound.name} open`} tone="success" /> : null}
+                    {openRound ? <Badge label={`${openRound.name} open`} tone="success" /> : <Badge label="No round open" />}
                   </Row>
+                  {typeof e.assignedTeams === "number" ? (
+                    <Muted style={{ fontSize: 12 }}>
+                      {e.submittedTeams ?? 0}/{e.assignedTeams} teams marked{openRound ? ` in ${openRound.name}` : ""}
+                    </Muted>
+                  ) : null}
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.muted} />
               </Row>

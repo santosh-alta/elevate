@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveTxt } from "node:dns/promises";
 import { z } from "zod";
+import { redactSettings } from "../lib/payments";
 import { ROLES } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { clearTenantCache, requireTenant } from "../plugins/tenant";
@@ -166,6 +167,13 @@ export function adminRoutes(app: FastifyInstance) {
             emailFrom: z.string().email().optional(),
             supportEmail: z.string().email().optional(),
             social: z.record(z.string()).optional(),
+            payments: z
+              .object({
+                razorpayKeyId: z.string().trim().optional(),
+                razorpayKeySecret: z.string().trim().optional(),
+                razorpayWebhookSecret: z.string().trim().optional(),
+              })
+              .optional(),
           })
           .optional(),
       })
@@ -177,11 +185,23 @@ export function adminRoutes(app: FastifyInstance) {
       data: {
         theme: nextTheme,
         ...(name && { name }),
-        ...(settings && { settings: { ...((tenant.settings as object) ?? {}), ...settings } }),
+        ...(settings && {
+          settings: {
+            ...((tenant.settings as object) ?? {}),
+            ...settings,
+            // Secrets left blank keep their stored value.
+            ...(settings.payments && {
+              payments: {
+                ...((((tenant.settings ?? {}) as Record<string, unknown>).payments as object) ?? {}),
+                ...Object.fromEntries(Object.entries(settings.payments).filter(([, v]) => v)),
+              },
+            }),
+          },
+        }),
       },
     });
     clearTenantCache();
-    return { id: updated.id, slug: updated.slug, name: updated.name, theme: themeOf(updated), settings: updated.settings };
+    return { id: updated.id, slug: updated.slug, name: updated.name, theme: themeOf(updated), settings: redactSettings(updated.settings) };
   });
 
   // ───────── Custom domains ─────────
@@ -253,7 +273,7 @@ export function adminRoutes(app: FastifyInstance) {
           prisma.registration.count({ where: { event: { tenantId: t.id } } }),
           prisma.certificate.count({ where: { event: { tenantId: t.id }, revokedAt: null } }),
         ]);
-        return { ...t, theme: themeOf(t), stats: { completedEvents: completed, registrations, certificates } };
+        return { ...t, settings: redactSettings(t.settings), theme: themeOf(t), stats: { completedEvents: completed, registrations, certificates } };
       }),
     );
   });

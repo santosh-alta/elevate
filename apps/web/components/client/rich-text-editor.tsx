@@ -1,0 +1,169 @@
+"use client";
+
+import { useRef, useState, type ReactNode } from "react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import Placeholder from "@tiptap/extension-placeholder";
+import { TableKit } from "@tiptap/extension-table";
+import {
+  Bold, Code, Columns3, Heading2, Heading3, ImagePlus, Italic, Link2, Link2Off, List, ListOrdered, Minus, Quote,
+  Redo2, Rows3, SquareCode, Strikethrough, Table2, Trash2, Underline as UnderlineIcon, Undo2,
+} from "lucide-react";
+import { cn } from "../ui/cn";
+import { MAX_UPLOAD_BYTES, uploadFile } from "./upload";
+
+function isEmptyHtml(html: string) {
+  return !html || /^(<p>\s*<\/p>)*$/.test(html.trim());
+}
+
+/**
+ * Rich-text editor (TipTap). Writes its HTML into a hidden input `name` so it works inside ApiForm / FormData,
+ * and also reports changes through `onChange`. Images upload through /uploads (via the proxy) or come from a URL.
+ */
+export function RichTextEditor({
+  name, defaultValue, onChange, placeholder = "Write something…", eventId, className, minHeight = "12rem", compact,
+}: {
+  name?: string; defaultValue?: string | null; onChange?: (html: string) => void; placeholder?: string;
+  eventId?: string; className?: string; minHeight?: string; compact?: boolean;
+}) {
+  const [html, setHtml] = useState(defaultValue ?? "");
+  const [uploading, setUploading] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    shouldRerenderOnTransaction: true,
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [2, 3] },
+        link: { openOnClick: false, autolink: true, defaultProtocol: "https", HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" } },
+      }),
+      Image.configure({ inline: false, allowBase64: false }),
+      TableKit.configure({ table: { resizable: false } }),
+      Placeholder.configure({ placeholder }),
+    ],
+    content: defaultValue || "",
+    editorProps: {
+      attributes: { class: "tiptap prose prose-brand prose-sm max-w-none px-4 py-3 focus:outline-none", style: `min-height:${minHeight}` },
+    },
+    onUpdate: ({ editor: ed }) => {
+      const out = ed.isEmpty ? "" : ed.getHTML();
+      setHtml(out);
+      onChange?.(out);
+    },
+  });
+
+  async function onFile(f: File) {
+    if (!editor) return;
+    if (f.size > MAX_UPLOAD_BYTES) { setErr("Image is larger than 15 MB"); return; }
+    setErr(null); setUploading(0);
+    try {
+      const r = await uploadFile("/uploads", f, { eventId }, setUploading);
+      editor.chain().focus().setImage({ src: r.url, alt: f.name.replace(/\.[^.]+$/, "") }).run();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  return (
+    <div className={cn("overflow-hidden rounded-brand border border-border bg-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20", className)}>
+      {editor ? <Toolbar editor={editor} compact={compact} uploading={uploading} onPickImage={() => fileRef.current?.click()} /> : <div className="h-10 border-b border-border bg-bg" />}
+      <EditorContent editor={editor} />
+      {!editor && <div className="px-4 py-3 text-sm text-muted" style={{ minHeight }}>Loading editor…</div>}
+      {name && <input type="hidden" name={name} value={isEmptyHtml(html) ? "" : html} data-keep-empty />}
+      <input
+        ref={fileRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onFile(f); }}
+      />
+      {err && <p className="border-t border-border px-3 py-1.5 text-xs text-red-600">{err}</p>}
+    </div>
+  );
+}
+
+function Btn({ onClick, active, disabled, label, children }: { onClick: () => void; active?: boolean; disabled?: boolean; label: string; children: ReactNode }) {
+  return (
+    <button
+      type="button" title={label} aria-label={label} aria-pressed={active} disabled={disabled}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-8 w-8 items-center justify-center rounded-md text-fg/80 transition-colors hover:bg-fg/5 disabled:opacity-40",
+        active && "bg-primary/10 text-primary",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+const Sep = () => <span className="mx-1 h-5 w-px bg-border" aria-hidden />;
+
+function Toolbar({ editor, compact, uploading, onPickImage }: { editor: Editor; compact?: boolean; uploading: number | null; onPickImage: () => void }) {
+  const c = () => editor.chain().focus();
+  const inTable = editor.isActive("table");
+  const ic = "h-4 w-4";
+
+  function setLink() {
+    const prev = editor.getAttributes("link").href as string | undefined;
+    const url = window.prompt("Link URL", prev ?? "https://");
+    if (url === null) return;
+    if (!url.trim() || url.trim() === "https://") { c().extendMarkRange("link").unsetLink().run(); return; }
+    c().extendMarkRange("link").setLink({ href: url.trim() }).run();
+  }
+  function imageFromUrl() {
+    const url = window.prompt("Image URL (https://…)");
+    if (url && /^https?:\/\//i.test(url.trim())) c().setImage({ src: url.trim() }).run();
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-bg/60 px-1.5 py-1">
+      <Btn label="Heading" active={editor.isActive("heading", { level: 2 })} onClick={() => c().toggleHeading({ level: 2 }).run()}><Heading2 className={ic} /></Btn>
+      <Btn label="Subheading" active={editor.isActive("heading", { level: 3 })} onClick={() => c().toggleHeading({ level: 3 }).run()}><Heading3 className={ic} /></Btn>
+      <Sep />
+      <Btn label="Bold" active={editor.isActive("bold")} onClick={() => c().toggleBold().run()}><Bold className={ic} /></Btn>
+      <Btn label="Italic" active={editor.isActive("italic")} onClick={() => c().toggleItalic().run()}><Italic className={ic} /></Btn>
+      <Btn label="Underline" active={editor.isActive("underline")} onClick={() => c().toggleUnderline().run()}><UnderlineIcon className={ic} /></Btn>
+      <Btn label="Strikethrough" active={editor.isActive("strike")} onClick={() => c().toggleStrike().run()}><Strikethrough className={ic} /></Btn>
+      <Btn label="Inline code" active={editor.isActive("code")} onClick={() => c().toggleCode().run()}><Code className={ic} /></Btn>
+      <Sep />
+      <Btn label="Bullet list" active={editor.isActive("bulletList")} onClick={() => c().toggleBulletList().run()}><List className={ic} /></Btn>
+      <Btn label="Numbered list" active={editor.isActive("orderedList")} onClick={() => c().toggleOrderedList().run()}><ListOrdered className={ic} /></Btn>
+      <Btn label="Quote" active={editor.isActive("blockquote")} onClick={() => c().toggleBlockquote().run()}><Quote className={ic} /></Btn>
+      {!compact && <Btn label="Code block" active={editor.isActive("codeBlock")} onClick={() => c().toggleCodeBlock().run()}><SquareCode className={ic} /></Btn>}
+      <Sep />
+      <Btn label="Link" active={editor.isActive("link")} onClick={setLink}><Link2 className={ic} /></Btn>
+      {editor.isActive("link") && <Btn label="Remove link" onClick={() => c().extendMarkRange("link").unsetLink().run()}><Link2Off className={ic} /></Btn>}
+      <Btn label={uploading !== null ? `Uploading ${uploading}%` : "Upload image"} disabled={uploading !== null} onClick={onPickImage}><ImagePlus className={ic} /></Btn>
+      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={imageFromUrl} className="h-8 rounded-md px-1.5 text-[11px] font-medium text-muted hover:bg-fg/5" title="Insert image from a URL">URL</button>
+      {uploading !== null && <span className="text-[11px] text-muted">{uploading}%</span>}
+      {!compact && <Btn label="Insert table" active={inTable} onClick={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><Table2 className={ic} /></Btn>}
+      <Btn label="Divider" onClick={() => c().setHorizontalRule().run()}><Minus className={ic} /></Btn>
+      <Sep />
+      <Btn label="Undo" disabled={!editor.can().undo()} onClick={() => c().undo().run()}><Undo2 className={ic} /></Btn>
+      <Btn label="Redo" disabled={!editor.can().redo()} onClick={() => c().redo().run()}><Redo2 className={ic} /></Btn>
+      {inTable && (
+        <div className="flex w-full flex-wrap items-center gap-1 border-t border-border pt-1 text-[11px]">
+          <span className="px-1 text-muted">Table:</span>
+          <TBtn onClick={() => c().addRowAfter().run()}><Rows3 className="h-3.5 w-3.5" />+ row</TBtn>
+          <TBtn onClick={() => c().addColumnAfter().run()}><Columns3 className="h-3.5 w-3.5" />+ column</TBtn>
+          <TBtn onClick={() => c().deleteRow().run()}>− row</TBtn>
+          <TBtn onClick={() => c().deleteColumn().run()}>− column</TBtn>
+          <TBtn onClick={() => c().toggleHeaderRow().run()}>Header row</TBtn>
+          <TBtn onClick={() => c().deleteTable().run()}><Trash2 className="h-3.5 w-3.5" />Delete table</TBtn>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TBtn({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onClick} className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2 hover:bg-bg">
+      {children}
+    </button>
+  );
+}

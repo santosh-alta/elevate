@@ -2,10 +2,12 @@ import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./plugins/prisma";
 import { sendEmail } from "./lib/mailer";
 import { enqueue, eventLinks, fmtDate, fromAddress, notifyGuest, renderEmailHtml } from "./lib/notify";
+import { expireDuePayments } from "./lib/payments";
 
 /**
  * In-process worker:
- *  - every 30 s: sends due PENDING email notifications (3 attempts, then FAILED)
+ *  - every 30 s: expires unpaid orders past their 30-minute hold (frees the seats), then sends due PENDING email
+ *    notifications (3 attempts, then FAILED)
  *  - every 5 min: schedules reminders (24 h / 1 h before events, guest profile reminders, daily overdue-task digest)
  * Everything it schedules carries a dedupKey, so running it repeatedly (or after a restart) never duplicates messages.
  * With several API instances, run it on one only (WORKER=off on the others) — or move to pg-boss as planned.
@@ -140,6 +142,8 @@ export function startWorker(log: FastifyBaseLogger): () => void {
     if (sending) return;
     sending = true;
     try {
+      const expired = await expireDuePayments();
+      if (expired) log.info({ expired }, "expired unpaid payments");
       await sendDueNotifications(log);
     } catch (err) {
       log.error({ err }, "notification send loop failed");

@@ -23,14 +23,15 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  domains       TenantDomain[]
-  campuses      Campus[]
-  memberships   Membership[]
-  events        Event[]
-  certTemplates CertificateTemplate[]
-  taskTemplates TaskTemplate[]
-  guestProfiles GuestProfile[]
-  notifications Notification[]
+  domains        TenantDomain[]
+  campuses       Campus[]
+  memberships    Membership[]
+  events         Event[]
+  certTemplates  CertificateTemplate[]
+  taskTemplates  TaskTemplate[]
+  guestProfiles  GuestProfile[]
+  notifications  Notification[]
+  judgingPresets JudgingPreset[]
 }
 
 model TenantDomain {
@@ -90,6 +91,8 @@ model User {
   staffRoles       EventStaff[]
   notifications    Notification[]
   hostedGuests     EventGuest[]      @relation("GuestHost")
+  judgeReviews     JudgeReview[]     @relation("JudgeReviews")
+  payments         Payment[]
 }
 
 enum Role {
@@ -154,6 +157,7 @@ enum EventType {
   ORIENTATION
   ALUMNI_MEET
   SPORTS
+  TECH_FEST
   OTHER
 }
 
@@ -217,6 +221,18 @@ model Event {
   /// Secret token that lets staff share a preview of a DRAFT/PLANNING event page
   previewToken         String      @unique @default(cuid())
   clonedFromId         String?
+  /// Fests: a sub-event points at its umbrella event (e.g. a hackathon inside a tech fest)
+  parentEventId        String?
+  /// Extra page sections written in the rich-text editor: [{ id, title, html, icon? }] (rules, prizes, timeline, eligibility...)
+  pageSections         Json        @default("[]")
+  /// Registration fee in the smallest currency unit (paise). 0 or null = free
+  feeAmount            Int?
+  currency             String      @default("INR")
+  feeType              FeeType     @default(PER_PERSON)
+  earlyBirdAmount      Int?
+  earlyBirdEndsAt      DateTime?
+  submissionsOpenAt    DateTime?
+  submissionsCloseAt   DateTime?
   resultsPublishedAt   DateTime?
   /// Cached outcome summary, regenerated on demand
   outcome              Json?
@@ -224,27 +240,33 @@ model Event {
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
-  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campuses      EventCampus[]
-  sessions      EventSession[]
-  staff         EventStaff[]
-  tasks         EventTask[]
-  guests        EventGuest[]
-  registrations Registration[]
-  teams         Team[]
-  rubric        RubricCriterion[]
-  rounds        JudgingRound[]
-  judges        JudgeAssignment[]
-  media         MediaAsset[]
-  socialPosts   SocialPost[]
-  certificates  Certificate[]
-  linkedinPosts LinkedInPost[]
-  feedback      Feedback[]
-  expenses      Expense[]
-  activities    EventActivity[]
-  announcements Announcement[]
-  sponsors      Sponsor[]
-  notifications Notification[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campuses          EventCampus[]
+  sessions          EventSession[]
+  staff             EventStaff[]
+  tasks             EventTask[]
+  guests            EventGuest[]
+  registrations     Registration[]
+  teams             Team[]
+  rubric            RubricCriterion[]
+  rounds            JudgingRound[]
+  judges            JudgeAssignment[]
+  media             MediaAsset[]
+  socialPosts       SocialPost[]
+  certificates      Certificate[]
+  linkedinPosts     LinkedInPost[]
+  feedback          Feedback[]
+  expenses          Expense[]
+  activities        EventActivity[]
+  announcements     Announcement[]
+  sponsors          Sponsor[]
+  notifications     Notification[]
+  parentEvent       Event?             @relation("FestChildren", fields: [parentEventId], references: [id], onDelete: SetNull)
+  subEvents         Event[]            @relation("FestChildren")
+  problemStatements ProblemStatement[]
+  payments          Payment[]
+  coupons           Coupon[]
+  reviews           JudgeReview[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status])
@@ -449,6 +471,7 @@ model Announcement {
 // ───────────────────────────── Participation ─────────────────────────────
 
 enum RegistrationStatus {
+  PENDING_PAYMENT
   REGISTERED
   APPROVED
   WAITLISTED
@@ -467,38 +490,52 @@ model Registration {
   ticketCode    String             @unique @default(cuid())
   checkedInAt   DateTime?
   checkedInById String?
+  /// Set when a team leader registered this person as part of their team
+  addedById     String?
+  paymentId     String?
   createdAt     DateTime           @default(now())
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@unique([eventId, userId])
   @@index([eventId, status])
 }
 
 model Team {
-  id             String    @id @default(cuid())
-  eventId        String
-  name           String
-  inviteCode     String    @unique
-  trackId        String?
+  id                 String    @id @default(cuid())
+  eventId            String
+  name               String
+  inviteCode         String    @unique
+  trackId            String?
+  problemStatementId String?
+  /// Registered as a team on the registration form (leader filled in the members)
+  registeredAsTeam   Boolean   @default(false)
   // Submission
-  projectTitle   String?
-  projectSummary String?
-  repoUrl        String?
-  demoUrl        String?
-  deckUrl        String?
-  videoUrl       String?
-  submittedAt    DateTime?
+  projectTitle       String?
+  projectSummary     String?
+  repoUrl            String?
+  demoUrl            String?
+  deckUrl            String?
+  videoUrl           String?
+  /// Extra links and uploaded files: [{ label, url, kind: "link" | "file" }]
+  attachments        Json      @default("[]")
+  techStack          String[]  @default([])
+  submittedAt        DateTime?
   // Result
-  rank           Int?
-  award          String? // "WINNER" | "RUNNER_UP" | "SECOND_RUNNER_UP" | "SPECIAL_MENTION"
-  createdAt      DateTime  @default(now())
+  rank               Int?
+  award              String? // "WINNER" | "RUNNER_UP" | "SECOND_RUNNER_UP" | "SPECIAL_MENTION"
+  createdAt          DateTime  @default(now())
 
   event            Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   members          TeamMember[]
   scores           Score[]
   judgeAssignments JudgeAssignment[]
+  problemStatement ProblemStatement? @relation(fields: [problemStatementId], references: [id], onDelete: SetNull)
+  roundEntries     RoundTeam[]
+  reviews          JudgeReview[]
+  payments         Payment[]
 
   @@unique([eventId, name])
 }
@@ -525,22 +562,188 @@ model RubricCriterion {
   maxScore    Int     @default(10)
   weight      Float   @default(1)
   sortOrder   Int     @default(0)
+  /// null = used in every round; otherwise only in this round
+  roundId     String?
 
-  event  Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event  Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  round  JudgingRound? @relation(fields: [roundId], references: [id], onDelete: Cascade)
   scores Score[]
 }
 
 model JudgingRound {
-  id        String    @id @default(cuid())
-  eventId   String
-  name      String // "Screening", "Finals"
-  sortOrder Int       @default(0)
-  isOpen    Boolean   @default(false)
-  closedAt  DateTime?
+  id            String    @id @default(cuid())
+  eventId       String
+  name          String // "Screening", "Finals"
+  sortOrder     Int       @default(0)
+  isOpen        Boolean   @default(false)
+  closedAt      DateTime?
+  description   String?
+  /// Optional schedule shown to judges; opening is still done by the admin
+  opensAt       DateTime?
+  closesAt      DateTime?
+  /// Only teams listed in RoundTeam are judged in this round (filled by "advance top N"); false = every team
+  restrictTeams Boolean   @default(false)
+  /// Teams can see judges' comments and their scores for this round after it closes
+  shareFeedback Boolean   @default(false)
 
   event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   scores      Score[]
   assignments JudgeAssignment[]
+  criteria    RubricCriterion[]
+  teams       RoundTeam[]
+  reviews     JudgeReview[]
+}
+
+/// A team qualified for a judging round (shortlist).
+model RoundTeam {
+  roundId String
+  teamId  String
+  addedAt DateTime @default(now())
+
+  round JudgingRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  team  Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([roundId, teamId])
+}
+
+/// A judge's overall remarks for one team in one round (besides per-criterion scores).
+model JudgeReview {
+  id          String    @id @default(cuid())
+  eventId     String
+  roundId     String
+  teamId      String
+  judgeId     String
+  comment     String?
+  /// Suggested remarks the judge ticked, e.g. "Strong demo", "Needs clearer problem statement"
+  tags        String[]  @default([])
+  /// Judge recommends this team for the next round
+  recommend   Boolean?
+  submittedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  event Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  round JudgingRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  team  Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  judge User         @relation("JudgeReviews", fields: [judgeId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, teamId, judgeId])
+}
+
+enum JudgingPresetKind {
+  CRITERION
+  COMMENT
+}
+
+/// Brand-level library of judging parameters and suggested comments (on top of the built-in defaults).
+model JudgingPreset {
+  id          String            @id @default(cuid())
+  tenantId    String
+  kind        JudgingPresetKind
+  name        String
+  description String?
+  maxScore    Int?
+  weight      Float?
+  /// Free label for grouping: "Technical", "Business", "Positive", "Improve"
+  category    String?
+  createdAt   DateTime          @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, kind])
+}
+
+model ProblemStatement {
+  id          String    @id @default(cuid())
+  eventId     String
+  trackId     String?
+  code        String? // "PS-01"
+  title       String
+  /// Rich text (sanitised HTML)
+  html        String    @default("")
+  difficulty  String?
+  sponsorName String?
+  /// [{ label, url }]
+  attachments Json      @default("[]")
+  /// Hidden from participants until this time (online hackathons reveal at kickoff)
+  releaseAt   DateTime?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  event Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  teams Team[]
+}
+
+// ───────────────────────────── Payments ─────────────────────────────
+
+enum FeeType {
+  PER_PERSON
+  PER_TEAM
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  MANUAL
+  DEV
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  eventId           String
+  userId            String
+  teamId            String?
+  provider          PaymentProvider @default(RAZORPAY)
+  status            PaymentStatus   @default(CREATED)
+  /// Smallest currency unit (paise)
+  amount            Int
+  currency          String          @default("INR")
+  /// Seats paid for (team members for a per-person fee)
+  quantity          Int             @default(1)
+  couponId          String?
+  discount          Int             @default(0)
+  providerOrderId   String?         @unique
+  providerPaymentId String?
+  receiptNo         String          @unique
+  paidAt            DateTime?
+  refundedAt        DateTime?
+  expiresAt         DateTime?
+  notes             String?
+  raw               Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team          Team?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  coupon        Coupon?        @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  registrations Registration[]
+
+  @@index([eventId, status])
+}
+
+model Coupon {
+  id         String    @id @default(cuid())
+  eventId    String
+  code       String
+  percentOff Int?
+  amountOff  Int?
+  maxUses    Int?
+  usedCount  Int       @default(0)
+  validUntil DateTime?
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([eventId, code])
 }
 
 /// A judge on an event. If teamId is null the judge scores every team in the round.
@@ -645,6 +848,7 @@ model SocialPost {
 
 enum CertificateType {
   PARTICIPATION
+  FINALIST
   WINNER
   RUNNER_UP
   SPECIAL_MENTION

@@ -22,3 +22,17 @@ body { background: rgb(var(--bg)); color: rgb(var(--fg)); }
   body { background: white; }
   .no-print { display: none !important; }
 }
+
+/* Rich-text editor (TipTap) */
+.tiptap { outline: none; min-height: 10rem; }
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: rgb(var(--muted) / 0.7);
+  float: left; height: 0; pointer-events: none;
+}
+.tiptap table { border-collapse: collapse; table-layout: fixed; width: 100%; overflow: hidden; display: table; }
+.tiptap td, .tiptap th { position: relative; vertical-align: top; min-width: 3em; }
+.tiptap .selectedCell::after { content: ""; position: absolute; inset: 0; background: rgb(var(--primary) / 0.12); pointer-events: none; }
+.tiptap .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: -2px; width: 4px; background: rgb(var(--primary) / 0.5); pointer-events: none; }
+.tiptap img.ProseMirror-selectednode { outline: 2px solid rgb(var(--primary)); }
+.tableWrapper { overflow-x: auto; }

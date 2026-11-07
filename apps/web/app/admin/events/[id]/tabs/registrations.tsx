@@ -6,7 +6,7 @@ import { Button, Card, CardHeader, EmptyState, Input, LinkButton, Stat, Table, T
 import { ApiForm } from "@/components/client/api-form";
 import { ApiSelect } from "@/components/client/api-select";
 
-const REG_STATUSES = ["REGISTERED", "APPROVED", "WAITLISTED", "REJECTED", "CANCELLED", "CHECKED_IN", "NO_SHOW"].map((s) => ({ value: s, label: s.replace("_", " ").toLowerCase().replace(/^./, (c) => c.toUpperCase()) }));
+const REG_STATUSES = ["PENDING_PAYMENT", "REGISTERED", "APPROVED", "WAITLISTED", "REJECTED", "CANCELLED", "CHECKED_IN", "NO_SHOW"].map((s) => ({ value: s, label: s.replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase()) }));
 
 export async function RegistrationsTab({ event }: { event: ElevateEvent }) {
   const regs = await apiList<Registration>(`/events/${event.id}/registrations`);

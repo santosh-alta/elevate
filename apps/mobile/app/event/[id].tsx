@@ -4,10 +4,11 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { useState } from "react";
 import { Alert, Image, Pressable, Share, Text, View } from "react-native";
-import { Api, EventDetail, Faq, Registration, Sponsor, eventTypeLabel } from "../../src/api";
+import { AWARD_LABELS, Api, EventDetail, EventFee, Faq, ProblemStatement, Registration, Sponsor, eventTypeLabel, formatMoney } from "../../src/api";
+import { HtmlContent } from "../../src/html";
 import { modeLabel, statusTone } from "../../src/events";
 import { useSession } from "../../src/session";
-import { withAlpha } from "../../src/theme";
+import { STATUS_COLORS, withAlpha } from "../../src/theme";
 import {
   Badge,
   Body,
@@ -80,6 +81,50 @@ function SponsorTile({ sponsor }: { sponsor: Sponsor }) {
   );
 }
 
+function priceLines(fee: EventFee): { main: string; sub?: string } {
+  const unit = fee.feeType === "PER_TEAM" ? "per team" : "per person";
+  const early =
+    fee.earlyBirdAmount != null && fee.earlyBirdEndsAt && new Date(fee.earlyBirdEndsAt).getTime() > Date.now() && fee.earlyBirdAmount < fee.amount;
+  if (early)
+    return {
+      main: `${formatMoney(fee.earlyBirdAmount!, fee.currency)} ${unit} · early bird`,
+      sub: `Until ${formatDate(fee.earlyBirdEndsAt, false)}, then ${formatMoney(fee.amount, fee.currency)}`,
+    };
+  return { main: `${formatMoney(fee.currentAmount || fee.amount, fee.currency)} ${unit}` };
+}
+
+function ProblemItem({ ps }: { ps: ProblemStatement }) {
+  const { theme } = useSession();
+  const [open, setOpen] = useState(false);
+  const expandable = !!ps.html || ps.attachments.length > 0;
+  return (
+    <Card onPress={expandable ? () => setOpen((v) => !v) : undefined} style={{ gap: 8 }}>
+      <Row style={{ alignItems: "flex-start" }}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Row style={{ flexWrap: "wrap" }}>
+            {ps.code ? <Badge label={ps.code} tone="primary" /> : null}
+            {ps.difficulty ? <Badge label={humanize(ps.difficulty)} /> : null}
+          </Row>
+          <Text style={{ fontWeight: "700", fontSize: 16, color: theme.colors.fg }}>{ps.title}</Text>
+          {ps.sponsorName ? <Muted style={{ fontSize: 12 }}>Sponsored by {ps.sponsorName}</Muted> : null}
+        </View>
+        {expandable ? <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={theme.colors.muted} /> : null}
+      </Row>
+      {open ? (
+        <>
+          <HtmlContent html={ps.html} compact />
+          {ps.attachments.length ? (
+            <Row style={{ flexWrap: "wrap" }}>
+              {ps.attachments.map((a, i) => (
+                <Button key={`${a.url}-${i}`} title={a.label} icon="attach" variant="secondary" size="sm" onPress={() => openUrl(a.url)} />
+              ))}
+            </Row>
+          ) : null}
+        </>
+      ) : null}
+    </Card>
+  );
+}
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -98,14 +143,48 @@ export default function EventDetailScreen() {
 
   const { event, mine } = data;
   const canRegister = event.status === "REGISTRATION_OPEN";
+  const fee = event.fee;
+  const price = fee ? priceLines(fee) : null;
+  const isTeamEvent = !!event.modules?.teams;
+  const teamAtRegistration = isTeamEvent && event.config?.teamRegistration !== "JOIN_LATER";
+  // Razorpay checkout and team sign-up (adding members) are web-only for now.
+  const registerOnWeb = !!fee || teamAtRegistration;
+  const registerUrl = Api.registerOnWebUrl(event.slug);
+  const pendingPayment = mine?.status === "PENDING_PAYMENT";
+  const paidPayment = event.myPayment && event.myPayment.status === "PAID" ? event.myPayment : null;
+
+  async function openOnWeb(url: string | null) {
+    if (!url) {
+      Alert.alert("Not available in the app", "Please register from the event website.");
+      return;
+    }
+    try {
+      await WebBrowser.openBrowserAsync(url);
+    } finally {
+      reload();
+    }
+  }
+
+  async function openReceipt(paymentId: string) {
+    try {
+      await Api.openReceipt(paymentId);
+    } catch (e: any) {
+      Alert.alert("Couldn't open receipt", e?.message ?? "Try again later.");
+    }
+  }
   const registrations = event.counts?.registrations ?? event._count?.registrations;
 
   async function register() {
     setBusy(true);
     setActionError(null);
     try {
-      await Api.register(event.id);
+      const res = await Api.register(event.id);
       await reload();
+      if (res.payment && res.payment.status !== "PAID") {
+        // The server decided this seat needs paying for: hand over to the web checkout.
+        await openOnWeb(Api.registerOnWebUrl(event.slug));
+        return;
+      }
       router.push("/(tabs)/tickets");
     } catch (e: any) {
       setActionError(e.message);
@@ -139,6 +218,8 @@ export default function EventDetailScreen() {
     .sort((a, b) => SPONSOR_TIER_ORDER.indexOf(a.tier ?? "PARTNER") - SPONSOR_TIER_ORDER.indexOf(b.tier ?? "PARTNER"));
   const sponsorTiers = [...new Set(sponsors.map((s) => s.tier ?? "PARTNER"))];
   const faqs = event.faqs ?? [];
+  const winners = event.winners;
+  const gallery = event.gallery ?? [];
   const isOver = new Date(event.endsAt).getTime() < Date.now();
 
   function cancel() {
@@ -210,6 +291,34 @@ export default function EventDetailScreen() {
               </Body>
             </Row>
           ) : null}
+          {price ? (
+            <Row style={{ alignItems: "flex-start" }}>
+              <Ionicons name="pricetag-outline" size={18} color={theme.colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Body style={{ fontWeight: "700" }}>{price.main}</Body>
+                {price.sub ? <Muted style={{ fontSize: 13 }}>{price.sub}</Muted> : null}
+              </View>
+            </Row>
+          ) : canRegister ? (
+            <Row>
+              <Ionicons name="pricetag-outline" size={18} color={theme.colors.primary} />
+              <Body>Free</Body>
+            </Row>
+          ) : null}
+          {isTeamEvent && (event.config?.minTeamSize || event.config?.maxTeamSize) ? (
+            <Row>
+              <Ionicons name="people-circle-outline" size={18} color={theme.colors.primary} />
+              <Body>
+                Teams of {String(event.config?.minTeamSize ?? 1)}–{String(event.config?.maxTeamSize ?? event.config?.minTeamSize ?? 1)}
+              </Body>
+            </Row>
+          ) : null}
+          {event.submissionsCloseAt ? (
+            <Row>
+              <Ionicons name="cloud-upload-outline" size={18} color={theme.colors.primary} />
+              <Body style={{ flex: 1 }}>Submissions close {formatDate(event.submissionsCloseAt)}</Body>
+            </Row>
+          ) : null}
           {event.registrationClosesAt ? (
             <Row>
               <Ionicons name="hourglass-outline" size={18} color={theme.colors.primary} />
@@ -243,7 +352,21 @@ export default function EventDetailScreen() {
 
         {actionError ? <ErrorBanner message={actionError} /> : null}
 
-        {mine ? (
+        {mine && pendingPayment ? (
+          <Card style={{ borderColor: STATUS_COLORS.warning, gap: 12 }}>
+            <Row>
+              <Ionicons name="card-outline" size={22} color={STATUS_COLORS.warning} />
+              <Text style={{ flex: 1, fontWeight: "700", fontSize: 16, color: theme.colors.fg }}>Payment pending</Text>
+              <Badge label="Pending payment" tone="warning" />
+            </Row>
+            <Muted>
+              Your seat is held for a short time. Complete the payment on the website to confirm your registration
+              {event.myPayment?.amount ? ` (${formatMoney(event.myPayment.amount, event.myPayment.currency)})` : ""}.
+            </Muted>
+            <Button title="Complete payment" icon="card" onPress={() => openOnWeb(registerUrl)} />
+            {isTeamEvent ? <Button title="My team" icon="people" variant="secondary" onPress={() => router.push(`/team/${event.id}`)} /> : null}
+          </Card>
+        ) : mine ? (
           <Card style={{ borderColor: theme.colors.primary, gap: 12 }}>
             <Row>
               <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />
@@ -253,12 +376,39 @@ export default function EventDetailScreen() {
               <Badge label={humanize(mine.status)} tone="primary" />
             </Row>
             <Button title="Show my ticket" icon="qr-code" onPress={() => router.push("/(tabs)/tickets")} />
+            {isTeamEvent || event.myTeam ? (
+              <Button title="My team" icon="people" variant="secondary" onPress={() => router.push(`/team/${event.id}`)} />
+            ) : null}
             {event.meetingUrl ? (
               <Button title="Join online" icon="videocam" variant="secondary" onPress={() => WebBrowser.openBrowserAsync(event.meetingUrl!)} />
+            ) : null}
+            {paidPayment ? (
+              <Button
+                title={`Receipt${paidPayment.receiptNo ? ` ${paidPayment.receiptNo}` : ""}`}
+                icon="receipt-outline"
+                variant="ghost"
+                onPress={() => openReceipt(paidPayment.id)}
+              />
             ) : null}
             {mine.status !== "CHECKED_IN" ? (
               <Button title="Cancel registration" variant="ghost" onPress={cancel} disabled={busy} />
             ) : null}
+          </Card>
+        ) : canRegister && registerOnWeb ? (
+          <Card style={{ gap: 10 }}>
+            <Button
+              title={fee ? `Register on web · ${formatMoney(fee.currentAmount || fee.amount, fee.currency)}` : "Register your team on web"}
+              icon="open-outline"
+              size="lg"
+              onPress={() => openOnWeb(registerUrl)}
+            />
+            <Muted style={{ fontSize: 13, textAlign: "center" }}>
+              {fee && teamAtRegistration
+                ? "Team details and payment are completed on the website. Your ticket shows up here afterwards."
+                : fee
+                  ? "Payment is completed securely on the website. Your ticket shows up here afterwards."
+                  : "Add your team members on the website. Your ticket shows up here afterwards."}
+            </Muted>
           </Card>
         ) : canRegister ? (
           <Button title="Register now" icon="ticket" size="lg" onPress={register} loading={busy} style={{ marginBottom: 12 }} />
@@ -272,19 +422,109 @@ export default function EventDetailScreen() {
           </Card>
         )}
 
-        {event.modules?.teams && mine ? (
-          <Card>
+        {event.parentEvent ? (
+          <Card onPress={() => router.push(`/event/${event.parentEvent!.id ?? event.parentEvent!.slug}`)}>
             <Row>
-              <Ionicons name="people" size={18} color={theme.colors.primary} />
-              <Body style={{ flex: 1 }}>Team event: create or join your team on the event website with an invite code.</Body>
+              <Ionicons name="albums-outline" size={18} color={theme.colors.primary} />
+              <Body style={{ flex: 1 }}>
+                Part of <Text style={{ fontWeight: "700" }}>{event.parentEvent.title}</Text>
+              </Body>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
             </Row>
           </Card>
+        ) : null}
+
+        {winners.length > 0 ? (
+          <>
+            <SectionHeader>Winners</SectionHeader>
+            {winners.map((w) => {
+              const top = w.award === "WINNER";
+              return (
+                <Card key={w.teamId} style={{ gap: 6, borderColor: top ? STATUS_COLORS.warning : theme.colors.border }}>
+                  <Row>
+                    <Ionicons name={w.award === "SPECIAL_MENTION" ? "star" : "trophy"} size={20} color={top ? STATUS_COLORS.warning : theme.colors.primary} />
+                    <Text style={{ flex: 1, fontWeight: "800", fontSize: 16, color: theme.colors.fg }}>{w.teamName}</Text>
+                    <Badge label={AWARD_LABELS[w.award ?? ""] ?? (w.rank ? `#${w.rank}` : humanize(w.award))} tone={top ? "warning" : "primary"} />
+                  </Row>
+                  {w.projectTitle ? <Body>{w.projectTitle}</Body> : null}
+                  {w.members.length ? <Muted>{w.members.map((m) => m.name).filter(Boolean).join(", ")}</Muted> : null}
+                </Card>
+              );
+            })}
+          </>
         ) : null}
 
         {event.description ? (
           <>
             <SectionHeader>About</SectionHeader>
-            <Body>{event.description}</Body>
+            <HtmlContent html={event.description} />
+          </>
+        ) : null}
+
+        {event.pageSections.map((sec) =>
+          sec.html.trim() ? (
+            <View key={sec.id}>
+              <SectionHeader>{sec.title}</SectionHeader>
+              <Card>
+                <HtmlContent html={sec.html} />
+              </Card>
+            </View>
+          ) : null,
+        )}
+
+        {event.subEvents.length > 0 ? (
+          <>
+            <SectionHeader>Events in this fest</SectionHeader>
+            {event.subEvents.map((se) => (
+              <Card key={se.id} onPress={() => router.push(`/event/${se.id}`)}>
+                <Row style={{ gap: 12 }}>
+                  {se.coverImageUrl ? (
+                    <Image source={{ uri: se.coverImageUrl }} style={{ width: 56, height: 56, borderRadius: 10 }} />
+                  ) : (
+                    <View style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: withAlpha(theme.colors.primary, 0.12), alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="sparkles-outline" size={22} color={theme.colors.primary} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontWeight: "700", color: theme.colors.fg }}>{se.title}</Text>
+                    <Muted style={{ fontSize: 13 }}>
+                      {eventTypeLabel(se.type)} · {formatDate(se.startsAt)}
+                    </Muted>
+                    <Badge label={humanize(se.status)} tone={statusTone(se.status)} />
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+                </Row>
+              </Card>
+            ))}
+          </>
+        ) : null}
+
+        {event.problemStatements.length > 0 ? (
+          <>
+            <SectionHeader>Problem statements</SectionHeader>
+            {event.problemStatements.map((ps) => (
+              <ProblemItem key={ps.id} ps={ps} />
+            ))}
+          </>
+        ) : null}
+
+        {event.rubricPublic.length > 0 ? (
+          <>
+            <SectionHeader>How you'll be judged</SectionHeader>
+            <Card style={{ gap: 10 }}>
+              {event.rubricPublic.map((c, i) => (
+                <View key={`${c.name}-${i}`} style={{ gap: 2 }}>
+                  <Row style={{ justifyContent: "space-between" }}>
+                    <Text style={{ flex: 1, fontWeight: "700", color: theme.colors.fg }}>{c.name}</Text>
+                    <Muted style={{ fontSize: 12 }}>
+                      {c.roundName ? `${c.roundName} · ` : ""}out of {c.maxScore}
+                      {c.weight !== 1 ? ` · ×${c.weight}` : ""}
+                    </Muted>
+                  </Row>
+                  {c.description ? <Muted style={{ fontSize: 13 }}>{c.description}</Muted> : null}
+                </View>
+              ))}
+            </Card>
           </>
         ) : null}
 
@@ -364,6 +604,32 @@ export default function EventDetailScreen() {
                 </View>
               </View>
             ))}
+          </>
+        ) : null}
+
+        {gallery.length > 0 ? (
+          <>
+            <SectionHeader
+              right={
+                <Text onPress={() => router.push(`/gallery/${event.id}`)} style={{ color: theme.colors.primary, fontWeight: "700" }}>
+                  See all
+                </Text>
+              }
+            >
+              Photos
+            </SectionHeader>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+              {gallery.slice(0, 6).map((m, i) => (
+                <Pressable
+                  key={m.id}
+                  onPress={() => router.push({ pathname: "/gallery/[eventId]", params: { eventId: event.id, start: String(i) } })}
+                  style={{ width: "32.4%", aspectRatio: 1 }}
+                  accessibilityLabel={m.caption ?? m.title ?? "Event photo"}
+                >
+                  <Image source={{ uri: m.url }} style={{ width: "100%", height: "100%", borderRadius: 6 }} />
+                </Pressable>
+              ))}
+            </View>
           </>
         ) : null}
 

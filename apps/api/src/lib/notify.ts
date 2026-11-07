@@ -1,7 +1,9 @@
 import type { Notification, NotificationChannel, Prisma, Tenant } from "@prisma/client";
 import { Prisma as P } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
+import { formatMoney } from "@elevate/shared";
 import { apiBaseUrl, brandBaseUrl, settingsOf, themeOf, verifyUrl } from "./brand";
+import { receiptUrl as receiptLink } from "./receipt";
 
 /**
  * Notification outbox. Every message is a Notification row; src/worker.ts sends due EMAIL rows.
@@ -295,5 +297,148 @@ export async function fanOutAnnouncement(announcementId: string): Promise<number
     });
   }
   await prisma.announcement.update({ where: { id: a.id }, data: { sentAt: new Date() } });
+  return regs.length;
+}
+
+// ───────── v1.2: teams, payments, judging, results, gallery ─────────
+
+/** A team leader registered this person: "<leader> added you to team <name> for <event>". */
+export async function notifyTeamAdded(registrationId: string): Promise<void> {
+  const reg = await prisma.registration.findUnique({ where: { id: registrationId }, include: { event: true, user: true } });
+  if (!reg) return;
+  const e = reg.event;
+  const [leader, tm] = await Promise.all([
+    reg.addedById ? prisma.user.findUnique({ where: { id: reg.addedById } }) : null,
+    prisma.teamMember.findFirst({ where: { userId: reg.userId, team: { eventId: e.id } }, include: { team: true } }),
+  ]);
+  const links = await eventLinks(e);
+  const teamName = tm?.team.name ?? "their team";
+  const who = leader?.name ?? "Your team leader";
+  const lines = [
+    `Hi ${reg.user.name},`,
+    `${who} added you to team ${teamName} for ${e.title}.`,
+    `When: ${fmtDate(e.startsAt)}\n${where(e)}`.trim(),
+  ];
+  if (["APPROVED", "CHECKED_IN"].includes(reg.status)) {
+    lines.push(`Your ticket code: ${reg.ticketCode}\nYour ticket and team are on your account page: ${links.me}`);
+  } else if (reg.status === "REGISTERED") {
+    lines.push("The organisers will review the registration and confirm soon.");
+  }
+  lines.push(`Not you, or don't want to take part? You can leave the team from the event page: ${links.page}`);
+  await enqueue({
+    tenantId: e.tenantId, eventId: e.id, userId: reg.userId, channels: ["EMAIL", "IN_APP"], template: "team.added",
+    subject: `${who} added you to team ${teamName}: ${e.title}`, body: lines.join("\n\n"),
+    ctaLabel: "View my ticket", ctaUrl: links.me, dedupKey: `team.added:${reg.id}:${reg.status}`,
+    data: { registrationId: reg.id, teamId: tm?.teamId },
+  });
+}
+
+export async function notifyPayment(paymentId: string, kind: "receipt" | "failed" | "expired"): Promise<void> {
+  const p = await prisma.payment.findUnique({ where: { id: paymentId }, include: { event: true, user: true, coupon: true, team: true } });
+  if (!p) return;
+  const e = p.event;
+  const links = await eventLinks(e);
+  const amount = formatMoney(p.amount, p.currency);
+  const receiptUrl = receiptLink(p.id);
+  let subject: string;
+  let body: string;
+  let ctaLabel = "View event";
+  let ctaUrl = links.page;
+  if (kind === "receipt") {
+    subject = `Payment received: ${e.title}`;
+    body = [
+      `Hi ${p.user.name},`,
+      `We've received your payment of ${amount} for ${e.title}${p.team ? ` (team ${p.team.name})` : ""}. Thank you!`,
+      [`Receipt no.: ${p.receiptNo}`, p.quantity > 1 ? `Seats: ${p.quantity}` : null, p.coupon ? `Coupon: ${p.coupon.code} (−${formatMoney(p.discount, p.currency)})` : null,
+        p.providerPaymentId ? `Payment id: ${p.providerPaymentId}` : null].filter(Boolean).join("\n"),
+      `Download your receipt (PDF): ${receiptUrl}`,
+    ].join("\n\n");
+    ctaLabel = "Download receipt";
+    ctaUrl = receiptUrl;
+  } else if (kind === "failed") {
+    subject = `Payment failed: ${e.title}`;
+    body = `Hi ${p.user.name},\n\nYour payment of ${amount} for ${e.title} didn't go through, so your registration isn't confirmed yet. No money was taken — if it was, it will be refunded automatically by your bank.\n\nYou can try again from the event page.`;
+    ctaLabel = "Try again";
+  } else {
+    subject = `Registration not completed: ${e.title}`;
+    body = `Hi ${p.user.name},\n\nWe held your seat${p.quantity > 1 ? "s" : ""} for ${e.title} for 30 minutes, but the payment of ${amount} wasn't completed, so the registration has been released.\n\nIf you still want to join, you can register again from the event page while seats last.`;
+    ctaLabel = "Register again";
+  }
+  await enqueue({
+    tenantId: e.tenantId, eventId: e.id, userId: p.userId, channels: ["EMAIL", "IN_APP"], template: `payment.${kind}`,
+    subject, body, ctaLabel, ctaUrl, dedupKey: `payment.${kind}:${p.id}${kind === "failed" ? `:${p.updatedAt.getTime()}` : ""}`,
+    data: { paymentId: p.id },
+  });
+}
+
+/** Results are out: every team member gets an email (winners get a congratulations). */
+export async function notifyResults(eventId: string, publishedAt: Date): Promise<number> {
+  const e = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!e) return 0;
+  const teams = await prisma.team.findMany({ where: { eventId }, include: { members: { include: { user: true } } } });
+  const links = await eventLinks(e);
+  const label: Record<string, string> = { WINNER: "won", RUNNER_UP: "finished 1st runner-up", SECOND_RUNNER_UP: "finished 2nd runner-up", SPECIAL_MENTION: "received a special mention" };
+  let n = 0;
+  for (const t of teams) {
+    for (const m of t.members) {
+      const won = t.award ? label[t.award] : null;
+      await enqueue({
+        tenantId: e.tenantId, eventId, userId: m.userId, channels: ["EMAIL", "IN_APP"], template: "results.published",
+        subject: won ? `Congratulations! Team ${t.name} ${won} at ${e.title}` : `Results are out: ${e.title}`,
+        body: won
+          ? `Hi ${m.user.name},\n\nCongratulations — your team ${t.name} ${won} at ${e.title}! Your certificate will be on your account page soon.`
+          : `Hi ${m.user.name},\n\nThe results of ${e.title} are out. Thank you for building with us — see the winners and every team's work on the event page.`,
+        ctaLabel: "See results", ctaUrl: `${links.page}#results`,
+        dedupKey: `results.published:${eventId}:${m.userId}:${publishedAt.getTime()}`,
+      });
+      n++;
+    }
+  }
+  return n;
+}
+
+/** A judging round was opened: tell the event's judges. */
+export async function notifyRoundOpened(roundId: string): Promise<number> {
+  const round = await prisma.judgingRound.findUnique({ where: { id: roundId }, include: { event: true } });
+  if (!round) return 0;
+  const e = round.event;
+  const judges = await prisma.judgeAssignment.findMany({
+    where: { eventId: e.id, OR: [{ roundId }, { roundId: null }] },
+    distinct: ["userId"],
+    include: { user: true },
+  });
+  const links = await eventLinks(e);
+  const stamp = Date.now();
+  for (const j of judges) {
+    await enqueue({
+      tenantId: e.tenantId, eventId: e.id, userId: j.userId, channels: ["EMAIL", "IN_APP"], template: "round.opened",
+      subject: `Judging is open: ${round.name} — ${e.title}`,
+      body: `Hi ${j.user.name},\n\n${round.name} of ${e.title} is now open for judging.${round.closesAt ? ` Please submit your scores by ${fmtDate(round.closesAt)}.` : ""}${round.description ? `\n\n${round.description}` : ""}\n\nOpen the judge view to see your teams, their submissions and the scoring criteria.`,
+      ctaLabel: "Start judging", ctaUrl: `${links.base}/judge/${e.id}`,
+      dedupKey: `round.opened:${roundId}:${j.userId}:${stamp}`, data: { roundId },
+    });
+  }
+  return judges.length;
+}
+
+/** Photos are up: everyone who attended. */
+export async function notifyGallery(eventId: string): Promise<number> {
+  const e = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!e) return 0;
+  const modules = (e.modules ?? {}) as Record<string, boolean>;
+  const statuses = modules.checkin === false || e.mode === "ONLINE" ? [...ACTIVE_REG] : ["CHECKED_IN"];
+  const regs = await prisma.registration.findMany({
+    where: { eventId, status: { in: statuses as never[] } },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  const links = await eventLinks(e);
+  for (const r of regs) {
+    await enqueue({
+      tenantId: e.tenantId, eventId, userId: r.userId, channels: ["EMAIL", "IN_APP"], template: "gallery.ready",
+      subject: `Photos from ${e.title} are up`,
+      body: `Hi ${r.user.name},\n\nThe photos from ${e.title} are up — find yourself, download your favourites and share them.\n\nGallery: ${links.page}#gallery${e.driveFolderUrl ? `\nAll photos (Drive): ${e.driveFolderUrl}` : ""}`,
+      ctaLabel: "See the photos", ctaUrl: `${links.page}#gallery`, dedupKey: `gallery.ready:${eventId}:${r.id}`,
+    });
+  }
   return regs.length;
 }

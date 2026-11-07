@@ -1,4 +1,4 @@
-import { ExternalLink, FileText, FolderOpen, Megaphone, Sparkles, Star, Trash2 } from "lucide-react";
+import { BellRing, ExternalLink, FileText, FolderOpen, Megaphone, Sparkles, Star, Trash2 } from "lucide-react";
 import { MEDIA_KINDS, SOCIAL_PLATFORMS } from "@elevate/shared";
 import { apiList } from "@/lib/api";
 import { fmtDateTime, humanize, isImage } from "@/lib/format";
@@ -47,7 +47,16 @@ export async function MediaTab({ event }: { event: ElevateEvent }) {
       </div>
 
       <Card>
-        <CardHeader title="Gallery" description={`${images.length} images · ${approved} approved for social media`} />
+        <CardHeader
+          title="Gallery"
+          description={`${images.length} images · ${approved} approved for social media`}
+          action={(images.length > 0 || event.driveFolderUrl) ? (
+            <ApiButton path={`/events/${event.id}/gallery/notify`} body={{}} size="sm" variant="secondary" successMessage="Attendees notified"
+              confirm="Email and notify everyone who attended that the photos are up?">
+              <BellRing className="h-4 w-4" />Notify attendees photos are up
+            </ApiButton>
+          ) : undefined}
+        />
         <CardBody>
           {images.length ? (
             <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

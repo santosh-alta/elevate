@@ -22,9 +22,12 @@ import { slugify } from "../lib/codes";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { canTransition, runCompletionAutomation } from "../lib/lifecycle";
-import { computeLeaderboard, defaultRoundId } from "../lib/judging";
+import { computeLeaderboard, defaultRoundId, judgesPerTeam, roundTeamIds } from "../lib/judging";
 import { fmtDate, notifyAudience, safely } from "../lib/notify";
 import { newToken } from "./guests";
+import { eventWinners } from "./hackathon";
+import { sanitizeHtml, sanitizeSections } from "../lib/html";
+import { currentFee, isPaidEvent, paymentResponse, revenueFor } from "../lib/payments";
 
 const HIDDEN_FROM_PUBLIC: EventStatus[] = ["DRAFT", "PLANNING"];
 const DAY = 24 * 60 * 60 * 1000;
@@ -59,7 +62,31 @@ const updateEventSchema = createEventSchema
     contactPhone: z.string().nullable().optional(),
     venue: z.string().nullable().optional(),
     coverImageUrl: z.string().url().nullable().optional(),
+    description: z.string().max(200_000).nullable().optional(),
+    parentEventId: z.string().nullable().optional(),
+    feeAmount: z.number().int().min(0).nullable().optional(),
+    earlyBirdAmount: z.number().int().min(0).nullable().optional(),
+    earlyBirdEndsAt: z.coerce.date().nullable().optional(),
+    submissionsOpenAt: z.coerce.date().nullable().optional(),
+    submissionsCloseAt: z.coerce.date().nullable().optional(),
   });
+
+/** A fest's sub-event must be another event of the same brand, and not create a cycle. */
+async function validateParent(tenantId: string, parentEventId: string | null | undefined, selfId?: string) {
+  if (!parentEventId) return;
+  if (parentEventId === selfId) throw badRequest("An event can't be its own parent");
+  const parent = await prisma.event.findFirst({ where: { tenantId, OR: [{ id: parentEventId }, { slug: parentEventId }] } });
+  if (!parent) throw badRequest("Unknown parent event");
+  if (selfId && parent.parentEventId === selfId) throw badRequest("Those events would contain each other");
+  return parent.id;
+}
+
+function validateFee(fee: { feeAmount?: number | null; earlyBirdAmount?: number | null }) {
+  if (fee.feeAmount && fee.feeAmount < 100) throw badRequest("The fee must be at least 1.00 (100 paise)");
+  if (fee.earlyBirdAmount !== null && fee.earlyBirdAmount !== undefined && fee.feeAmount && fee.earlyBirdAmount > fee.feeAmount) {
+    throw badRequest("The early-bird price can't be more than the normal fee");
+  }
+}
 
 /** Checklist rows for a new event: the brand's templates for the type, else the defaults. */
 export async function checklistFor(tenantId: string, type: (typeof EVENT_TYPES)[number], startsAt: Date) {
@@ -101,6 +128,7 @@ export function eventRoutes(app: FastifyInstance) {
         upcoming: z.coerce.boolean().optional(),
         past: z.coerce.boolean().optional(),
         search: z.string().optional(),
+        parentId: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(200).default(50),
         offset: z.coerce.number().int().min(0).default(0),
       })
@@ -114,6 +142,7 @@ export function eventRoutes(app: FastifyInstance) {
       ...(q.upcoming && { endsAt: { gte: new Date() } }),
       ...(q.past && { endsAt: { lt: new Date() } }),
       ...(q.search && { title: { contains: q.search, mode: "insensitive" } }),
+      ...(q.parentId && { parentEventId: q.parentId }),
     };
     if (q.status) {
       if (!staff && HIDDEN_FROM_PUBLIC.includes(q.status)) return [];
@@ -174,16 +203,64 @@ export function eventRoutes(app: FastifyInstance) {
 
     let myRegistration = null;
     let myTeam = null;
+    let myPayment = null;
     if (req.auth) {
+      const userId = req.auth.user.id;
       myRegistration = await prisma.registration.findUnique({
-        where: { eventId_userId: { eventId: event.id, userId: req.auth.user.id } },
+        where: { eventId_userId: { eventId: event.id, userId } },
       });
       const tm = await prisma.teamMember.findFirst({
-        where: { userId: req.auth.user.id, team: { eventId: event.id } },
-        include: { team: { include: { members: { include: { user: { select: { id: true, name: true, email: true } } } } } } },
+        where: { userId, team: { eventId: event.id } },
+        include: {
+          team: {
+            include: {
+              members: { include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } }, orderBy: { joinedAt: "asc" } },
+              problemStatement: { select: { id: true, code: true, title: true } },
+            },
+          },
+        },
       });
       myTeam = tm?.team ?? null;
+      const p = await prisma.payment.findFirst({
+        where: { eventId: event.id, OR: [{ userId }, { registrations: { some: { userId } } }] },
+        orderBy: { createdAt: "desc" },
+      });
+      if (p) myPayment = { ...(await paymentResponse(p)), payerId: p.userId, teamId: p.teamId, createdAt: p.createdAt };
     }
+
+    const now = new Date();
+    const [problemStatements, rounds, parent, subEvents, winners] = await Promise.all([
+      prisma.problemStatement.findMany({
+        where: { eventId: event.id, ...(!manager && { OR: [{ releaseAt: null }, { releaseAt: { lte: now } }] }) },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      }),
+      prisma.judgingRound.findMany({
+        where: { eventId: event.id },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true, isOpen: true, closedAt: true, opensAt: true, closesAt: true, description: true, sortOrder: true },
+      }),
+      event.parentEventId ? prisma.event.findUnique({ where: { id: event.parentEventId }, select: { id: true, slug: true, title: true, status: true } }) : null,
+      prisma.event.findMany({
+        where: { parentEventId: event.id, ...(!manager && { status: { notIn: HIDDEN_FROM_PUBLIC } }) },
+        orderBy: { startsAt: "asc" },
+        select: {
+          id: true, slug: true, title: true, tagline: true, type: true, startsAt: true, endsAt: true, mode: true, coverImageUrl: true, status: true,
+          venue: true, feeAmount: true, currency: true, feeType: true, _count: { select: { registrations: true } },
+        },
+      }),
+      event.resultsPublishedAt ? eventWinners(event.id) : Promise.resolve([]),
+    ]);
+    const roundName = new Map(rounds.map((r) => [r.id, r.name]));
+    const fee = isPaidEvent(event)
+      ? {
+          amount: event.feeAmount!,
+          currency: event.currency,
+          feeType: event.feeType,
+          earlyBirdAmount: event.earlyBirdAmount,
+          earlyBirdEndsAt: event.earlyBirdEndsAt,
+          currentAmount: currentFee(event, now).amount,
+        }
+      : null;
 
     const gallery = await prisma.mediaAsset.findMany({
       where: { eventId: event.id, kind: "PHOTO" },
@@ -201,6 +278,19 @@ export function eventRoutes(app: FastifyInstance) {
       canManage: manager,
       myRegistration,
       myTeam,
+      myPayment,
+      pageSections: event.pageSections ?? [],
+      fee,
+      problemStatements: problemStatements.map((p) => ({ ...p, releaseAt: manager ? p.releaseAt : undefined })),
+      rubricPublic: event.rubric.map((c) => ({
+        name: c.name, description: c.description, maxScore: c.maxScore, weight: c.weight, roundName: c.roundId ? roundName.get(c.roundId) ?? null : null,
+      })),
+      rounds,
+      parentEvent: parent && (manager || !HIDDEN_FROM_PUBLIC.includes(parent.status)) ? { id: parent.id, slug: parent.slug, title: parent.title } : null,
+      subEvents,
+      winners,
+      submissionsOpenAt: event.submissionsOpenAt,
+      submissionsCloseAt: event.submissionsCloseAt,
     };
   });
 
@@ -219,6 +309,8 @@ export function eventRoutes(app: FastifyInstance) {
     }
     if (input.scope === "CAMPUS" && !input.campusIds.length) throw badRequest("Pick at least one campus for a campus-level event");
     await validateCampuses(tenant.id, input.campusIds);
+    validateFee(input);
+    const parentEventId = await validateParent(tenant.id, input.parentEventId);
 
     const modules = { ...DEFAULT_MODULES[input.type], ...(input.modules ?? {}) };
     const checklist = await checklistFor(tenant.id, input.type, input.startsAt);
@@ -228,10 +320,13 @@ export function eventRoutes(app: FastifyInstance) {
       ...(input.config ?? {}),
     };
 
-    const { campusIds, ...fields } = input;
+    const { campusIds, pageSections, ...fields } = input;
     const event = await prisma.event.create({
       data: {
         ...fields,
+        parentEventId: parentEventId ?? null,
+        ...(fields.description !== undefined && { description: sanitizeHtml(fields.description) }),
+        ...(pageSections && { pageSections: sanitizeSections(pageSections) }),
         modules,
         config: config as Prisma.InputJsonValue,
         tenantId: tenant.id,
@@ -254,8 +349,14 @@ export function eventRoutes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>("/events/:id", async (req) => {
     const event = await requireEventManager(req, req.params.id);
     const input = updateEventSchema.parse(req.body);
-    const { campusIds, modules, config, registrationForm, ...fields } = input;
+    const { campusIds, modules, config, registrationForm, pageSections, parentEventId, ...fields } = input;
     if (campusIds) await validateCampuses(event.tenantId, campusIds);
+    validateFee({
+      feeAmount: fields.feeAmount !== undefined ? fields.feeAmount : event.feeAmount,
+      earlyBirdAmount: fields.earlyBirdAmount !== undefined ? fields.earlyBirdAmount : event.earlyBirdAmount,
+    });
+    const parentId = parentEventId ? await validateParent(event.tenantId, parentEventId, event.id) : parentEventId;
+    if (fields.description) fields.description = sanitizeHtml(fields.description);
 
     const startsAt = fields.startsAt ?? event.startsAt;
     const endsAt = fields.endsAt ?? event.endsAt;
@@ -273,6 +374,8 @@ export function eventRoutes(app: FastifyInstance) {
           ...(modules && { modules: { ...(event.modules as object), ...modules } }),
           ...(config && { config: { ...(event.config as object), ...config } as Prisma.InputJsonValue }),
           ...(registrationForm && { registrationForm }),
+          ...(pageSections && { pageSections: sanitizeSections(pageSections) }),
+          ...(parentId !== undefined && { parentEventId: parentId }),
         },
       });
     });
@@ -344,16 +447,14 @@ export function eventRoutes(app: FastifyInstance) {
     const roundId = await defaultRoundId(eventId);
     let judging = null;
     if (roundId) {
-      const [submittedPairs, assignments] = await Promise.all([
-        prisma.score.groupBy({ by: ["teamId", "judgeId"], where: { roundId, submittedAt: { not: null } } }),
-        prisma.judgeAssignment.findMany({ where: { eventId, OR: [{ roundId }, { roundId: null }] } }),
+      const round = await prisma.judgingRound.findUniqueOrThrow({ where: { id: roundId } });
+      const teamIds = await roundTeamIds(round);
+      const [submittedPairs, perTeam] = await Promise.all([
+        prisma.score.groupBy({ by: ["teamId", "judgeId"], where: { roundId, submittedAt: { not: null }, teamId: { in: teamIds } } }),
+        judgesPerTeam(eventId, roundId, teamIds),
       ]);
       const expected = new Set<string>();
-      const allTeams = await prisma.team.findMany({ where: { eventId }, select: { id: true } });
-      for (const a of assignments) {
-        const targets = a.teamId ? [a.teamId] : allTeams.map((t) => t.id);
-        for (const t of targets) expected.add(`${t}:${a.userId}`);
-      }
+      for (const [t, judges] of perTeam) for (const j of judges) expected.add(`${t}:${j}`);
       judging = {
         roundId,
         rounds,
@@ -394,6 +495,7 @@ export function eventRoutes(app: FastifyInstance) {
       linkedin: { total: sum(linkedin), byStatus: Object.fromEntries(linkedin.map((l) => [l.status, l._count])) },
       feedback: { responses: feedback._count, avgRating: feedback._avg.rating },
       budget: { planned: Number(expenses._sum.planned ?? 0), actual: Number(expenses._sum.actual ?? 0) },
+      revenue: { ...(await revenueFor({ eventId })), currency: event.currency },
       activity,
     };
   });

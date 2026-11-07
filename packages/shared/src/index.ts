@@ -5,7 +5,7 @@ export const EVENT_TYPES = [
   "HACKATHON", "SEMINAR", "WORKSHOP", "GUEST_LECTURE", "COMPETITION",
   "BOOTCAMP", "WEBINAR", "CULTURAL", "ENTREPRENEURSHIP", "STARTUP_PITCH", "CONFERENCE",
   "PANEL_DISCUSSION", "MEETUP", "CAREER_FAIR", "INDUSTRY_VISIT", "ORIENTATION", "ALUMNI_MEET",
-  "SPORTS", "OTHER",
+  "SPORTS", "TECH_FEST", "OTHER",
 ] as const;
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -14,13 +14,14 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   ENTREPRENEURSHIP: "Entrepreneurship", STARTUP_PITCH: "Startup pitch", CONFERENCE: "Conference",
   PANEL_DISCUSSION: "Panel discussion", MEETUP: "Meetup", CAREER_FAIR: "Career fair",
   INDUSTRY_VISIT: "Industry visit", ORIENTATION: "Orientation", ALUMNI_MEET: "Alumni meet",
-  SPORTS: "Sports", OTHER: "Other",
+  SPORTS: "Sports", TECH_FEST: "Tech fest", OTHER: "Other",
 };
 
 export const GUEST_ROLES = ["SPEAKER", "CHIEF_GUEST", "PANELIST", "MODERATOR", "JUDGE", "MENTOR", "INVESTOR"] as const;
 export const SPONSOR_TIERS = ["TITLE", "GOLD", "SILVER", "PARTNER", "COMMUNITY"] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
+export const FEE_TYPES = ["PER_PERSON", "PER_TEAM"] as const;
 export const EVENT_SCOPES = ["CENTRAL", "CAMPUS"] as const;
 export const EVENT_MODES = ["ONLINE", "OFFLINE", "HYBRID"] as const;
 
@@ -39,7 +40,7 @@ export type Role = (typeof ROLES)[number];
 export const STAFF_ROLES: Role[] = ["BRAND_ADMIN", "CAMPUS_ADMIN", "EVENT_MANAGER"];
 
 export const CERTIFICATE_TYPES = [
-  "PARTICIPATION", "WINNER", "RUNNER_UP", "SPECIAL_MENTION", "JUDGE", "SPEAKER", "VOLUNTEER", "MENTOR",
+  "PARTICIPATION", "FINALIST", "WINNER", "RUNNER_UP", "SPECIAL_MENTION", "JUDGE", "SPEAKER", "VOLUNTEER", "MENTOR",
 ] as const;
 
 export const SOCIAL_PLATFORMS = ["LINKEDIN", "INSTAGRAM", "X", "FACEBOOK", "YOUTUBE", "WHATSAPP"] as const;
@@ -83,6 +84,7 @@ export const DEFAULT_MODULES: Record<EventType, EventModules> = {
   ORIENTATION: { ...BASE_MODULES, guests: true },
   ALUMNI_MEET: { ...BASE_MODULES, guests: true, budget: true },
   SPORTS: { ...BASE_MODULES, teams: true, budget: true, sponsors: true },
+  TECH_FEST: { ...BASE_MODULES, budget: true, sponsors: true, guests: true },
   OTHER: { ...BASE_MODULES },
 };
 
@@ -119,6 +121,9 @@ const GUEST_EVENT: ChecklistItem[] = [
 
 const HACKATHON: ChecklistItem[] = [
   { phase: "PRE", title: "Finalise problem statements / tracks", dueOffsetDays: -30 },
+  { phase: "PRE", title: "Write the event page (about, rules, prizes, timeline, FAQs)", dueOffsetDays: -29 },
+  { phase: "PRE", title: "Set registration fee, coupons and team size", dueOffsetDays: -28 },
+  { phase: "PRE", title: "Set up judging rounds and parameters", dueOffsetDays: -21 },
   { phase: "PRE", title: "Publish rules and judging rubric", dueOffsetDays: -28 },
   { phase: "PRE", title: "Confirm prizes and sponsors", dueOffsetDays: -25 },
   { phase: "PRE", title: "Invite judges and mentors", dueOffsetDays: -21 },
@@ -129,7 +134,8 @@ const HACKATHON: ChecklistItem[] = [
   { phase: "DURING", title: "Kickoff and briefing", dueOffsetDays: 0 },
   { phase: "DURING", title: "Mentor rounds", dueOffsetDays: 0 },
   { phase: "DURING", title: "Submission deadline", dueOffsetDays: 1 },
-  { phase: "DURING", title: "Judging rounds", dueOffsetDays: 1 },
+  { phase: "DURING", title: "Release problem statements (online)", dueOffsetDays: 0 },
+  { phase: "DURING", title: "Judging rounds (open each check, shortlist teams)", dueOffsetDays: 1 },
   { phase: "DURING", title: "Announce results", dueOffsetDays: 1 },
   ...POST_COMMON,
 ];
@@ -184,6 +190,7 @@ export const DEFAULT_CHECKLISTS: Record<EventType, ChecklistItem[]> = {
   ORIENTATION: GUEST_EVENT,
   ALUMNI_MEET: GUEST_EVENT,
   SPORTS: GENERIC,
+  TECH_FEST: ENTREPRENEURSHIP,
   OTHER: GENERIC,
 };
 
@@ -239,6 +246,15 @@ export const createEventSchema = z.object({
   coverImageUrl: z.string().url().optional(),
   modules: z.record(z.boolean()).optional(),
   config: z.record(z.unknown()).optional(),
+  parentEventId: z.string().optional(),
+  pageSections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string(), icon: z.string().optional() })).optional(),
+  feeAmount: z.number().int().min(0).optional(),
+  currency: z.string().length(3).default("INR"),
+  feeType: z.enum(FEE_TYPES).default("PER_PERSON"),
+  earlyBirdAmount: z.number().int().min(0).optional(),
+  earlyBirdEndsAt: z.coerce.date().optional(),
+  submissionsOpenAt: z.coerce.date().optional(),
+  submissionsCloseAt: z.coerce.date().optional(),
 });
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
@@ -261,3 +277,91 @@ export function randomCode(len = 8): string {
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
+
+// ───────── Registration (individual or as a team, free or paid) ─────────
+
+
+export const teamMemberInputSchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().trim().toLowerCase().email(),
+  phone: z.string().trim().optional(),
+});
+
+export const registerInputSchema = z.object({
+  answers: z.record(z.unknown()).default({}),
+  /** Hackathons: the leader registers the whole team in one go. The caller is the leader. */
+  team: z.object({
+    name: z.string().trim().min(2).max(60),
+    trackId: z.string().optional(),
+    problemStatementId: z.string().optional(),
+    members: z.array(teamMemberInputSchema).default([]),
+  }).optional(),
+  couponCode: z.string().trim().optional(),
+});
+export type RegisterInput = z.infer<typeof registerInputSchema>;
+
+/** Format paise as "₹1,499" */
+export function formatMoney(amount: number, currency = "INR"): string {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: amount % 100 ? 2 : 0 }).format(amount / 100);
+}
+
+// ───────── Judging library (built-in; brands add their own as JudgingPreset rows) ─────────
+
+export interface CriterionPreset { name: string; description: string; maxScore: number; weight: number; category: string }
+
+export const DEFAULT_CRITERIA_LIBRARY: CriterionPreset[] = [
+  { name: "Innovation", description: "How new or creative is the idea?", maxScore: 10, weight: 1, category: "Idea" },
+  { name: "Problem understanding", description: "Is the problem real, clear and well researched?", maxScore: 10, weight: 1, category: "Idea" },
+  { name: "Technical complexity", description: "Depth and difficulty of what was built", maxScore: 10, weight: 1, category: "Technical" },
+  { name: "Code quality", description: "Structure, readability and use of version control", maxScore: 10, weight: 1, category: "Technical" },
+  { name: "Working demo", description: "Does the prototype actually work end to end?", maxScore: 10, weight: 1, category: "Technical" },
+  { name: "Use of technology", description: "Right tools, APIs and AI used well", maxScore: 10, weight: 1, category: "Technical" },
+  { name: "Design and UX", description: "Is it easy and pleasant to use?", maxScore: 10, weight: 1, category: "Product" },
+  { name: "Completeness", description: "How much of the plan was delivered", maxScore: 10, weight: 1, category: "Product" },
+  { name: "Impact", description: "Who benefits and how much?", maxScore: 10, weight: 1, category: "Business" },
+  { name: "Feasibility and scalability", description: "Can it be built out and grow?", maxScore: 10, weight: 1, category: "Business" },
+  { name: "Business model", description: "Revenue, market size and go-to-market", maxScore: 10, weight: 1, category: "Business" },
+  { name: "Presentation", description: "Clarity of the pitch and answers to questions", maxScore: 10, weight: 1, category: "Pitch" },
+  { name: "Teamwork", description: "Every member contributed and the team worked well together", maxScore: 10, weight: 1, category: "Pitch" },
+  { name: "Relevance to problem statement", description: "How closely the solution fits the chosen problem", maxScore: 10, weight: 1, category: "Idea" },
+];
+
+export const DEFAULT_JUDGE_COMMENTS: { text: string; category: "Positive" | "Improve" }[] = [
+  { text: "Strong, working demo", category: "Positive" },
+  { text: "Very original idea", category: "Positive" },
+  { text: "Clear, confident presentation", category: "Positive" },
+  { text: "Clean, well-structured code", category: "Positive" },
+  { text: "Real user impact", category: "Positive" },
+  { text: "Great teamwork", category: "Positive" },
+  { text: "Good use of AI / APIs", category: "Positive" },
+  { text: "Define the problem more clearly", category: "Improve" },
+  { text: "Demo was incomplete", category: "Improve" },
+  { text: "Focus on fewer features and finish them", category: "Improve" },
+  { text: "Validate the idea with real users", category: "Improve" },
+  { text: "Explain the business model", category: "Improve" },
+  { text: "Improve the UI / UX", category: "Improve" },
+  { text: "Add a README and setup steps to the repo", category: "Improve" },
+];
+
+/** Default judging checks an admin can start from. */
+export const DEFAULT_ROUND_NAMES = ["First cut", "Second check", "Third check", "Final"] as const;
+
+// ───────── Page sections (rich text, written by admins) ─────────
+
+export interface PageSection { id: string; title: string; html: string; icon?: string }
+
+export const PAGE_SECTION_TEMPLATES: Record<string, { title: string; html: string }[]> = {
+  HACKATHON: [
+    { title: "Eligibility", html: "<ul><li>Open to all students</li><li>Teams of 2–4</li></ul>" },
+    { title: "Timeline", html: "<ul><li><strong>Registrations close:</strong> …</li><li><strong>Problem statements released:</strong> …</li><li><strong>Submission deadline:</strong> …</li><li><strong>Results:</strong> …</li></ul>" },
+    { title: "Prizes", html: "<ul><li>🥇 Winner: …</li><li>🥈 Runner-up: …</li><li>🥉 Second runner-up: …</li></ul>" },
+    { title: "Rules", html: "<ol><li>All code must be written during the hackathon.</li><li>Submit a public GitHub repo and a demo video.</li></ol>" },
+    { title: "Judging", html: "<p>Teams are judged in rounds on the parameters below.</p>" },
+  ],
+  COMPETITION: [
+    { title: "Eligibility", html: "" }, { title: "Rules", html: "" }, { title: "Prizes", html: "" },
+  ],
+  TECH_FEST: [
+    { title: "Highlights", html: "" }, { title: "Schedule", html: "" }, { title: "Prizes", html: "" },
+  ],
+};

@@ -162,15 +162,22 @@ export function eventPageRoutes(app: FastifyInstance) {
         capacity: src.capacity, requiresApproval: src.requiresApproval,
         modules: src.modules as Prisma.InputJsonValue, config: src.config as Prisma.InputJsonValue,
         registrationForm: src.registrationForm as Prisma.InputJsonValue, faqs: src.faqs as Prisma.InputJsonValue,
+        pageSections: src.pageSections as Prisma.InputJsonValue, parentEventId: src.parentEventId,
+        feeAmount: src.feeAmount, currency: src.currency, feeType: src.feeType, earlyBirdAmount: src.earlyBirdAmount,
+        earlyBirdEndsAt: move(src.earlyBirdEndsAt), submissionsOpenAt: move(src.submissionsOpenAt), submissionsCloseAt: move(src.submissionsCloseAt),
         clonedFromId: src.id,
         createdById: req.auth!.user.id,
         campuses: { create: full.campuses.map((c) => ({ campusId: c.campusId })) },
         staff: { create: [{ userId: req.auth!.user.id, role: "MANAGER" }] },
         tasks: { create: await checklistFor(src.tenantId, src.type, startsAt) },
-        rubric: { create: full.rubric.map(({ name, description, maxScore, weight, sortOrder }) => ({ name, description, maxScore, weight, sortOrder })) },
+        rubric: {
+          create: full.rubric.filter((c) => !c.roundId).map(({ name, description, maxScore, weight, sortOrder }) => ({ name, description, maxScore, weight, sortOrder })),
+        },
         rounds: {
           create: full.rounds.length
-            ? full.rounds.map(({ name, sortOrder }) => ({ name, sortOrder, isOpen: false }))
+            ? full.rounds.map(({ name, sortOrder, description, restrictTeams, shareFeedback }) => ({
+                name, sortOrder, description, restrictTeams, shareFeedback, isOpen: false,
+              }))
             : isCompetition ? [{ name: "Final", sortOrder: 0, isOpen: false }] : [],
         },
         sessions: {
@@ -191,6 +198,19 @@ export function eventPageRoutes(app: FastifyInstance) {
         },
       },
     });
+    // Round-specific criteria move with their (new) round.
+    const roundCriteria = full.rubric.filter((c) => c.roundId);
+    if (roundCriteria.length) {
+      const newRounds = await prisma.judgingRound.findMany({ where: { eventId: event.id } });
+      for (const c of roundCriteria) {
+        const old = full.rounds.find((r) => r.id === c.roundId);
+        const target = old && newRounds.find((r) => r.name === old.name && r.sortOrder === old.sortOrder);
+        if (!target) continue;
+        await prisma.rubricCriterion.create({
+          data: { eventId: event.id, roundId: target.id, name: c.name, description: c.description, maxScore: c.maxScore, weight: c.weight, sortOrder: c.sortOrder },
+        });
+      }
+    }
     await logActivity(event.id, req.auth!.user.id, "event.cloned", { from: src.id, fromTitle: src.title });
     await logActivity(src.id, req.auth!.user.id, "event.cloned_to", { to: event.id, title: event.title });
     return reply.status(201).send(event);

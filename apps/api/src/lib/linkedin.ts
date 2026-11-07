@@ -6,7 +6,7 @@ import { notifyLinkedInReady, safely } from "./notify";
 
 export interface DraftContext {
   name: string;
-  role: "PARTICIPANT" | "WINNER" | "RUNNER_UP" | "SPECIAL_MENTION" | "JUDGE" | "SPEAKER" | "VOLUNTEER" | "MENTOR";
+  role: "PARTICIPANT" | "WINNER" | "RUNNER_UP" | "SPECIAL_MENTION" | "FINALIST" | "JUDGE" | "SPEAKER" | "VOLUNTEER" | "MENTOR";
   teamName?: string;
   projectTitle?: string;
   awardLabel?: string;
@@ -44,6 +44,11 @@ export function templateDraft(ctx: DraftContext): string {
       if (ctx.projectTitle) lines.push(`We built "${ctx.projectTitle}" — and learned a lot about building fast under pressure, working as a team, and pitching an idea clearly.`);
       else lines.push("It was an intense experience of building fast, working as a team, and pitching our idea clearly.");
       lines.push("Huge thanks to the judges, mentors and organisers for a great experience.");
+      break;
+    case "FINALIST":
+      lines.push(`Proud to share that our team${ctx.teamName ? ` "${ctx.teamName}"` : ""} made it to the finals of ${at}!`);
+      if (ctx.projectTitle) lines.push(`We built "${ctx.projectTitle}" and got to pitch it to the jury — a great learning experience.`);
+      lines.push("Thank you to the judges, mentors and organisers.");
       break;
     case "JUDGE":
       lines.push(`It was a privilege to serve as a judge at ${at}.`);
@@ -133,7 +138,7 @@ export function shareUrl(text: string): string {
   return `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`;
 }
 
-const ROLE_PRIORITY: CertificateType[] = ["WINNER", "RUNNER_UP", "SPECIAL_MENTION", "SPEAKER", "JUDGE", "MENTOR", "VOLUNTEER", "PARTICIPATION"];
+const ROLE_PRIORITY: CertificateType[] = ["WINNER", "RUNNER_UP", "SPECIAL_MENTION", "FINALIST", "SPEAKER", "JUDGE", "MENTOR", "VOLUNTEER", "PARTICIPATION"];
 const AWARD_LABEL: Record<string, string> = {
   WINNER: "first place", RUNNER_UP: "1st runner-up", SECOND_RUNNER_UP: "2nd runner-up", SPECIAL_MENTION: "a special mention",
 };

@@ -4,7 +4,10 @@ import { apiList } from "@/lib/api";
 import { getOrigin } from "@/lib/tenant";
 import { humanize } from "@/lib/format";
 import type { ElevateEvent, Guest, Sponsor } from "@/lib/types";
-import { Button, Card, CardBody, CardHeader, Field, Input, LinkButton, Select } from "@/components/ui";
+import { Button, Card, CardBody, CardHeader, Field, FieldGroup, Input, LinkButton, Select } from "@/components/ui";
+import { RichTextEditor } from "@/components/client/rich-text-editor";
+import { PageSectionsEditor } from "@/components/admin/page-sections-editor";
+import { htmlToText } from "@/components/rich-text";
 import { ApiButton } from "@/components/client/api-button";
 import { ApiForm } from "@/components/client/api-form";
 import { ApiSelect } from "@/components/client/api-select";
@@ -25,7 +28,8 @@ export async function EventPageTab({ event }: { event: ElevateEvent }) {
   const previewUrl = event.previewToken ? `${publicUrl}?preview=${event.previewToken}` : null;
   const checks: [string, boolean][] = [
     ["Cover image", !!event.coverImageUrl],
-    ["Description", !!event.description && event.description.length > 80],
+    ["Description", htmlToText(event.description).length > 80],
+    ...(event.modules?.teams ? [["Page sections (rules, prizes, timeline)", (event.pageSections?.length ?? 0) >= 2] as [string, boolean]] : []),
     ["Date, venue or meeting link", !!(event.venue || event.meetingUrl)],
     ...(event.modules?.guests ? [["Guests with photo and bio", guests.length > 0 && guests.every((g) => g.photoUrl && g.bio)] as [string, boolean]] : []),
     ...(event.modules?.sponsors ? [["Sponsors", sponsors.length > 0] as [string, boolean]] : []),
@@ -49,10 +53,25 @@ export async function EventPageTab({ event }: { event: ElevateEvent }) {
         </Card>
 
         <Card>
+          <CardHeader title="About this event" description="The main description on the public page. Headings, lists, links, images and tables are supported." />
+          <CardBody>
+            <ApiForm method="PATCH" path={`/events/${event.id}`} resetOnSuccess={false} successMessage="Description saved." className="space-y-3">
+              <RichTextEditor name="description" defaultValue={event.description} eventId={event.id} placeholder="What is this event about? Who should come and why?" minHeight="14rem" />
+              <Button type="submit">Save description</Button>
+            </ApiForm>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader title="Page sections" description="Eligibility, timeline, prizes, rules… Each section gets its own heading and a link in the page's section menu." />
+          <CardBody><PageSectionsEditor eventId={event.id} eventType={event.type} initial={Array.isArray(event.pageSections) ? event.pageSections : []} /></CardBody>
+        </Card>
+
+        <Card>
           <CardHeader title="Page details" />
           <CardBody>
             <ApiForm method="PATCH" path={`/events/${event.id}`} resetOnSuccess={false} successMessage="Page details saved." className="grid gap-4 sm:grid-cols-2">
-              <Field label="Cover image" className="sm:col-span-2" hint="Shown at the top of the page and when the link is shared."><UploadField name="coverImageUrl" defaultValue={event.coverImageUrl} fields={{ eventId: event.id, kind: "POSTER" }} /></Field>
+              <FieldGroup label="Cover image" className="sm:col-span-2" hint="Shown at the top of the page and when the link is shared."><UploadField name="coverImageUrl" defaultValue={event.coverImageUrl} fields={{ eventId: event.id, kind: "POSTER" }} /></FieldGroup>
               <Field label="Livestream link"><Input name="livestreamUrl" type="url" defaultValue={event.livestreamUrl ?? ""} placeholder="https://youtube.com/live/…" /></Field>
               <Field label="Venue map link"><Input name="venueMapUrl" type="url" defaultValue={event.venueMapUrl ?? ""} placeholder="https://maps.google.com/…" /></Field>
               <Field label="Contact email"><Input name="contactEmail" type="email" defaultValue={event.contactEmail ?? ""} /></Field>
@@ -91,7 +110,7 @@ export async function EventPageTab({ event }: { event: ElevateEvent }) {
               <Field label="Name"><Input name="name" required /></Field>
               <Field label="Tier"><Select name="tier" defaultValue="PARTNER">{SPONSOR_TIERS.map((t) => <option key={t} value={t}>{humanize(t)}</option>)}</Select></Field>
               <Field label="Website"><Input name="website" type="url" /></Field>
-              <Field label="Logo"><UploadField name="logoUrl" fields={{ eventId: event.id }} /></Field>
+              <FieldGroup label="Logo"><UploadField name="logoUrl" fields={{ eventId: event.id }} /></FieldGroup>
               <div className="sm:col-span-2"><Button type="submit">Add sponsor</Button></div>
             </ApiForm>
           </CardBody>
@@ -109,7 +128,7 @@ export async function EventPageTab({ event }: { event: ElevateEvent }) {
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-xs text-muted">Agenda, speakers, gallery and results appear on the page automatically as you add them.</p>
+          <p className="mt-4 text-xs text-muted">Agenda, speakers, problem statements, judging parameters, gallery and winners appear on the page automatically as you add them.</p>
         </CardBody>
       </Card>
     </div>

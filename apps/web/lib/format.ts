@@ -1,4 +1,4 @@
-import { EVENT_TYPE_LABELS, type EventType } from "@elevate/shared";
+import { EVENT_TYPE_LABELS, formatMoney, type EventType } from "@elevate/shared";
 import type { Campus, ElevateEvent, Media } from "./types";
 
 const TZ = "Asia/Kolkata";
@@ -55,7 +55,7 @@ export function typeLabel(t: string): string {
 export const EVENT_TYPE_GROUPS: { label: string; types: EventType[] }[] = [
   { label: "Learning", types: ["SEMINAR", "WORKSHOP", "GUEST_LECTURE", "BOOTCAMP", "WEBINAR"] },
   { label: "Competitions", types: ["HACKATHON", "COMPETITION", "STARTUP_PITCH", "SPORTS"] },
-  { label: "Community", types: ["ENTREPRENEURSHIP", "CONFERENCE", "PANEL_DISCUSSION", "MEETUP", "ALUMNI_MEET", "ORIENTATION", "CULTURAL"] },
+  { label: "Community", types: ["ENTREPRENEURSHIP", "CONFERENCE", "PANEL_DISCUSSION", "MEETUP", "ALUMNI_MEET", "ORIENTATION", "CULTURAL", "TECH_FEST"] },
   { label: "Career", types: ["CAREER_FAIR", "INDUSTRY_VISIT"] },
   { label: "Other", types: ["OTHER"] },
 ];
@@ -86,3 +86,37 @@ export function googleCalendarUrl(e: Pick<ElevateEvent, "title" | "tagline" | "s
 }
 
 export const GUEST_STATUS_LIST = ["PROPOSED", "INVITED", "CONFIRMED", "DECLINED", "ARRIVED", "THANKED"];
+
+/** Paise → "₹1,499". Null/undefined → "Free". */
+export function money(amount?: number | null, currency = "INR"): string {
+  if (!amount) return "Free";
+  return formatMoney(amount, currency);
+}
+
+/** Rupees typed by an admin ("1499.50") → paise (149950). Empty → undefined. */
+export function rupeesToPaise(v: string | null | undefined): number | undefined {
+  const t = (v ?? "").toString().trim();
+  if (!t) return undefined;
+  const n = Number(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : undefined;
+}
+
+export function paiseToRupees(v?: number | null): string {
+  return v ? String(v / 100) : "";
+}
+
+/** Event fee summary from either the `fee` object (detail) or raw fields (admin). */
+export function eventFee(e: Pick<ElevateEvent, "fee" | "feeAmount" | "currency" | "feeType" | "earlyBirdAmount" | "earlyBirdEndsAt">) {
+  if (e.fee) return e.fee;
+  if (!e.feeAmount) return null;
+  const early = e.earlyBirdAmount != null && e.earlyBirdEndsAt && new Date(e.earlyBirdEndsAt).getTime() > Date.now();
+  return {
+    amount: e.feeAmount, currency: e.currency ?? "INR", feeType: e.feeType ?? "PER_PERSON",
+    earlyBirdAmount: e.earlyBirdAmount, earlyBirdEndsAt: e.earlyBirdEndsAt,
+    currentAmount: early ? e.earlyBirdAmount! : e.feeAmount,
+  };
+}
+
+export const AWARD_LABELS: Record<string, string> = {
+  WINNER: "Winner", RUNNER_UP: "1st runner-up", SECOND_RUNNER_UP: "2nd runner-up", SPECIAL_MENTION: "Special mention", FINALIST: "Finalist",
+};

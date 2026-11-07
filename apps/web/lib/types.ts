@@ -70,12 +70,61 @@ export interface ElevateEvent {
   faqs?: Faq[] | null; previewToken?: string; sponsors?: Sponsor[]; gallery?: Media[];
   registrationForm?: { id: string; label: string; type?: string; required?: boolean; options?: string[] }[];
   canManage?: boolean;
+  // v1.2
+  parentEventId?: string | null;
+  pageSections?: PageSection[] | null;
+  feeAmount?: number | null; currency?: string; feeType?: "PER_PERSON" | "PER_TEAM";
+  earlyBirdAmount?: number | null; earlyBirdEndsAt?: string | null;
+  submissionsOpenAt?: string | null; submissionsCloseAt?: string | null;
+  fee?: EventFee | null;
+  problemStatements?: ProblemStatement[];
+  rubricPublic?: { name: string; description?: string | null; maxScore: number; weight: number; roundName?: string | null }[];
+  rounds?: Round[];
+  parentEvent?: { slug: string; title: string } | null;
+  subEvents?: Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "mode" | "coverImageUrl" | "status">[];
+  winners?: Winner[];
+  myTeam?: Team | null;
+  myPayment?: Payment | null;
+}
+
+export interface PageSection { id: string; title: string; html: string; icon?: string }
+export interface EventFee {
+  amount: number; currency: string; feeType: "PER_PERSON" | "PER_TEAM";
+  earlyBirdAmount?: number | null; earlyBirdEndsAt?: string | null; currentAmount: number;
+}
+export interface Attachment { label: string; url: string; kind?: "link" | "file" | string }
+export interface ProblemStatement {
+  id: string; eventId?: string; trackId?: string | null; code?: string | null; title: string; html?: string | null;
+  difficulty?: string | null; sponsorName?: string | null; attachments?: Attachment[] | null;
+  releaseAt?: string | null; sortOrder?: number;
+}
+export interface Winner {
+  teamId: string; teamName: string; award?: string | null; rank?: number | null; projectTitle?: string | null;
+  members?: { name: string; avatarUrl?: string | null }[];
+}
+export interface Payment {
+  id: string; eventId?: string; userId?: string; teamId?: string | null; provider?: "RAZORPAY" | "MANUAL" | "DEV" | string;
+  status: "CREATED" | "PAID" | "FAILED" | "EXPIRED" | "REFUNDED" | string;
+  amount: number; currency?: string; quantity?: number; discount?: number; receiptNo?: string;
+  providerPaymentId?: string | null; paidAt?: string | null; refundedAt?: string | null; expiresAt?: string | null;
+  createdAt?: string; notes?: string | null;
+  user?: User | null; team?: { id: string; name: string } | null; event?: ElevateEvent | null;
+  coupon?: { code: string } | null; registrations?: Registration[];
+  checkout?: CheckoutInfo | null;
+}
+export interface CheckoutInfo {
+  dev?: boolean; keyId?: string; orderId?: string; amount?: number; currency?: string; name?: string; description?: string;
+  prefill?: { name?: string; email?: string; contact?: string };
+}
+export interface Coupon {
+  id: string; code: string; percentOff?: number | null; amountOff?: number | null; maxUses?: number | null;
+  usedCount?: number; validUntil?: string | null; active?: boolean;
 }
 
 export interface Registration {
   id: string; eventId: string; userId: string; status: string; ticketCode: string;
   checkedInAt?: string | null; createdAt: string; answers?: Record<string, unknown>;
-  user?: User; event?: ElevateEvent;
+  user?: User; event?: ElevateEvent; paymentId?: string | null; payment?: Payment | null; addedById?: string | null;
 }
 
 export interface TeamMember { userId: string; isLeader: boolean; user?: User }
@@ -84,6 +133,10 @@ export interface Team {
   projectTitle?: string | null; projectSummary?: string | null; repoUrl?: string | null; demoUrl?: string | null;
   deckUrl?: string | null; videoUrl?: string | null; submittedAt?: string | null;
   rank?: number | null; award?: string | null; members?: TeamMember[]; event?: ElevateEvent;
+  problemStatementId?: string | null; problemStatement?: ProblemStatement | null; registeredAsTeam?: boolean;
+  attachments?: Attachment[] | null; techStack?: string[];
+  paymentStatus?: string | null; payment?: Payment | null; payments?: Payment[];
+  feedback?: { roundName: string; averageScore?: number | null; comments?: string[]; tags?: string[] }[];
 }
 
 export interface Task {
@@ -91,8 +144,14 @@ export interface Task {
   dueAt?: string | null; assigneeId?: string | null; assignee?: User | null; evidenceUrl?: string | null;
 }
 
-export interface Criterion { id?: string; name: string; description?: string | null; maxScore: number; weight: number }
-export interface Round { id: string; name: string; isOpen: boolean; closedAt?: string | null }
+export interface Criterion { id?: string; name: string; description?: string | null; maxScore: number; weight: number; roundId?: string | null; sortOrder?: number }
+export interface Round {
+  id: string; name: string; isOpen: boolean; closedAt?: string | null; description?: string | null;
+  opensAt?: string | null; closesAt?: string | null; restrictTeams?: boolean; shareFeedback?: boolean; sortOrder?: number;
+  teams?: ({ teamId: string } | { id: string; name?: string })[]; teamIds?: string[]; _count?: Record<string, number>;
+}
+export interface LibraryCriterion { id?: string; name: string; description?: string | null; maxScore?: number | null; weight?: number | null; category?: string | null; builtIn?: boolean }
+export interface LibraryComment { id?: string; text?: string; name?: string; category?: string | null; builtIn?: boolean }
 export interface JudgeAssignment { id: string; userId: string; roundId?: string | null; teamId?: string | null; user?: User; round?: Round | null; team?: Team | null }
 export interface LeaderboardRow { team: Team; avgWeighted: number; judgesScored: number; rank: number }
 

@@ -24,3 +24,14 @@ export function Field({ label, hint, children, className }: { label: ReactNode; 
     </label>
   );
 }
+
+/** Like Field but a <div>: use around composite widgets (rich-text editor, uploaders) so label clicks aren't forwarded. */
+export function FieldGroup({ label, hint, children, className }: { label: ReactNode; hint?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <span className="block text-sm font-medium text-fg">{label}</span>
+      {children}
+      {hint && <span className="block text-xs text-muted">{hint}</span>}
+    </div>
+  );
+}

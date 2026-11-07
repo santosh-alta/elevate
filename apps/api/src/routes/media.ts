@@ -8,6 +8,45 @@ import { assertManageable, canCheckIn, canManageEvent, findEvent, requireEventMa
 import { forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { aiCaption, captionFacts, templateCaption } from "../lib/social";
+import { ZipArchive } from "archiver";
+import { isValidKey, storage } from "../lib/storage";
+import { notifyGallery } from "../lib/notify";
+import { badRequest } from "../lib/errors";
+
+const HIDDEN = ["DRAFT", "PLANNING"];
+const MAX_ZIP_PHOTOS = 500;
+
+/** Bytes of a photo: from our storage when we have the key, else fetched from its URL. */
+async function photoBytes(m: { url: string; storageKey: string | null }): Promise<Buffer | null> {
+  if (m.storageKey && isValidKey(m.storageKey)) {
+    const local = await storage.get(m.storageKey);
+    if (local) return local;
+  }
+  // Our own /files URLs map straight back to storage.
+  const own = /\/v1\/files\/(.+)$/.exec(m.url);
+  if (own && isValidKey(own[1])) {
+    const local = await storage.get(own[1]);
+    if (local) return local;
+  }
+  if (!/^https?:\/\//i.test(m.url)) return null;
+  try {
+    const res = await fetch(m.url, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return null;
+    const type = res.headers.get("content-type") ?? "";
+    if (type && !type.startsWith("image/")) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+function extOf(m: { storageKey: string | null; mimeType: string | null; url: string }): string {
+  const fromKey = m.storageKey?.split(".").pop();
+  if (fromKey && fromKey.length <= 5) return fromKey;
+  if (m.mimeType?.startsWith("image/")) return m.mimeType.slice(6).replace("jpeg", "jpg");
+  const fromUrl = /\.(jpe?g|png|webp|gif|heic)(?:[?#]|$)/i.exec(m.url)?.[1];
+  return fromUrl?.toLowerCase().replace("jpeg", "jpg") ?? "jpg";
+}
 
 const PUBLIC_KINDS: MediaKind[] = ["PHOTO_ALBUM", "PHOTO", "VIDEO", "POSTER"];
 const socialStatus = z.enum(["PLANNED", "DRAFTED", "POSTED"]);
@@ -62,6 +101,80 @@ export function mediaRoutes(app: FastifyInstance) {
     });
     await logActivity(event.id, req.auth!.user.id, "drive.linked", { url: driveFolderUrl });
     return updated;
+  });
+
+  // ───────── Gallery for participants ─────────
+  app.get<{ Params: { id: string } }>("/events/:id/gallery", async (req) => {
+    const event = await findEvent(req, req.params.id);
+    if (HIDDEN.includes(event.status) && !(await canManageEvent(req, event))) throw notFound("Event");
+    const q = z
+      .object({
+        highlights: z.coerce.boolean().optional(),
+        cursor: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(40),
+      })
+      .parse(req.query);
+    const items = await prisma.mediaAsset.findMany({
+      where: { eventId: event.id, kind: "PHOTO", ...(q.highlights && { isHighlight: true }) },
+      orderBy: [{ isHighlight: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      take: q.limit + 1,
+      ...(q.cursor && { cursor: { id: q.cursor }, skip: 1 }),
+      select: { id: true, url: true, title: true, caption: true, isHighlight: true, mimeType: true, createdAt: true },
+    });
+    const more = items.length > q.limit;
+    const page = more ? items.slice(0, q.limit) : items;
+    const total = await prisma.mediaAsset.count({ where: { eventId: event.id, kind: "PHOTO", ...(q.highlights && { isHighlight: true }) } });
+    return { items: page, nextCursor: more ? page.at(-1)!.id : null, total, driveFolderUrl: event.driveFolderUrl };
+  });
+
+  app.post<{ Params: { id: string } }>("/events/:id/gallery/notify", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    const photos = await prisma.mediaAsset.count({ where: { eventId: event.id, kind: { in: ["PHOTO", "PHOTO_ALBUM"] } } });
+    if (!photos && !event.driveFolderUrl) throw badRequest("Add some photos or a Drive folder first");
+    const recipients = await notifyGallery(event.id);
+    await logActivity(event.id, req.auth!.user.id, "gallery.notified", { recipients });
+    return { ok: true, recipients };
+  });
+
+  app.get<{ Params: { id: string } }>("/events/:id/gallery.zip", async (req, reply) => {
+    const { user } = requireUser(req);
+    const event = await findEvent(req, req.params.id);
+    if (!(await canManageEvent(req, event))) {
+      const reg = await prisma.registration.findFirst({
+        where: { eventId: event.id, userId: user.id, status: { in: ["REGISTERED", "APPROVED", "CHECKED_IN"] } },
+      });
+      if (!reg) throw forbidden("Only attendees can download the photos");
+    }
+    const photos = await prisma.mediaAsset.findMany({
+      where: { eventId: event.id, kind: "PHOTO" },
+      orderBy: [{ isHighlight: "desc" }, { createdAt: "asc" }],
+      take: MAX_ZIP_PHOTOS,
+    });
+    if (!photos.length) throw notFound("Photos");
+
+    // Photos are already compressed: store them as-is and stream entries as they are read.
+    const archive = new ZipArchive({ zlib: { level: 0 } });
+    archive.on("warning", (err) => req.log.warn({ err }, "gallery zip warning"));
+    archive.on("error", (err) => req.log.error({ err }, "gallery zip failed"));
+    void (async () => {
+      let n = 0;
+      for (const m of photos) {
+        const data = await photoBytes(m);
+        if (!data) continue;
+        n++;
+        archive.append(data, { name: `${String(n).padStart(3, "0")}${m.isHighlight ? "-highlight" : ""}.${extOf(m)}`, date: m.createdAt });
+      }
+      if (!n) archive.append(`No photos could be downloaded. See ${event.driveFolderUrl ?? "the event page"}.\n`, { name: "README.txt" });
+      await archive.finalize();
+    })().catch((err) => {
+      req.log.error({ err }, "gallery zip failed");
+      archive.abort();
+    });
+    return reply
+      .type("application/zip")
+      .header("Content-Disposition", `attachment; filename="${event.slug}-photos.zip"`)
+      .header("Cache-Control", "private, no-store")
+      .send(archive);
   });
 
   // ───────── Social posts ─────────

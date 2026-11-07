@@ -1,7 +1,9 @@
 // Elevate API client — follows docs/API.md. All endpoint calls and response
 // normalisation live here, so contract changes only touch this file.
 import Constants from "expo-constants";
+import { Directory, File, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
+import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 import type { BrandTheme } from "./theme";
 
@@ -264,6 +266,137 @@ export interface EventDetail extends EventSummary {
   contactEmail?: string | null;
   contactPhone?: string | null;
   gallery?: MediaItem[];
+  // v1.2
+  config?: Record<string, unknown> | null;
+  fee: EventFee | null;
+  pageSections: PageSection[];
+  problemStatements: ProblemStatement[];
+  rubricPublic: PublicCriterion[];
+  rounds: JudgingRound[];
+  parentEvent: { slug: string; title: string; id?: string } | null;
+  subEvents: SubEvent[];
+  winners: Winner[];
+  submissionsOpenAt?: string | null;
+  submissionsCloseAt?: string | null;
+  myTeam: Team | null;
+  myPayment: Payment | null;
+  myRegistration?: Registration | null;
+}
+
+/** Money is in the smallest currency unit (paise). */
+export interface EventFee {
+  amount: number;
+  currency: string;
+  feeType: "PER_PERSON" | "PER_TEAM";
+  earlyBirdAmount?: number | null;
+  earlyBirdEndsAt?: string | null;
+  currentAmount: number;
+}
+
+export interface PageSection {
+  id: string;
+  title: string;
+  html: string;
+  icon?: string | null;
+}
+
+export interface LinkItem {
+  label: string;
+  url: string;
+  kind?: string | null;
+}
+
+export interface ProblemStatement {
+  id: string;
+  code?: string | null;
+  title: string;
+  html?: string | null;
+  trackId?: string | null;
+  difficulty?: string | null;
+  sponsorName?: string | null;
+  attachments: LinkItem[];
+  releaseAt?: string | null;
+}
+
+export interface PublicCriterion {
+  name: string;
+  description?: string | null;
+  maxScore: number;
+  weight: number;
+  roundName?: string | null;
+}
+
+export interface SubEvent {
+  id: string;
+  slug: string;
+  title: string;
+  type: string;
+  startsAt: string;
+  mode?: string;
+  coverImageUrl?: string | null;
+  status: string;
+}
+
+export interface Winner {
+  teamId: string;
+  teamName: string;
+  award?: string | null;
+  rank?: number | null;
+  projectTitle?: string | null;
+  members: { name: string; avatarUrl?: string | null }[];
+}
+
+export type PaymentStatus = "CREATED" | "PAID" | "FAILED" | "EXPIRED" | "REFUNDED" | string;
+
+export interface Payment {
+  id: string;
+  status: PaymentStatus;
+  amount: number;
+  currency: string;
+  receiptNo?: string | null;
+  provider?: string | null;
+  expiresAt?: string | null;
+  paidAt?: string | null;
+}
+
+export interface TeamMemberInfo {
+  userId?: string;
+  name: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+  isLeader: boolean;
+}
+
+export interface TeamFeedback {
+  roundName: string;
+  averageScore?: number | null;
+  comments: string[];
+  tags: string[];
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  eventId?: string;
+  inviteCode?: string | null;
+  trackId?: string | null;
+  projectTitle?: string | null;
+  projectSummary?: string | null;
+  repoUrl?: string | null;
+  demoUrl?: string | null;
+  deckUrl?: string | null;
+  videoUrl?: string | null;
+  attachments: LinkItem[];
+  techStack: string[];
+  submittedAt?: string | null;
+  problemStatement?: { id: string; code?: string | null; title: string; html?: string | null } | null;
+  members: TeamMemberInfo[];
+  /** Payment status of the team's registration fee, when the event is paid. */
+  paymentStatus?: PaymentStatus | null;
+  payment?: Payment | null;
+  feedback: TeamFeedback[];
+  award?: string | null;
+  rank?: number | null;
 }
 
 export interface AppNotification {
@@ -298,6 +431,15 @@ export interface Registration {
   checkedInAt?: string | null;
   createdAt: string;
   event?: EventSummary;
+  paymentId?: string | null;
+  payment?: Payment | null;
+  teamId?: string | null;
+}
+
+export interface RegisterResult {
+  registration: Registration;
+  team?: Team | null;
+  payment?: Payment | null;
 }
 
 export interface Certificate {
@@ -329,16 +471,48 @@ export interface RubricCriterion {
   maxScore: number;
   weight: number;
   sortOrder?: number;
+  /** null = used in every round */
+  roundId?: string | null;
 }
 
 export interface JudgingRound {
   id: string;
   name: string;
+  description?: string | null;
   isOpen?: boolean;
+  closedAt?: string | null;
+  opensAt?: string | null;
+  closesAt?: string | null;
+  sortOrder?: number;
+}
+
+export type RoundState = "open" | "closed" | "upcoming";
+
+export function roundState(r: JudgingRound | undefined | null): RoundState {
+  if (!r) return "upcoming";
+  if (r.isOpen) return "open";
+  if (r.closedAt) return "closed";
+  if (r.closesAt && new Date(r.closesAt).getTime() < Date.now()) return "closed";
+  return "upcoming";
+}
+
+export interface JudgeComment {
+  text: string;
+  category?: string | null;
+}
+
+export interface MyReview {
+  comment?: string | null;
+  tags: string[];
+  recommend?: boolean | null;
+  submittedAt?: string | null;
 }
 
 export interface JudgeEvent extends EventSummary {
   rounds?: JudgingRound[];
+  currentRoundId?: string | null;
+  assignedTeams?: number;
+  submittedTeams?: number;
 }
 
 export interface MyScore {
@@ -361,9 +535,23 @@ export interface JudgeTeam {
   deckUrl?: string | null;
   videoUrl?: string | null;
   submittedAt?: string | null;
-  members?: { user?: { name: string }; name?: string; isLeader?: boolean }[];
+  members: TeamMemberInfo[];
+  attachments: LinkItem[];
+  techStack: string[];
+  problemStatement?: Team["problemStatement"];
   myScores: MyScore[];
+  myReview: MyReview | null;
   status: JudgeTeamStatus;
+}
+
+/** `GET /judge/events/:id?roundId=` — one round's teams, criteria and suggested remarks. */
+export interface JudgePayload {
+  event: { id: string; title: string; slug?: string; status?: string } | null;
+  round: JudgingRound | null;
+  rounds: JudgingRound[];
+  criteria: RubricCriterion[];
+  comments: JudgeComment[];
+  teams: JudgeTeam[];
 }
 
 export interface CheckinResult {
@@ -383,13 +571,134 @@ export interface EventTask {
 
 // ───────── Normalisers ─────────
 
+const asArray = (v: any): any[] => (Array.isArray(v) ? v : []);
+
+function normaliseLinks(v: any): LinkItem[] {
+  return asArray(v)
+    .map((a: any) =>
+      typeof a === "string"
+        ? { label: a, url: a }
+        : { label: String(a?.label ?? a?.name ?? a?.url ?? "Link"), url: String(a?.url ?? ""), kind: a?.kind ?? null },
+    )
+    .filter((a) => /^(https?:|\/)/.test(a.url))
+    .map((a) => ({ ...a, url: absoluteUrl(a.url) }));
+}
+
+function normaliseMember(m: any): TeamMemberInfo {
+  return {
+    userId: m?.userId ?? m?.user?.id ?? m?.id,
+    name: String(m?.user?.name ?? m?.name ?? m?.email ?? "Member"),
+    email: m?.user?.email ?? m?.email ?? null,
+    avatarUrl: m?.user?.avatarUrl ?? m?.avatarUrl ?? null,
+    isLeader: !!m?.isLeader,
+  };
+}
+
+function normaliseProblem(p: any): ProblemStatement {
+  return { ...p, title: String(p?.title ?? "Problem statement"), attachments: normaliseLinks(p?.attachments) };
+}
+
+function normalisePayment(p: any): Payment | null {
+  if (!p || typeof p !== "object" || !p.id) return null;
+  return { ...p, amount: Number(p.amount ?? 0), currency: p.currency ?? "INR", status: p.status ?? "CREATED" };
+}
+
+function normaliseTeam(t: any): Team {
+  const ps = t?.problemStatement;
+  return {
+    ...t,
+    name: String(t?.name ?? "Team"),
+    attachments: normaliseLinks(t?.attachments),
+    techStack: asArray(t?.techStack).map(String),
+    members: asArray(t?.members).map(normaliseMember).sort((a, b) => Number(b.isLeader) - Number(a.isLeader)),
+    problemStatement: ps && ps.title ? { id: ps.id, code: ps.code ?? null, title: ps.title, html: ps.html ?? null } : null,
+    payment: normalisePayment(t?.payment),
+    paymentStatus: t?.paymentStatus ?? t?.payment?.status ?? null,
+    feedback: asArray(t?.feedback).map((f: any) => ({
+      roundName: String(f?.roundName ?? "Round"),
+      averageScore: typeof f?.averageScore === "number" ? f.averageScore : null,
+      comments: asArray(f?.comments).map(String).filter(Boolean),
+      tags: asArray(f?.tags).map(String).filter(Boolean),
+    })),
+  };
+}
+
+function normaliseReview(r: any): MyReview | null {
+  if (!r || typeof r !== "object") return null;
+  return {
+    comment: r.comment ?? null,
+    tags: asArray(r.tags).map(String),
+    recommend: typeof r.recommend === "boolean" ? r.recommend : null,
+    submittedAt: r.submittedAt ?? null,
+  };
+}
+
 function normaliseJudgeTeam(t: any): JudgeTeam {
+  const base = normaliseTeam(t);
   const myScores: MyScore[] = list<MyScore>(t.myScores ?? t.scores ?? []);
+  const myReview = normaliseReview(t.myReview ?? t.review);
   let status: JudgeTeamStatus = t.status ?? t.myStatus;
   if (status !== "PENDING" && status !== "DRAFT" && status !== "SUBMITTED") {
-    status = myScores.length === 0 ? "PENDING" : myScores.some((s) => s.submittedAt) ? "SUBMITTED" : "DRAFT";
+    status =
+      myScores.length === 0 && !myReview
+        ? "PENDING"
+        : myScores.some((s) => s.submittedAt) || myReview?.submittedAt
+          ? "SUBMITTED"
+          : "DRAFT";
   }
-  return { ...t, myScores, status };
+  return { ...base, myScores, myReview, status } as JudgeTeam;
+}
+
+/** Built-in suggested remarks (copied from packages/shared DEFAULT_JUDGE_COMMENTS) — used for categories and as a fallback. */
+export const DEFAULT_JUDGE_COMMENTS: JudgeComment[] = [
+  { text: "Strong, working demo", category: "Positive" },
+  { text: "Very original idea", category: "Positive" },
+  { text: "Clear, confident presentation", category: "Positive" },
+  { text: "Clean, well-structured code", category: "Positive" },
+  { text: "Real user impact", category: "Positive" },
+  { text: "Great teamwork", category: "Positive" },
+  { text: "Good use of AI / APIs", category: "Positive" },
+  { text: "Define the problem more clearly", category: "Improve" },
+  { text: "Demo was incomplete", category: "Improve" },
+  { text: "Focus on fewer features and finish them", category: "Improve" },
+  { text: "Validate the idea with real users", category: "Improve" },
+  { text: "Explain the business model", category: "Improve" },
+  { text: "Improve the UI / UX", category: "Improve" },
+  { text: "Add a README and setup steps to the repo", category: "Improve" },
+];
+
+function normaliseComments(v: any): JudgeComment[] {
+  if (!Array.isArray(v)) return DEFAULT_JUDGE_COMMENTS;
+  const known = new Map(DEFAULT_JUDGE_COMMENTS.map((c) => [c.text.toLowerCase(), c.category]));
+  const seen = new Set<string>();
+  const out: JudgeComment[] = [];
+  for (const c of v) {
+    const text = typeof c === "string" ? c : String(c?.text ?? c?.name ?? "");
+    if (!text.trim() || seen.has(text.toLowerCase())) continue;
+    seen.add(text.toLowerCase());
+    const category = (typeof c === "object" ? c?.category : null) ?? known.get(text.toLowerCase()) ?? null;
+    out.push({ text, category });
+  }
+  return out;
+}
+
+function normaliseJudgePayload(data: any, roundId?: string): JudgePayload {
+  const d = data && !Array.isArray(data) ? data : { teams: data };
+  const rounds: JudgingRound[] = asArray(d.rounds).sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const round: JudgingRound | null =
+    d.round ?? rounds.find((r) => r.id === roundId) ?? rounds.find((r) => r.isOpen) ?? rounds[0] ?? null;
+  const criteria: RubricCriterion[] = asArray(d.criteria ?? d.rubric)
+    .filter((c: any) => !c.roundId || !round || c.roundId === round.id)
+    .map((c: any) => ({ ...c, maxScore: Number(c.maxScore ?? 10), weight: Number(c.weight ?? 1) }))
+    .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  return {
+    event: d.event ?? null,
+    round,
+    rounds,
+    criteria,
+    comments: normaliseComments(d.comments),
+    teams: list<any>(d, "teams").map(normaliseJudgeTeam),
+  };
 }
 
 function absoluteUrl(url: string): string {
@@ -404,10 +713,45 @@ function normaliseMedia(m: any): MediaItem {
   return { ...m, url: absoluteUrl(String(m.url ?? "")) };
 }
 
+function normaliseFee(e: any): EventFee | null {
+  const f = e.fee && typeof e.fee === "object" ? e.fee : null;
+  const amount = Number(f?.amount ?? e.feeAmount ?? 0);
+  if (!amount) return null;
+  const earlyBirdAmount = f?.earlyBirdAmount ?? e.earlyBirdAmount ?? null;
+  const earlyBirdEndsAt = f?.earlyBirdEndsAt ?? e.earlyBirdEndsAt ?? null;
+  const earlyActive = earlyBirdAmount != null && earlyBirdEndsAt && new Date(earlyBirdEndsAt).getTime() > Date.now();
+  return {
+    amount,
+    currency: f?.currency ?? e.currency ?? "INR",
+    feeType: (f?.feeType ?? e.feeType ?? "PER_PERSON") === "PER_TEAM" ? "PER_TEAM" : "PER_PERSON",
+    earlyBirdAmount,
+    earlyBirdEndsAt,
+    currentAmount: Number(f?.currentAmount ?? (earlyActive ? earlyBirdAmount : amount)),
+  };
+}
+
 function normaliseEvent(e: any): EventDetail {
-  const asArray = (v: any) => (Array.isArray(v) ? v : []);
+  const myTeam = e.myTeam ? normaliseTeam(e.myTeam) : null;
   return {
     ...e,
+    fee: normaliseFee(e),
+    pageSections: asArray(e.pageSections)
+      .filter((s: any) => s && (s.title || s.html))
+      .map((s: any, i: number) => ({ id: String(s.id ?? i), title: String(s.title ?? ""), html: String(s.html ?? ""), icon: s.icon ?? null })),
+    problemStatements: asArray(e.problemStatements).map(normaliseProblem),
+    rubricPublic: asArray(e.rubricPublic),
+    rounds: asArray(e.rounds),
+    parentEvent: e.parentEvent ?? null,
+    subEvents: asArray(e.subEvents).map((s: any) => ({ ...s, coverImageUrl: s.coverImageUrl ? absoluteUrl(s.coverImageUrl) : null })),
+    winners: asArray(e.winners)
+      .map((w: any) => ({
+        ...w,
+        teamName: String(w.teamName ?? w.team?.name ?? "Team"),
+        members: asArray(w.members).map((m: any) => ({ name: String(m?.name ?? m?.user?.name ?? ""), avatarUrl: m?.avatarUrl ?? null })),
+      }))
+      .sort((a: any, b: any) => (a.rank ?? 99) - (b.rank ?? 99)),
+    myTeam,
+    myPayment: normalisePayment(e.myPayment),
     guests: asArray(e.guests).map((g: any) => ({ ...g, photoUrl: g.photoUrl ? absoluteUrl(g.photoUrl) : g.photoUrl })),
     sponsors: asArray(e.sponsors)
       .map((s: any) => ({ ...s, logoUrl: s.logoUrl ? absoluteUrl(s.logoUrl) : s.logoUrl }))
@@ -465,6 +809,67 @@ async function uploadFile(
   });
 }
 
+/**
+ * Downloads a file (optionally with the auth header) into the cache and hands it to the system viewer
+ * (Quick Look on iOS, ACTION_VIEW on Android) — from there the user can save or share it.
+ * On web, or if the native preview is unavailable, it opens the URL in the browser instead.
+ */
+async function openRemoteFile(url: string, name: string, auth: boolean): Promise<void> {
+  if (Platform.OS === "web") {
+    await WebBrowser.openBrowserAsync(url);
+    return;
+  }
+  const headers: Record<string, string> = { "X-Tenant": brand.slug };
+  if (auth && cachedToken) headers.Authorization = `Bearer ${cachedToken}`;
+  const dir = new Directory(Paths.cache, "elevate-downloads");
+  if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
+  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  let file: File;
+  try {
+    file = await File.downloadFileAsync(url, new File(dir, safeName), { headers, idempotent: true });
+  } catch (e: any) {
+    const status = Number(/\b(\d{3})\b/.exec(String(e?.message ?? ""))?.[1] ?? 0);
+    if (status === 401 || status === 403) throw new ApiError(status, "forbidden", "You don't have access to this file.");
+    if (status === 404) throw new ApiError(404, "not_found", "File not found.");
+    throw new ApiError(0, "network", "Couldn't download the file. Check your connection.");
+  }
+  try {
+    await file.preview();
+  } catch {
+    if (!auth) await WebBrowser.openBrowserAsync(url);
+    else throw new ApiError(0, "preview", "No app on this phone can open this file.");
+  }
+}
+
+/** Certificate type labels (mirrors packages/shared CERTIFICATE_TYPES). */
+export const CERTIFICATE_TYPE_LABELS: Record<string, string> = {
+  PARTICIPATION: "Participation",
+  FINALIST: "Finalist",
+  WINNER: "Winner",
+  RUNNER_UP: "Runner-up",
+  SPECIAL_MENTION: "Special mention",
+  JUDGE: "Judge",
+  SPEAKER: "Speaker",
+  VOLUNTEER: "Volunteer",
+  MENTOR: "Mentor",
+};
+
+export const AWARD_LABELS: Record<string, string> = {
+  WINNER: "Winner",
+  RUNNER_UP: "1st runner-up",
+  SECOND_RUNNER_UP: "2nd runner-up",
+  SPECIAL_MENTION: "Special mention",
+};
+
+/** Formats paise as "₹1,499" (mirrors packages/shared formatMoney). */
+export function formatMoney(amount: number, currency = "INR"): string {
+  try {
+    return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: amount % 100 ? 2 : 0 }).format(amount / 100);
+  } catch {
+    return `${currency} ${(amount / 100).toFixed(amount % 100 ? 2 : 0)}`;
+  }
+}
+
 // ───────── Endpoints ─────────
 
 export const Api = {
@@ -486,10 +891,56 @@ export const Api = {
   calendarUrl: (idOrSlug: string) => `${API_BASE}/events/${encodeURIComponent(idOrSlug)}/calendar.ics`,
   /** Public event page on the brand's website, when the brand has one configured. */
   publicEventUrl: (slug: string) => (WEB_BASE ? `${WEB_BASE}/events/${encodeURIComponent(slug)}` : null),
-  register: (eventId: string, answers: Record<string, unknown> = {}) =>
-    api<Registration>(`/events/${eventId}/register`, { method: "POST", body: { answers } }),
+  /** Free individual registration. Paid and team registrations go through the website (Razorpay checkout). */
+  register: async (eventId: string, answers: Record<string, unknown> = {}): Promise<RegisterResult> => {
+    const data: any = await api(`/events/${eventId}/register`, { method: "POST", body: { answers } });
+    // v1.2: `{ registration, team?, payment? }`; older servers returned the registration itself.
+    const registration: Registration = data?.registration ?? data;
+    return { registration, team: data?.team ? normaliseTeam(data.team) : null, payment: normalisePayment(data?.payment) };
+  },
   cancelRegistration: (eventId: string) => api(`/events/${eventId}/register`, { method: "DELETE" }),
-  myRegistrations: async () => list<Registration>(await api("/me/registrations"), "registrations"),
+  myRegistrations: async () =>
+    list<any>(await api("/me/registrations"), "registrations").map(
+      (r): Registration => ({ ...r, payment: normalisePayment(r.payment), paymentId: r.paymentId ?? r.payment?.id ?? null }),
+    ),
+
+  // Web hand-off (paid checkout and team editing are web-only for now)
+  webUrl: (path: string) => (WEB_BASE ? `${WEB_BASE}${path}` : null),
+  registerOnWebUrl: (slug: string) => (WEB_BASE ? `${WEB_BASE}/events/${encodeURIComponent(slug)}/register` : null),
+  teamOnWebUrl: (slug: string) => (WEB_BASE ? `${WEB_BASE}/events/${encodeURIComponent(slug)}/team` : null),
+
+  // Teams
+  team: async (teamId: string) => normaliseTeam(await api(`/teams/${teamId}`)),
+  /** The caller's team for an event (or null). */
+  myTeam: async (eventId: string): Promise<Team | null> => {
+    const teams = list<any>(await api(`/me/teams?eventId=${encodeURIComponent(eventId)}`), "teams");
+    return teams[0] ? normaliseTeam(teams[0]) : null;
+  },
+
+  // Payments
+  payment: async (paymentId: string) => {
+    const data: any = await api(`/payments/${paymentId}`);
+    return normalisePayment(data?.payment ?? data);
+  },
+  receiptUrl: (paymentId: string) => `${API_BASE}/payments/${paymentId}/receipt.pdf`,
+  /** Downloads the (auth-protected) PDF receipt and opens it in the system viewer. */
+  openReceipt: (paymentId: string) =>
+    openRemoteFile(`${API_BASE}/payments/${paymentId}/receipt.pdf`, `receipt-${paymentId}.pdf`, true),
+
+  // Gallery
+  gallery: async (eventId: string, opts: { highlights?: boolean; cursor?: string | null } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.highlights) q.set("highlights", "1");
+    if (opts.cursor) q.set("cursor", opts.cursor);
+    const data: any = await api(`/events/${eventId}/gallery${q.toString() ? `?${q}` : ""}`);
+    const items = list<any>(data, "media").length ? list<any>(data, "media") : list<any>(data, "photos");
+    return {
+      items: items.map(normaliseMedia),
+      nextCursor: (data && !Array.isArray(data) ? (data.nextCursor ?? data.cursor ?? null) : null) as string | null,
+    };
+  },
+  /** Downloads a photo and opens the system viewer (from which it can be saved to the phone). */
+  openPhoto: (url: string, name: string) => openRemoteFile(url, name, false),
 
   // Certificates & LinkedIn
   myCertificates: async () => list<Certificate>(await api("/me/certificates"), "certificates"),
@@ -505,21 +956,37 @@ export const Api = {
     list<RubricCriterion>(await api(`/events/${eventId}/rubric`), "criteria").sort(
       (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
     ),
-  judgeTeams: async (eventId: string, roundId?: string) => {
-    const data: any = await api(`/judge/events/${eventId}/teams${roundId ? `?roundId=${roundId}` : ""}`);
-    const teams = list<any>(data, "teams").map(normaliseJudgeTeam);
-    return {
-      teams,
-      round: (data && !Array.isArray(data) ? data.round : undefined) as JudgingRound | undefined,
-      rounds: (data && !Array.isArray(data) ? data.rounds : undefined) as JudgingRound[] | undefined,
-    };
+  /**
+   * One round of an event for the judge: its teams (shortlist), criteria (event-wide + round's own),
+   * suggested remarks and my scores/review per team. Falls back to the v1.1 `/teams` endpoint.
+   */
+  judgeEvent: async (eventId: string, roundId?: string): Promise<JudgePayload> => {
+    const q = roundId ? `?roundId=${encodeURIComponent(roundId)}` : "";
+    try {
+      return normaliseJudgePayload(await api(`/judge/events/${eventId}${q}`), roundId);
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.status !== 404) throw e;
+      const data: any = await api(`/judge/events/${eventId}/teams${q}`);
+      const payload = normaliseJudgePayload(data, roundId);
+      if (!payload.criteria.length) payload.criteria = await Api.rubric(eventId).catch(() => []);
+      return payload;
+    }
   },
-  saveScores: (body: {
+  saveScores: async (body: {
     roundId: string;
     teamId: string;
     scores: { criterionId: string; value: number; comment?: string }[];
+    review?: { comment?: string; tags?: string[]; recommend?: boolean };
     submit: boolean;
-  }) => api("/judge/scores", { method: "PUT", body }),
+  }) => {
+    try {
+      return await api("/judge/scores", { method: "POST", body });
+    } catch (e) {
+      // v1.1 servers only accept PUT.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) return api("/judge/scores", { method: "PUT", body });
+      throw e;
+    }
+  },
 
   // Staff / volunteer
   checkin: (ticketCode: string) => api<CheckinResult>("/checkin", { method: "POST", body: { ticketCode } }),

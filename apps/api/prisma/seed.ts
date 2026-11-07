@@ -3,7 +3,7 @@
  * Run: npm run seed -w @elevate/api   (wipes existing data first)
  */
 import { PrismaClient, type EventType, type Prisma } from "@prisma/client";
-import { DEFAULT_CHECKLISTS, DEFAULT_MODULES } from "@elevate/shared";
+import { DEFAULT_CHECKLISTS, DEFAULT_CRITERIA_LIBRARY, DEFAULT_MODULES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
 import { certificateSerial, teamInviteCode } from "../src/lib/codes";
 import { generateCertificates } from "../src/lib/certificates";
 import { generateLinkedInDrafts } from "../src/lib/linkedin";
@@ -558,6 +558,245 @@ async function main() {
   });
   await prisma.eventGuest.updateMany({ where: { eventId: altaWorkshop.id, email: "ankit@example.com" }, data: { profileId: ankit.id } });
 
+  // ───────── Alta: paid hackathon open for team registrations (v1.2) ─────────
+  const altaAdmin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@altaschool.dev" } });
+  const bwStart = days(18);
+  const bwEnd = new Date(bwStart.getTime() + 2 * DAY);
+  const crit = (name: string) => DEFAULT_CRITERIA_LIBRARY.find((c) => c.name === name)!;
+  const sectionHtml: Record<string, string> = {
+    Eligibility:
+      "<ul><li>Open to all Alta School of Technology students, any year and any campus</li><li>Teams of <strong>2–4</strong> — cross-campus teams are welcome</li><li>Every member needs their own Elevate account (we create it when the leader registers the team)</li></ul>",
+    Timeline: [
+      "<ul>",
+      `<li><strong>Registrations close:</strong> ${new Date(bwStart.getTime() - 2 * DAY).toDateString()}</li>`,
+      `<li><strong>Problem statements released:</strong> two now, the sponsor track at kickoff (${bwStart.toDateString()}, 10:00)</li>`,
+      `<li><strong>Submission deadline:</strong> ${bwEnd.toDateString()}, 12:00</li>`,
+      "<li><strong>First cut:</strong> all teams, judged on the repo and demo video</li>",
+      "<li><strong>Final:</strong> top teams pitch live to the jury</li>",
+      "</ul>",
+    ].join(""),
+    Prizes: "<ul><li>🥇 Winner: ₹50,000 + internship interviews with our partners</li><li>🥈 Runner-up: ₹25,000</li><li>🥉 Second runner-up: ₹10,000</li><li>Best first-year team: swag kits and mentorship</li></ul>",
+    Rules:
+      "<ol><li>All code must be written during the hackathon — boilerplate and open-source libraries are fine.</li><li>Submit a <strong>public GitHub repo</strong> and a demo video of at most 3 minutes.</li><li>Use of AI tools is allowed; say how you used them in your README.</li><li>Be kind. The <a href=\"https://altaschool.tech/code-of-conduct\" target=\"_blank\">code of conduct</a> applies throughout.</li></ol>",
+    Judging:
+      "<p>Teams are judged in two checks. The <strong>First cut</strong> looks at every submission; the best teams move on to the <strong>Final</strong>, where they also present live.</p><p>Parameters: innovation, problem understanding, technical complexity, working demo and impact — plus presentation in the Final.</p>",
+  };
+  const buildWeekend = await prisma.event.create({
+    data: {
+      tenantId: alta.id,
+      slug: "alta-build-weekend-2026",
+      title: "Alta Build Weekend 2026",
+      tagline: "48 hours. Your team. Real problems from real partners.",
+      description: [
+        "<h2>Build something people actually use</h2>",
+        "<p>Alta Build Weekend is our <strong>48-hour product hackathon</strong>. Form a team of 2–4, pick a track and a problem statement, and ship a working prototype by Sunday noon.</p>",
+        "<h3>Why join</h3>",
+        "<ul><li>Mentors from product companies on call all weekend</li><li>Cloud credits and API keys for every team</li><li>₹85,000 in prizes and internship interviews</li></ul>",
+        "<blockquote>Last year's winners turned their project into a startup that now serves 3 colleges.</blockquote>",
+        "<p>Bring a laptop and your charger; we bring food, coffee and Wi-Fi. Starter repo: <code>npx create-alta-app</code></p>",
+      ].join(""),
+      type: "HACKATHON",
+      scope: "CENTRAL",
+      mode: "HYBRID",
+      status: "REGISTRATION_OPEN",
+      venue: "Bengaluru Campus, Innovation Hall",
+      meetingUrl: "https://meet.example.com/alta-build-weekend",
+      contactEmail: "events@altaschool.tech",
+      startsAt: bwStart,
+      endsAt: bwEnd,
+      registrationOpensAt: days(-5),
+      registrationClosesAt: days(16),
+      capacity: 120,
+      modules: { ...DEFAULT_MODULES.HACKATHON },
+      config: {
+        minTeamSize: 2,
+        maxTeamSize: 4,
+        teamRegistration: "WITH_TEAM",
+        tracks: [
+          { id: "ai", name: "AI for good", description: "Use AI to solve a real problem for real people" },
+          { id: "fintech", name: "Fintech", description: "Money, payments and financial inclusion" },
+          { id: "campus", name: "Campus life", description: "Make student life easier, safer or more fun" },
+        ],
+        prizes: [{ place: 1, prize: "₹50,000" }, { place: 2, prize: "₹25,000" }, { place: 3, prize: "₹10,000" }],
+        judgeComments: ["Great use of the sponsor API", "Think about offline users"],
+      },
+      pageSections: PAGE_SECTION_TEMPLATES.HACKATHON.map((t, i) => ({
+        id: t.title.toLowerCase(),
+        title: t.title,
+        html: sectionHtml[t.title] ?? t.html,
+        icon: ["users", "calendar", "trophy", "scroll", "scale"][i],
+      })),
+      feeAmount: 49900,
+      currency: "INR",
+      feeType: "PER_TEAM",
+      earlyBirdAmount: 29900,
+      earlyBirdEndsAt: days(7),
+      submissionsOpenAt: days(-1),
+      submissionsCloseAt: days(20),
+      faqs: [
+        { q: "Is the fee per person?", a: "No — ₹499 per team (₹299 early bird), whatever the team size." },
+        { q: "Can I register without a team?", a: "This edition takes team registrations only. Post in the Discord to find teammates." },
+      ],
+      createdById: altaAdmin.id,
+      campuses: { create: alta.campuses.map((c) => ({ campusId: c.id })) },
+      staff: { create: [{ userId: altaAdmin.id, role: "MANAGER" }, { userId: volunteer.id, role: "VOLUNTEER" }] },
+      tasks: { create: checklist("HACKATHON", bwStart, days(0)) },
+      coupons: { create: [{ code: "ALTA50", percentOff: 50, maxUses: 50 }] },
+      problemStatements: {
+        create: [
+          {
+            code: "PS-01", trackId: "ai", title: "Smart study planner", difficulty: "Medium", sortOrder: 0,
+            html: "<p>Students juggle classes, assignments and exams across apps. Build an assistant that turns a syllabus and deadlines into a realistic weekly plan, and adapts when things slip.</p><ul><li>Import deadlines from a calendar or PDF</li><li>Explain <em>why</em> it scheduled something</li></ul>",
+            attachments: [{ label: "Sample syllabus (PDF)", url: "https://example.com/ps/syllabus.pdf" }],
+          },
+          {
+            code: "PS-02", trackId: "fintech", title: "Split it fairly", difficulty: "Easy", sortOrder: 1,
+            html: "<p>Hostel roommates share rent, food and trips. Design a UPI-friendly way to track and settle shared expenses with the fewest transfers.</p>",
+          },
+          {
+            code: "PS-03", trackId: "campus", title: "Sponsor challenge: campus safety", difficulty: "Hard", sponsorName: "Example Labs", sortOrder: 2,
+            html: "<p>Revealed at kickoff.</p>", releaseAt: new Date(bwStart.getTime() + 10 * 60 * 60 * 1000),
+          },
+        ],
+      },
+    },
+    include: { problemStatements: true },
+  });
+  const [firstCut, finalRound] = [
+    await prisma.judgingRound.create({ data: { eventId: buildWeekend.id, name: "First cut", sortOrder: 0, restrictTeams: false, description: "Every submission, judged on the repo and the demo video." } }),
+    await prisma.judgingRound.create({ data: { eventId: buildWeekend.id, name: "Final", sortOrder: 1, restrictTeams: true, shareFeedback: true, description: "Shortlisted teams pitch live (5 min + 3 min Q&A)." } }),
+  ];
+  const eventWide = ["Innovation", "Problem understanding", "Technical complexity", "Working demo", "Impact"].map(crit);
+  await prisma.rubricCriterion.createMany({
+    data: [
+      ...eventWide.map((c, i) => ({ eventId: buildWeekend.id, name: c.name, description: c.description, maxScore: c.maxScore, weight: c.weight, sortOrder: i })),
+      { eventId: buildWeekend.id, roundId: finalRound.id, name: crit("Presentation").name, description: crit("Presentation").description, maxScore: 10, weight: 1, sortOrder: 5 },
+    ],
+  });
+  await prisma.judgeAssignment.create({ data: { eventId: buildWeekend.id, userId: judge.id } });
+
+  const ps = buildWeekend.problemStatements;
+  const bwTeams = [
+    { name: "Pixel Pirates", track: "ai", ps: ps[0].id, members: altaStudents.slice(0, 3), title: "PlanPal", stack: ["Next.js", "FastAPI", "OpenAI"], provider: "DEV" as const, amount: 29900 },
+    { name: "Quantum Quokkas", track: "fintech", ps: ps[1].id, members: altaStudents.slice(3, 5), title: "SplitSmart", stack: ["Flutter", "Firebase"], provider: "MANUAL" as const, amount: 29900 },
+  ];
+  for (const [i, d] of bwTeams.entries()) {
+    const slug = d.title.toLowerCase();
+    const team = await prisma.team.create({
+      data: {
+        eventId: buildWeekend.id, name: d.name, trackId: d.track, problemStatementId: d.ps, inviteCode: teamInviteCode(), registeredAsTeam: true,
+        projectTitle: d.title, projectSummary: `${d.title} — a ${d.stack.join(" + ")} prototype built for ${buildWeekend.title}.`,
+        repoUrl: `https://github.com/example/${slug}`, demoUrl: `https://${slug}.example.com`, videoUrl: `https://youtube.com/watch?v=${slug}`,
+        techStack: d.stack,
+        attachments: [{ label: "Pitch deck", url: `https://example.com/decks/${slug}.pdf`, kind: "link" }],
+        submittedAt: i === 0 ? days(-0.5) : null,
+        members: { create: d.members.map((userId, j) => ({ userId, isLeader: j === 0 })) },
+      },
+    });
+    const payment = await prisma.payment.create({
+      data: {
+        eventId: buildWeekend.id, userId: d.members[0], teamId: team.id, provider: d.provider, status: "PAID", amount: d.amount, currency: "INR",
+        quantity: 1, receiptNo: `ELV-2026-${String(100 + i).padStart(6, "0")}`, paidAt: days(-2 + i),
+        providerOrderId: d.provider === "DEV" ? `order_dev_seed${i}` : null, providerPaymentId: d.provider === "DEV" ? `pay_dev_seed${i}` : null,
+        notes: d.provider === "MANUAL" ? "Bank transfer, UTR 4211 0098 7765" : null,
+      },
+    });
+    for (const [j, userId] of d.members.entries()) {
+      await prisma.registration.create({
+        data: { eventId: buildWeekend.id, userId, status: "APPROVED", paymentId: payment.id, addedById: j === 0 ? null : d.members[0] },
+      });
+    }
+  }
+
+  // ───────── Alta: tech fest umbrella with sub-events ─────────
+  const festStart = days(17);
+  const fest = await prisma.event.create({
+    data: {
+      tenantId: alta.id,
+      slug: "alta-techfest-2026",
+      title: "Alta TechFest 2026",
+      tagline: "Three days of building, learning and showing off",
+      description: "<p>Our annual tech fest brings together the <strong>Build Weekend hackathon</strong>, hands-on workshops and talks from industry. Register for each event separately below.</p>",
+      type: "TECH_FEST",
+      scope: "CENTRAL",
+      mode: "OFFLINE",
+      status: "ANNOUNCED",
+      venue: "Bengaluru Campus",
+      startsAt: festStart,
+      endsAt: new Date(festStart.getTime() + 3 * DAY),
+      modules: { ...DEFAULT_MODULES.TECH_FEST },
+      pageSections: [
+        { id: "highlights", title: "Highlights", html: "<ul><li>48-hour Build Weekend hackathon</li><li>GenAI and cloud workshops</li><li>Startup expo and demo day</li></ul>", icon: "sparkles" },
+        { id: "schedule", title: "Schedule", html: "<p><strong>Day 1:</strong> Opening keynote, workshops</p><p><strong>Day 2–3:</strong> Build Weekend, demo day and prizes</p>", icon: "calendar" },
+        { id: "prizes", title: "Prizes", html: "<p>Over ₹1,00,000 in prizes across the fest.</p>", icon: "trophy" },
+      ],
+      createdById: altaAdmin.id,
+      campuses: { create: alta.campuses.map((c) => ({ campusId: c.id })) },
+      staff: { create: [{ userId: altaAdmin.id, role: "MANAGER" }] },
+      tasks: { create: checklist("TECH_FEST", festStart, days(0)) },
+    },
+  });
+  await prisma.event.updateMany({ where: { tenantId: alta.id, slug: { in: ["alta-build-weekend-2026", "intro-to-genai-workshop"] } }, data: { parentEventId: fest.id } });
+
+  // ───────── Alta: last year's hackathon, completed with published results ─────────
+  const pastStart = days(-120);
+  const past = await prisma.event.create({
+    data: {
+      tenantId: alta.id,
+      slug: "alta-hacks-2025",
+      title: "Alta Hacks 2025",
+      tagline: "Where it all started",
+      description: "<p>The first inter-campus Alta hackathon: 9 teams, 36 hours, one auditorium.</p>",
+      type: "HACKATHON",
+      scope: "CENTRAL",
+      mode: "OFFLINE",
+      status: "COMPLETED",
+      venue: "Bengaluru Campus, Main Auditorium",
+      startsAt: pastStart,
+      endsAt: new Date(pastStart.getTime() + 1.5 * DAY),
+      registrationOpensAt: days(-150),
+      registrationClosesAt: days(-122),
+      modules: { ...DEFAULT_MODULES.HACKATHON },
+      config: { minTeamSize: 2, maxTeamSize: 4, tracks: [{ id: "open", name: "Open innovation" }] },
+      resultsPublishedAt: new Date(pastStart.getTime() + 2 * DAY),
+      createdById: altaAdmin.id,
+      campuses: { create: alta.campuses.map((c) => ({ campusId: c.id })) },
+      tasks: { create: checklist("HACKATHON", pastStart, days(0)) },
+      rubric: { create: ["Innovation", "Working demo", "Impact", "Presentation"].map((n, i) => ({ ...(({ category: _c, ...c }) => c)(crit(n)), sortOrder: i })) },
+      rounds: { create: [{ name: "First cut", sortOrder: 0, closedAt: new Date(pastStart.getTime() + 1.2 * DAY) }, { name: "Final", sortOrder: 1, restrictTeams: true, closedAt: new Date(pastStart.getTime() + 1.5 * DAY) }] },
+    },
+    include: { rounds: true, rubric: true },
+  });
+  const pastTeams = [
+    { name: "Debug Thugs", title: "MediQueue", award: "WINNER", rank: 1, members: altaStudents.slice(5, 8) },
+    { name: "Ctrl Alt Elite", title: "FarmFresh", award: "RUNNER_UP", rank: 2, members: altaStudents.slice(8, 11) },
+    { name: "Semicolon Squad", title: "BusBuddy", award: null, rank: null, members: altaStudents.slice(11, 14) },
+  ];
+  const pastFinal = past.rounds.find((r) => r.name === "Final")!;
+  const pastFirst = past.rounds.find((r) => r.name === "First cut")!;
+  for (const [i, d] of pastTeams.entries()) {
+    const team = await prisma.team.create({
+      data: {
+        eventId: past.id, name: d.name, trackId: "open", inviteCode: teamInviteCode(), projectTitle: d.title,
+        projectSummary: `${d.title} — built at Alta Hacks 2025.`, repoUrl: `https://github.com/example/${d.title.toLowerCase()}`,
+        submittedAt: new Date(pastStart.getTime() + DAY), award: d.award, rank: d.rank,
+        members: { create: d.members.map((userId, j) => ({ userId, isLeader: j === 0 })) },
+      },
+    });
+    await prisma.roundTeam.create({ data: { roundId: pastFinal.id, teamId: team.id } });
+    for (const userId of d.members) {
+      await prisma.registration.create({ data: { eventId: past.id, userId, status: "CHECKED_IN", checkedInAt: pastStart, checkedInById: volunteer.id } });
+    }
+    for (const c of past.rubric) {
+      await prisma.score.create({ data: { roundId: pastFirst.id, teamId: team.id, judgeId: judge.id, criterionId: c.id, value: 9 - i, submittedAt: pastStart } });
+    }
+    await prisma.judgeReview.create({
+      data: { eventId: past.id, roundId: pastFirst.id, teamId: team.id, judgeId: judge.id, comment: i === 0 ? "Polished and genuinely useful." : "Solid build.", tags: ["Strong, working demo"], recommend: i < 2, submittedAt: pastStart },
+    });
+  }
+  await prisma.judgeAssignment.create({ data: { eventId: past.id, userId: judge.id } });
+  await generateCertificates(past.id);
+
   // Unused import guard (serials are generated inside generateCertificates).
   void certificateSerial;
 
@@ -570,6 +809,8 @@ async function main() {
     linkedinDrafts: await prisma.linkedInPost.count(),
     guestProfiles: await prisma.guestProfile.count(),
     sponsors: await prisma.sponsor.count(),
+    payments: await prisma.payment.count(),
+    problemStatements: await prisma.problemStatement.count(),
   };
   console.log("Seeded:", counts);
   console.log("Sign in with OTP as admin@elevate.dev (platform admin), admin@altaschool.dev, judge@elevate.dev, volunteer@elevate.dev, student1@example.com");

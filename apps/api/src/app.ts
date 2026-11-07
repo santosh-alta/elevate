@@ -21,6 +21,8 @@ import { guestRoutes } from "./routes/guests";
 import { eventPageRoutes } from "./routes/eventPage";
 import { uploadRoutes } from "./routes/uploads";
 import { notificationRoutes } from "./routes/notifications";
+import { paymentRoutes } from "./routes/payments";
+import { hackathonRoutes } from "./routes/hackathon";
 import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
 export async function buildApp() {
@@ -100,6 +102,8 @@ export async function buildApp() {
       eventPageRoutes(v1);
       uploadRoutes(v1);
       notificationRoutes(v1);
+      paymentRoutes(v1);
+      hackathonRoutes(v1);
     },
     { prefix: "/v1" },
   );

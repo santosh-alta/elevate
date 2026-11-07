@@ -4,10 +4,26 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DEFAULT_MODULES, EVENT_MODES, EVENT_TYPE_LABELS, type EventModules, type EventType } from "@elevate/shared";
 import { callApi } from "@/components/client/api";
-import { Button, Card, CardBody, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
-import { EVENT_TYPE_GROUPS, humanize, toLocalInput } from "@/lib/format";
+import { Button, Card, CardBody, CardHeader, Field, FieldGroup, Input, Select, Textarea } from "@/components/ui";
+import { EVENT_TYPE_GROUPS, humanize, paiseToRupees, rupeesToPaise, toLocalInput } from "@/lib/format";
 import { UploadField } from "@/components/client/uploader";
-import type { Campus, ElevateEvent } from "@/lib/types";
+import { RichTextEditor } from "@/components/client/rich-text-editor";
+import type { Campus, ElevateEvent, Track } from "@/lib/types";
+
+/** Keep track ids stable across edits (problem statements and teams point at them). */
+function tracksFromLines(text: string, prev: Track[]): Track[] {
+  const used = new Set<string>();
+  let n = prev.length;
+  return text.split("\n").map((t) => t.trim()).filter(Boolean).map((line) => {
+    const [name, ...rest] = line.split(" - ");
+    const existing = prev.find((t) => t.name.toLowerCase() === name.trim().toLowerCase() && !used.has(t.id));
+    let id = existing?.id;
+    while (!id || used.has(id) || (!existing && prev.some((t) => t.id === id))) id = `t${++n}`;
+    used.add(id);
+    const description = rest.join(" - ").trim() || existing?.description;
+    return { id, name: name.trim(), ...(description ? { description } : {}) };
+  });
+}
 
 const MODULE_HELP: Record<keyof EventModules, string> = {
   teams: "Participants form teams",
@@ -21,7 +37,7 @@ const MODULE_HELP: Record<keyof EventModules, string> = {
   sponsors: "Show sponsors & partners on the page",
 };
 
-export function EventForm({ campuses, event }: { campuses: Campus[]; event?: ElevateEvent }) {
+export function EventForm({ campuses, event, parents = [] }: { campuses: Campus[]; event?: ElevateEvent; parents?: { id: string; title: string }[] }) {
   const router = useRouter();
   const [type, setType] = useState<EventType>(event?.type ?? "HACKATHON");
   const [scope, setScope] = useState(event?.scope ?? "CENTRAL");
@@ -30,7 +46,12 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
   const initialCampuses = (event?.campuses ?? []).map((c) => ("campus" in c ? c.campus.id : c.id));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paid, setPaid] = useState(!!event?.feeAmount);
   const isHack = modules.teams;
+  const parentOptions = parents.filter((p) => p.id !== event?.id);
+  if (event?.parentEventId && !parentOptions.some((p) => p.id === event.parentEventId)) {
+    parentOptions.unshift({ id: event.parentEventId, title: event.parentEvent?.title ?? "Current parent event" });
+  }
   const typeHint = isHack ? "Teams, submissions and judging are switched on." : modules.guests ? "Guests, check-in and certificates are switched on." : undefined;
 
   return (
@@ -42,7 +63,7 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
         const s = (k: string) => (fd.get(k) as string | null)?.trim() || undefined;
         const d = (k: string) => (s(k) ? new Date(s(k)!).toISOString() : undefined);
         const body: Record<string, unknown> = {
-          title: s("title"), tagline: s("tagline"), description: s("description"), type, scope, mode,
+          title: s("title"), tagline: s("tagline"), description: s("description") ?? (event?.description ? "" : undefined), type, scope, mode,
           campusIds: scope === "CAMPUS" ? fd.getAll("campusIds") : [],
           venue: s("venue"), meetingUrl: s("meetingUrl"), coverImageUrl: s("coverImageUrl"),
           startsAt: d("startsAt"), endsAt: d("endsAt"),
@@ -51,13 +72,38 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
           requiresApproval: fd.get("requiresApproval") === "on",
           modules,
         };
+        // Clearing optional values: only send null when there was a value before (create never needs it).
+        const clear = (k: keyof ElevateEvent) => (event && event[k] != null ? null : undefined);
+        body.parentEventId = s("parentEventId") ?? clear("parentEventId");
+        // Pricing: admins type rupees, the API stores paise.
+        if (paid) {
+          const fee = rupeesToPaise(s("feeRupees"));
+          if (!fee) { setError("Enter the registration fee, or switch the event to Free."); return; }
+          body.feeAmount = fee;
+          body.currency = "INR";
+          body.feeType = s("feeType") ?? "PER_PERSON";
+          const early = rupeesToPaise(s("earlyBirdRupees"));
+          if (early !== undefined && !d("earlyBirdEndsAt")) { setError("Set when the early-bird price ends."); return; }
+          if (early !== undefined && early >= fee) { setError("The early-bird price should be lower than the regular fee."); return; }
+          body.earlyBirdAmount = early ?? clear("earlyBirdAmount");
+          body.earlyBirdEndsAt = early !== undefined ? d("earlyBirdEndsAt") : clear("earlyBirdEndsAt");
+        } else {
+          body.feeAmount = 0;
+        }
+        if (modules.submissions) {
+          body.submissionsOpenAt = d("submissionsOpenAt") ?? clear("submissionsOpenAt");
+          body.submissionsCloseAt = d("submissionsCloseAt") ?? clear("submissionsCloseAt");
+        }
         if (isHack) {
-          const tracks = (s("tracks") ?? "").split("\n").map((t) => t.trim()).filter(Boolean)
-            .map((name, i) => ({ id: `t${i + 1}`, name }));
+          const tracks = tracksFromLines(s("tracks") ?? "", event?.config?.tracks ?? []);
+          const min = s("minTeamSize") ? Number(s("minTeamSize")) : undefined;
+          const max = s("maxTeamSize") ? Number(s("maxTeamSize")) : undefined;
+          if (min && max && min > max) { setError("Min team size can't be larger than max team size."); return; }
           body.config = {
             ...(event?.config ?? {}),
-            minTeamSize: s("minTeamSize") ? Number(s("minTeamSize")) : undefined,
-            maxTeamSize: s("maxTeamSize") ? Number(s("maxTeamSize")) : undefined,
+            minTeamSize: min,
+            maxTeamSize: max,
+            teamRegistration: s("teamRegistration") ?? "LEADER_ADDS",
             tracks,
           };
         }
@@ -87,8 +133,18 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
               ))}
             </Select>
           </Field>
-          <Field label="Cover image" hint="Wide image, 1600×600 or larger"><UploadField name="coverImageUrl" defaultValue={event?.coverImageUrl} fields={{ eventId: event?.id }} /></Field>
-          <Field label="Description" className="sm:col-span-2"><Textarea name="description" rows={5} defaultValue={event?.description ?? ""} /></Field>
+          <FieldGroup label="Cover image" hint="Wide image, 1600×600 or larger"><UploadField name="coverImageUrl" defaultValue={event?.coverImageUrl} fields={{ eventId: event?.id }} /></FieldGroup>
+          <FieldGroup label="Description" className="sm:col-span-2" hint="Shown in the About section of the public page. Add rules, prizes and timeline as page sections in the Event page tab.">
+            <RichTextEditor name="description" defaultValue={event?.description} eventId={event?.id} placeholder="What is this event about? Who is it for?" />
+          </FieldGroup>
+          {type !== "TECH_FEST" && (
+            <Field label="Part of a fest" className="sm:col-span-2" hint="Sub-events show on the fest's page with their own register button.">
+              <Select name="parentEventId" defaultValue={event?.parentEventId ?? ""}>
+                <option value="">Not part of a fest</option>
+                {parentOptions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </Select>
+            </Field>
+          )}
         </CardBody>
       </Card>
 
@@ -136,6 +192,31 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
       </Card>
 
       <Card>
+        <CardHeader title="Pricing" description="Paid registrations are collected online with Razorpay. Manage coupons in the Payments tab." />
+        <CardBody className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2 inline-flex w-fit rounded-brand border border-border bg-bg p-1 text-sm" role="radiogroup" aria-label="Free or paid">
+            {([[false, "Free"], [true, "Paid"]] as const).map(([v, l]) => (
+              <button key={l} type="button" role="radio" aria-checked={paid === v} onClick={() => setPaid(v)}
+                className={`rounded-[calc(var(--radius)-4px)] px-4 py-1.5 font-medium ${paid === v ? "bg-card text-primary shadow-sm" : "text-muted"}`}>{l}</button>
+            ))}
+          </div>
+          {paid && (
+            <>
+              <Field label="Registration fee (₹)"><Input name="feeRupees" type="number" min={1} step="0.01" required defaultValue={paiseToRupees(event?.feeAmount)} placeholder="499" /></Field>
+              <Field label="Charged">
+                <Select name="feeType" defaultValue={event?.feeType ?? "PER_PERSON"}>
+                  <option value="PER_PERSON">Per person</option>
+                  <option value="PER_TEAM">Per team</option>
+                </Select>
+              </Field>
+              <Field label="Early-bird price (₹)" hint="Optional"><Input name="earlyBirdRupees" type="number" min={0} step="0.01" defaultValue={paiseToRupees(event?.earlyBirdAmount)} placeholder="299" /></Field>
+              <Field label="Early bird ends"><Input name="earlyBirdEndsAt" type="datetime-local" defaultValue={toLocalInput(event?.earlyBirdEndsAt)} /></Field>
+            </>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
         <CardHeader title="Modules" description="Defaults depend on event type. Switch on whatever this event needs." />
         <CardBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(Object.keys(MODULE_HELP) as (keyof EventModules)[]).map((k) => (
@@ -147,15 +228,31 @@ export function EventForm({ campuses, event }: { campuses: Campus[]; event?: Ele
         </CardBody>
       </Card>
 
-      {isHack && (
+      {(isHack || modules.submissions) && (
         <Card>
-          <CardHeader title="Teams & tracks" />
+          <CardHeader title="Hackathon settings" description="Team size, how teams register, tracks and the submission window." />
           <CardBody className="grid gap-4 sm:grid-cols-2">
-            <Field label="Min team size"><Input type="number" name="minTeamSize" min={1} defaultValue={event?.config?.minTeamSize ?? 2} /></Field>
-            <Field label="Max team size"><Input type="number" name="maxTeamSize" min={1} defaultValue={event?.config?.maxTeamSize ?? 4} /></Field>
-            <Field label="Tracks / problem statements" hint="One per line" className="sm:col-span-2">
-              <Textarea name="tracks" defaultValue={(event?.config?.tracks ?? []).map((t) => t.name).join("\n")} placeholder={"AI for Education\nFintech for Bharat\nOpen Innovation"} />
-            </Field>
+            {isHack && (
+              <>
+                <Field label="Min team size" hint="Including the leader"><Input type="number" name="minTeamSize" min={1} defaultValue={event?.config?.minTeamSize ?? 2} /></Field>
+                <Field label="Max team size"><Input type="number" name="maxTeamSize" min={1} defaultValue={event?.config?.maxTeamSize ?? 4} /></Field>
+                <Field label="Team registration" className="sm:col-span-2" hint="With “Leader adds the team”, the leader enters every member's name and email while registering; members get an email.">
+                  <Select name="teamRegistration" defaultValue={(event?.config?.teamRegistration as string) ?? "LEADER_ADDS"}>
+                    <option value="LEADER_ADDS">Leader adds the whole team when registering</option>
+                    <option value="JOIN_LATER">Register individually, form or join teams later</option>
+                  </Select>
+                </Field>
+                <Field label="Tracks" hint="One per line. Optional description after “ - ”, e.g. “Fintech - Payments for Bharat”" className="sm:col-span-2">
+                  <Textarea name="tracks" defaultValue={(event?.config?.tracks ?? []).map((t) => t.name + (t.description ? ` - ${t.description}` : "")).join("\n")} placeholder={"AI for Education\nFintech for Bharat\nOpen Innovation"} />
+                </Field>
+              </>
+            )}
+            {modules.submissions && (
+              <>
+                <Field label="Submissions open" hint="Empty = open while the event runs"><Input type="datetime-local" name="submissionsOpenAt" defaultValue={toLocalInput(event?.submissionsOpenAt)} /></Field>
+                <Field label="Submissions close"><Input type="datetime-local" name="submissionsCloseAt" defaultValue={toLocalInput(event?.submissionsCloseAt)} /></Field>
+              </>
+            )}
           </CardBody>
         </Card>
       )}

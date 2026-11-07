@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Award, Bell, Download, Linkedin, Ticket } from "lucide-react";
+import { Award, Bell, CreditCard, Download, Linkedin, Ticket, Users } from "lucide-react";
+import { formatMoney } from "@elevate/shared";
+import { PaymentStatusBadge } from "@/components/payment-status";
 import { apiList } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { getHost, requireTenant } from "@/lib/tenant";
 import { fmtDate, fmtDateTime, fmtRange, humanize } from "@/lib/format";
-import type { AppNotification, Certificate, LinkedInPost, Registration, Team } from "@/lib/types";
+import type { AppNotification, Certificate, LinkedInPost, Payment, Registration, Team } from "@/lib/types";
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, Select, StatusBadge, Textarea } from "@/components/ui";
 import { ApiForm } from "@/components/client/api-form";
 import { ApiButton } from "@/components/client/api-button";
@@ -18,13 +20,19 @@ export default async function MePage() {
   const tenant = await requireTenant();
   const host = await getHost();
   const origin = `${/^(localhost|127\.|[a-z0-9-]+\.localhost)/.test(host) ? "http" : "https"}://${host}`;
-  const [regs, teams, certs, posts, notifications] = await Promise.all([
+  const [regs, teams, certs, posts, notifications, myPayments] = await Promise.all([
     apiList<Registration>("/me/registrations"),
     apiList<Team>("/me/teams"),
     apiList<Certificate>("/me/certificates"),
     apiList<LinkedInPost>("/me/linkedin"),
     apiList<AppNotification>("/me/notifications"),
+    apiList<Payment>("/me/payments"),
   ]);
+  // Payments: /me/payments when available, otherwise the payments attached to my registrations.
+  const paymentMap = new Map<string, Payment>();
+  for (const p of myPayments) paymentMap.set(p.id, p);
+  for (const r of regs) if (r.payment && !paymentMap.has(r.payment.id)) paymentMap.set(r.payment.id, { ...r.payment, event: r.payment.event ?? r.event ?? null });
+  const payments = [...paymentMap.values()].sort((a, b) => +new Date(b.createdAt ?? 0) - +new Date(a.createdAt ?? 0));
   const sortedNotes = notifications.slice().sort((a, b) => Number(!!a.readAt) - Number(!!b.readAt) || +new Date(b.createdAt) - +new Date(a.createdAt));
   const unread = notifications.filter((n) => !n.readAt).length;
   const active = regs.filter((r) => r.status !== "CANCELLED");
@@ -85,6 +93,7 @@ export default async function MePage() {
                   <p className="text-xs text-muted">{fmtRange(r.event!.startsAt, r.event!.endsAt)}</p>
                   <StatusBadge status={r.status} />
                   <p className="font-mono text-[11px] text-muted">{r.ticketCode}</p>
+                  {r.status === "PENDING_PAYMENT" && <Link href={`/events/${r.event!.slug}/register`} className="block text-xs font-medium text-primary hover:underline">Complete payment →</Link>}
                 </div>
               </Card>
             ))}
@@ -96,19 +105,45 @@ export default async function MePage() {
 
       {teams.length > 0 && (
         <section>
-          <SectionTitle title="My teams" />
+          <SectionTitle icon={<Users className="h-5 w-5" />} title="My teams" />
           <div className="grid gap-4 sm:grid-cols-2">
             {teams.map((t) => (
               <Card key={t.id} className="p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold">{t.name}</p>
-                  {t.award ? <Badge tone="amber">{humanize(t.award)}</Badge> : t.submittedAt ? <Badge tone="green">Submitted</Badge> : <Badge>Draft</Badge>}
+                  <span className="flex gap-1">
+                    {(t.payment?.status ?? t.paymentStatus) && <PaymentStatusBadge status={(t.payment?.status ?? t.paymentStatus)!} />}
+                    {t.award ? <Badge tone="amber">{humanize(t.award)}</Badge> : t.submittedAt ? <Badge tone="green">Submitted</Badge> : <Badge>Draft</Badge>}
+                  </span>
                 </div>
                 {t.event && <Link href={`/events/${t.event.slug}`} className="text-sm text-primary hover:underline">{t.event.title}</Link>}
-                <p className="mt-2 text-xs text-muted">{(t.members ?? []).map((m) => m.user?.name).filter(Boolean).join(", ")}</p>
+                <p className="mt-2 text-xs text-muted">{(t.members ?? []).map((m) => m.user?.name + (m.isLeader ? " (leader)" : "")).filter(Boolean).join(", ")}</p>
+                {t.event && <LinkButton href={`/events/${t.event.slug}/team`} size="sm" variant="outline" className="mt-3">Team page</LinkButton>}
               </Card>
             ))}
           </div>
+        </section>
+      )}
+
+      {payments.length > 0 && (
+        <section>
+          <SectionTitle icon={<CreditCard className="h-5 w-5" />} title="Payments" />
+          <Card>
+            <ul className="divide-y divide-border">
+              {payments.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{p.event?.title ?? "Event registration"}{p.team?.name ? <span className="font-normal text-muted"> · {p.team.name}</span> : null}</p>
+                    <p className="text-xs text-muted">{p.receiptNo ? <span className="font-mono">{p.receiptNo}</span> : null}{p.paidAt ? ` · paid ${fmtDateTime(p.paidAt)}` : p.createdAt ? ` · ${fmtDateTime(p.createdAt)}` : ""}</p>
+                  </div>
+                  <span className="font-semibold tabular-nums">{formatMoney(p.amount, p.currency ?? "INR")}</span>
+                  <PaymentStatusBadge status={p.status} />
+                  {(p.status === "PAID" || p.status === "REFUNDED") && <LinkButton href={`/api/proxy/payments/${p.id}/receipt.pdf`} external size="sm" variant="ghost"><Download className="h-4 w-4" />Receipt</LinkButton>}
+                  {["CREATED", "FAILED", "EXPIRED"].includes(p.status) && p.event?.slug && <LinkButton href={`/events/${p.event.slug}/register`} size="sm">Pay now</LinkButton>}
+                </li>
+              ))}
+            </ul>
+          </Card>
         </section>
       )}
 
