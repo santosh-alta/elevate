@@ -78,14 +78,42 @@ makes you an admin. It never deletes anything, so you can run it again safely (f
 
 Open `https://elevate-alta.vercel.app/admin`, enter your email, and sign in with the code that arrives.
 
-## 7. Razorpay webhook
+## 7. "Continue with Google"
+
+1. console.cloud.google.com → create a project named **Elevate** (or pick an existing one).
+2. **APIs & Services** → **OAuth consent screen** → User type **External** → app name "Alta School of Technology Events",
+   support email, logo (optional) → add the scopes `openid`, `email`, `profile` → **Publish app**.
+3. **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** → type **Web application**.
+   Under **Authorized redirect URIs**, add one line per website address:
+   - `https://elevate-alta.vercel.app/api/auth/google/callback`
+   - `https://event.altaschool.tech/api/auth/google/callback` (once the domain is connected)
+4. Copy the **Client ID** and **Client secret** into Render → **elevate-api** → **Environment** as `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`. The button appears on the sign-in page by itself; nothing is needed on Vercel.
+
+Each new brand domain needs its own redirect URI line in step 3.
+
+## 8. Roles
+
+| Role | Can do |
+|---|---|
+| Super admin (platform admin) | Everything, in every brand; creates brands |
+| Admin | Everything in the brand: people and roles, settings, payments, approving events |
+| Moderator | Approves or sends back event pages, edits any event |
+| Event manager (staff) | Creates and runs events without approval |
+| Organizer | Creates event pages; each one is hidden until an admin or moderator approves it, and is free unless an admin allows paid registration |
+| User | Signs up, registers for events |
+
+Change roles in **Admin → Brand settings → Team & roles**. Organizers press **Submit for review** on their event; reviewers
+get an email and see it under **Review queue**. Approving publishes the page; sending it back emails the organizer the note.
+
+## 9. Razorpay webhook
 
 Razorpay dashboard → **Settings** → **Webhooks** → **Add New Webhook**:
 - URL: `https://<your-api-address>/v1/webhooks/razorpay`
 - Secret: the same value as `RAZORPAY_WEBHOOK_SECRET`
 - Events: `payment.captured`, `payment.failed`, `order.paid`, `refund.processed`
 
-## 8. Later: Alta's own domain (event.altaschool.tech)
+## 10. Later: Alta's own domain (event.altaschool.tech)
 
 1. Vercel → project → **Settings** → **Domains** → add `event.altaschool.tech`.
 2. In altaschool.tech's DNS, add the CNAME Vercel shows (`event` → `cname.vercel-dns.com`).

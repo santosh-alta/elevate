@@ -4,7 +4,7 @@ import type { Event, Prisma } from "@prisma/client";
 import { SPONSOR_TIERS } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { assertManageable, canManageEvent, findEvent, requireEventManager, requireStaff } from "../lib/permissions";
+import { assertManageable, canManageEvent, findEvent, isOrganizer, requireEventManager, requireStaff } from "../lib/permissions";
 import { badRequest, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { eventPageUrl } from "../lib/brand";
@@ -21,7 +21,7 @@ const HIDDEN = ["DRAFT", "PLANNING"];
 async function findPublicEvent(req: FastifyRequest, idOrSlug: string, preview?: string): Promise<Event> {
   const event = req.tenant ? await findEvent(req, idOrSlug) : await prisma.event.findUnique({ where: { id: idOrSlug } });
   if (!event) throw notFound("Event");
-  if (HIDDEN.includes(event.status) && preview !== event.previewToken && !(await canManageEvent(req, event))) throw notFound("Event");
+  if ((HIDDEN.includes(event.status) || event.approvalStatus !== "APPROVED") && preview !== event.previewToken && !(await canManageEvent(req, event))) throw notFound("Event");
   return event;
 }
 
@@ -170,6 +170,8 @@ export function eventPageRoutes(app: FastifyInstance) {
         categoryId: src.categoryId, tags: src.tags,
         clonedFromId: src.id,
         createdById: req.auth!.user.id,
+        // A copy made by an organizer needs its own approval and stays free like any organizer event.
+        ...(isOrganizer(req) && { approvalStatus: "DRAFT" as const, paidAllowed: false, feeAmount: null, earlyBirdAmount: null }),
         campuses: { create: full.campuses.map((c) => ({ campusId: c.campusId })) },
         staff: { create: [{ userId: req.auth!.user.id, role: "MANAGER" }] },
         tasks: { create: await checklistFor(src.tenantId, src.type, startsAt) },

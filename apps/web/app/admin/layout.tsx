@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { resolveTheme } from "@elevate/shared";
-import { getMe, isStaff, requireUser } from "@/lib/auth";
+import { canUseAdmin, getMe, isBrandAdmin, isReviewer, isStaff, requireUser } from "@/lib/auth";
+import { ROLE_LABELS } from "@elevate/shared";
 import { requireTenant } from "@/lib/tenant";
 import { BrandLogo } from "@/components/brand-logo";
 import { AdminNav } from "./admin-nav";
@@ -15,12 +16,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const theme = resolveTheme(tenant.theme);
   await requireUser("/admin");
   const me = await getMe();
-  if (!isStaff(me)) {
+  if (!canUseAdmin(me)) {
     return (
       <main className="flex min-h-screen items-center justify-center px-4 text-center">
         <div>
           <h1 className="text-xl font-semibold">You don&apos;t have admin access</h1>
-          <p className="mt-2 text-muted">Ask your brand admin to give you an event manager role.</p>
+          <p className="mt-2 text-muted">To create event pages, ask an admin to make you an organizer.</p>
           <LinkButton href="/" className="mt-6" variant="outline">Back to events</LinkButton>
         </div>
       </main>
@@ -35,10 +36,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           {!theme.logoDarkUrl && <span className="truncate font-heading text-sm font-bold">{tenant.name}</span>}
         </Link>
         <p className="hidden px-5 pb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-hero-fg/80 lg:block">Event operations</p>
-        <AdminNav />
+        <AdminNav staff={isStaff(me)} reviewer={isReviewer(me)} admin={isBrandAdmin(me)} />
         <div className="hidden border-t border-hero-fg/15 px-5 py-4 text-xs text-hero-fg/80 lg:mt-auto lg:block">
           <p className="font-medium text-hero-fg">{me!.user.name}</p>
-          <p className="capitalize">{me!.user.isPlatformAdmin ? "Platform admin" : me!.membership?.role.replace(/_/g, " ").toLowerCase()}</p>
+          <p>{me!.user.isPlatformAdmin ? "Super admin" : me!.membership ? ROLE_LABELS[me!.membership.role] : ""}</p>
           <Link href="/" className="mt-2 inline-block font-medium text-hero-fg underline decoration-accent decoration-2 underline-offset-4">View public site ↗</Link>
         </div>
       </aside>

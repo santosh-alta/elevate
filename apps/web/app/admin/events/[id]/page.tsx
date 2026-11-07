@@ -24,6 +24,8 @@ import { NotificationsTab } from "./tabs/notifications";
 import { ProblemsTab } from "./tabs/problems";
 import { PaymentsTab } from "./tabs/payments";
 import { CloneEventButton } from "@/components/admin/clone-event-button";
+import { ApprovalPanel } from "@/components/admin/approval-panel";
+import { getMe, isBrandAdmin, isReviewer } from "@/lib/auth";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; guest?: string; round?: string; status?: string }> };
 
@@ -38,7 +40,7 @@ export default async function EventCommandCentre({ params, searchParams }: Props
   const { tab = "overview", guest, round, status } = await searchParams;
   const event = await apiGet<ElevateEvent>(`/events/${id}`);
   if (!event) notFound();
-  const tenant = await requireTenant();
+  const [tenant, me] = await Promise.all([requireTenant(), getMe()]);
   const m = event.modules ?? {};
   // Payments tab: when the event charges a fee, or has any payments recorded (e.g. fee removed later).
   const hasPayments = !!event.feeAmount || !!event.fee || (await apiList<Payment>(`/events/${event.id}/payments`)).length > 0;
@@ -88,6 +90,7 @@ export default async function EventCommandCentre({ params, searchParams }: Props
             <CloneEventButton eventId={event.id} title={event.title} startsAt={event.startsAt} endsAt={event.endsAt} />
           </div>
         </div>
+        <div className="mt-5"><ApprovalPanel event={event} reviewer={isReviewer(me)} admin={isBrandAdmin(me)} /></div>
         <div className="mt-5"><Tabs tabs={tabs} active={active} baseHref={`/admin/events/${event.id}`} /></div>
       </div>
 

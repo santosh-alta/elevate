@@ -67,7 +67,9 @@ export interface ElevateEvent {
   _count?: Record<string, number>;
   counts?: Record<string, number>;
   livestreamUrl?: string | null; venueMapUrl?: string | null; contactEmail?: string | null; contactPhone?: string | null;
-  faqs?: Faq[] | null; previewToken?: string; sponsors?: Sponsor[]; gallery?: Media[];
+  faqs?: Faq[] | null; previewToken?: string;
+  approvalStatus?: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED"; approvalNote?: string | null;
+  submittedAt?: string | null; reviewedAt?: string | null; paidAllowed?: boolean; createdById?: string | null; sponsors?: Sponsor[]; gallery?: Media[];
   registrationForm?: { id: string; label: string; type?: string; required?: boolean; options?: string[] }[];
   canManage?: boolean;
   // v1.2

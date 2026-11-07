@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireStaffPage } from "@/lib/auth";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { apiList } from "@/lib/api";
@@ -14,6 +15,7 @@ const dayKey = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: TZ }); // 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  await requireStaffPage();
   const { month } = await searchParams;
   const today = new Date();
   const [y, m] = (month && /^\d{4}-\d{2}$/.test(month) ? month : dayKey(today).slice(0, 7)).split("-").map(Number);

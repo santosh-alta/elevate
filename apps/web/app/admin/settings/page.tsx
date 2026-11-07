@@ -1,7 +1,8 @@
 import { CheckCircle2, Clock } from "lucide-react";
-import { ROLES } from "@elevate/shared";
+import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from "@elevate/shared";
+import { ApiSelect } from "@/components/client/api-select";
 import { apiList } from "@/lib/api";
-import { getMe, isBrandAdmin } from "@/lib/auth";
+import { isBrandAdmin, requireStaffPage } from "@/lib/auth";
 import { requireTenant } from "@/lib/tenant";
 import { fmtDateTime, humanize } from "@/lib/format";
 import type { Campus, Domain, Membership } from "@/lib/types";
@@ -29,7 +30,7 @@ const TABS = [
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab = "theme" } = await searchParams;
   const tenant = await requireTenant();
-  const me = await getMe();
+  const me = await requireStaffPage();
   const active = TABS.some((t) => t.key === tab) ? tab : "theme";
 
   return (
@@ -131,21 +132,31 @@ async function Members({ campuses }: { campuses: Campus[] }) {
               {members.map((m) => (
                 <tr key={m.id}>
                   <Td><p className="font-medium">{m.user?.name}</p><p className="text-xs text-muted">{m.user?.email}</p></Td>
-                  <Td><Badge tone="primary">{humanize(m.role)}</Badge></Td>
+                  <Td>
+                    <ApiSelect path={`/admin/members/${m.id}`} field="role" value={m.role} options={ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))} />
+                  </Td>
                   <Td className="text-muted">{m.campus?.name ?? campuses.find((c) => c.id === m.campusId)?.name ?? "All"}</Td>
                 </tr>
               ))}
             </tbody>
           </Table>
-        ) : <div className="p-5"><EmptyState title="No staff yet" description="Add admins, event managers, volunteers and judges." /></div>}
+        ) : <div className="p-5"><EmptyState title="No staff yet" description="Add admins, moderators, organizers, volunteers and judges." /></div>}
+        <div className="border-t border-border p-5">
+          <p className="text-sm font-medium">What each role can do</p>
+          <dl className="mt-2 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+            {ROLES.map((r) => (
+              <div key={r}><dt className="inline font-medium">{ROLE_LABELS[r]}: </dt><dd className="inline text-muted">{ROLE_DESCRIPTIONS[r]}</dd></div>
+            ))}
+          </dl>
+        </div>
       </Card>
       <Card className="h-fit">
-        <CardHeader title="Add team member" description="They sign in with this email" />
+        <CardHeader title="Add or change a person's role" description="Use the email they sign in with. If they already have an account, their role is updated." />
         <CardBody>
           <ApiForm path="/admin/members" className="space-y-3">
             <Input name="email" type="email" required placeholder="name@college.edu" />
             <Input name="name" required placeholder="Full name" />
-            <Select name="role" defaultValue="EVENT_MANAGER">{ROLES.map((r) => <option key={r} value={r}>{humanize(r)}</option>)}</Select>
+            <Select name="role" defaultValue="ORGANIZER">{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</Select>
             <Select name="campusId" defaultValue=""><option value="">All campuses</option>{campuses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
             <Button type="submit" className="w-full">Add member</Button>
           </ApiForm>

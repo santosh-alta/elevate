@@ -1,3 +1,4 @@
+import { requireStaffPage } from "@/lib/auth";
 import Link from "next/link";
 import { AlertTriangle, CalendarPlus } from "lucide-react";
 import { EVENT_FAMILIES } from "@elevate/shared";
@@ -20,6 +21,7 @@ interface Dashboard {
 }
 
 export default async function AdminDashboard() {
+  await requireStaffPage();
   const [dash, events] = await Promise.all([apiGet<Dashboard>("/dashboard"), apiList<ElevateEvent>("/events")]);
   const now = Date.now();
   const upcoming = dash?.upcoming ?? events.filter((e) => new Date(e.endsAt).getTime() >= now && e.status !== "CANCELLED").sort((a, b) => +new Date(a.startsAt) - +new Date(b.startsAt));

@@ -4,6 +4,7 @@ import { EVENT_FAMILIES, EVENT_STATUSES } from "@elevate/shared";
 import { getEventTypes, getTags } from "@/lib/catalog";
 import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
+import { getMe, isOrganizerOnly } from "@/lib/auth";
 import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtRange, humanize, isFamily, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, Button, Card, EmptyState, Input, LinkButton, Select, StatusBadge, Table, Td, Th } from "@/components/ui";
@@ -12,8 +13,9 @@ export const metadata = { title: "Events" };
 
 export default async function AdminEvents({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const tenant = await requireTenant();
+  const [tenant, me] = await Promise.all([requireTenant(), getMe()]);
   const qs = new URLSearchParams();
+  if (isOrganizerOnly(me)) qs.set("mine", "true");
   for (const k of ["status", "type", "campusId", "tag", "categoryId", "q"]) if (sp[k]) qs.set(k, sp[k]!);
   const family = isFamily(sp.family) ? sp.family : undefined;
   if (family) qs.set("family", family);
@@ -81,7 +83,14 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
                   <Td className="text-muted">{e.scope === "CENTRAL" ? "Central" : eventCampuses(e).map((c) => c.code || c.name).join(", ")} · {humanize(e.mode)}</Td>
                   <Td className="whitespace-nowrap text-muted">{fmtRange(e.startsAt, e.endsAt)}</Td>
                   <Td className="tabular-nums">{eventCount(e, "registrations") ?? "—"}</Td>
-                  <Td><StatusBadge status={e.status} /></Td>
+                  <Td>
+                    <StatusBadge status={e.status} />
+                    {e.approvalStatus && e.approvalStatus !== "APPROVED" && (
+                      <Badge tone={e.approvalStatus === "PENDING" ? "amber" : e.approvalStatus === "REJECTED" ? "red" : "gray"} className="ml-1">
+                        {{ DRAFT: "Not submitted", PENDING: "Awaiting review", REJECTED: "Changes requested" }[e.approvalStatus]}
+                      </Badge>
+                    )}
+                  </Td>
                 </tr>
               ))}
             </tbody>

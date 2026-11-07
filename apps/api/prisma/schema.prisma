@@ -76,6 +76,8 @@ model User {
   linkedinUrl     String?
   githubUrl       String?
   isPlatformAdmin Boolean  @default(false)
+  /// Google account id ("sub") once the user has signed in with Google
+  googleSub       String?  @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -104,6 +106,18 @@ enum Role {
   VOLUNTEER
   SPEAKER
   STUDENT
+  /// Reviews and approves events submitted by organizers; can edit any event
+  MODERATOR
+  /// Can create event pages; they stay hidden until an admin or moderator approves them
+  ORGANIZER
+}
+
+/// Review state of an event page. Staff-created events are APPROVED from the start.
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model Membership {
@@ -245,6 +259,15 @@ model Event {
   /// Cached outcome summary, regenerated on demand
   outcome              Json?
   createdById          String?
+  /// Organizer-created events must be approved before they can be published
+  approvalStatus       ApprovalStatus @default(APPROVED)
+  /// Reviewer's note, shown to the organizer (e.g. why it was sent back)
+  approvalNote         String?
+  submittedAt          DateTime?
+  reviewedAt           DateTime?
+  reviewedById         String?
+  /// Whether this event may charge a fee (off for organizer events until an admin allows it)
+  paidAllowed          Boolean     @default(true)
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 

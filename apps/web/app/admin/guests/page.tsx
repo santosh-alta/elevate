@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireStaffPage } from "@/lib/auth";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { apiList } from "@/lib/api";
@@ -11,6 +12,7 @@ import { GuestAvatar } from "@/components/guest-avatar";
 export const metadata: Metadata = { title: "Guest library" };
 
 export default async function GuestLibraryPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  await requireStaffPage();
   const { q = "" } = await searchParams;
   const profiles = await apiList<GuestProfile>(`/guest-profiles?q=${encodeURIComponent(q)}`);
   const count = (p: GuestProfile) => (typeof p.appearances === "number" ? p.appearances : Array.isArray(p.appearances) ? p.appearances.length : p._count?.appearances ?? 0);

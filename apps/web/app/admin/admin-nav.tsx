@@ -2,23 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, CalendarPlus, CalendarRange, LayoutDashboard, Settings, UsersRound } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarRange, ClipboardCheck, LayoutDashboard, Settings, UsersRound } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
-const ITEMS = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/admin/events", label: "Events", icon: CalendarRange },
-  { href: "/admin/events/new", label: "Create event", icon: CalendarPlus, exact: true },
-  { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/admin/guests", label: "Guest library", icon: UsersRound },
-  { href: "/admin/settings", label: "Brand settings", icon: Settings },
+type Who = { staff: boolean; reviewer: boolean; admin: boolean };
+const ITEMS: { href: string; label: string; organizerLabel?: string; icon: typeof CalendarDays; exact?: boolean; show: (w: Who) => boolean }[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true, show: (w) => w.staff },
+  { href: "/admin/review", label: "Review queue", icon: ClipboardCheck, show: (w) => w.reviewer },
+  { href: "/admin/events", label: "Events", organizerLabel: "My events", icon: CalendarRange, show: () => true },
+  { href: "/admin/events/new", label: "Create event", icon: CalendarPlus, exact: true, show: () => true },
+  { href: "/admin/calendar", label: "Calendar", icon: CalendarDays, show: (w) => w.staff },
+  { href: "/admin/guests", label: "Guest library", icon: UsersRound, show: (w) => w.staff },
+  { href: "/admin/settings", label: "Brand settings", icon: Settings, show: (w) => w.staff },
 ];
 
-export function AdminNav() {
+export function AdminNav(who: Who) {
   const path = usePathname();
   return (
     <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
-      {ITEMS.map(({ href, label, icon: Icon, exact }) => {
+      {ITEMS.filter((i) => i.show(who)).map(({ href, label: staffLabel, organizerLabel, icon: Icon, exact }) => {
+        const label = !who.staff && organizerLabel ? organizerLabel : staffLabel;
         const active = exact ? path === href : path.startsWith(href) && !(href === "/admin/events" && path === "/admin/events/new");
         return (
           <Link

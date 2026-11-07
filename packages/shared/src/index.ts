@@ -35,10 +35,42 @@ export const EVENT_STATUSES = [...EVENT_STATUS_FLOW, "CANCELLED"] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
 
 export const ROLES = [
-  "BRAND_ADMIN", "CAMPUS_ADMIN", "EVENT_MANAGER", "JUDGE", "VOLUNTEER", "SPEAKER", "STUDENT",
+  "BRAND_ADMIN", "MODERATOR", "CAMPUS_ADMIN", "EVENT_MANAGER", "ORGANIZER", "JUDGE", "VOLUNTEER", "SPEAKER", "STUDENT",
 ] as const;
 export type Role = (typeof ROLES)[number];
-export const STAFF_ROLES: Role[] = ["BRAND_ADMIN", "CAMPUS_ADMIN", "EVENT_MANAGER"];
+/** Brand staff: see every event (including hidden ones) and the staff tools. */
+export const STAFF_ROLES: Role[] = ["BRAND_ADMIN", "MODERATOR", "CAMPUS_ADMIN", "EVENT_MANAGER"];
+/** Can approve or reject event pages submitted by organizers. */
+export const REVIEWER_ROLES: Role[] = ["BRAND_ADMIN", "MODERATOR"];
+/** Can open the admin area (organizers see only their own events there). */
+export const ADMIN_AREA_ROLES: Role[] = [...STAFF_ROLES, "ORGANIZER"];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  BRAND_ADMIN: "Admin",
+  MODERATOR: "Moderator",
+  CAMPUS_ADMIN: "Campus admin",
+  EVENT_MANAGER: "Event manager (staff)",
+  ORGANIZER: "Organizer",
+  JUDGE: "Judge",
+  VOLUNTEER: "Volunteer",
+  SPEAKER: "Speaker",
+  STUDENT: "User",
+};
+
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  BRAND_ADMIN: "Everything for this brand: people and roles, settings, payments, approving events",
+  MODERATOR: "Approves or rejects submitted event pages and can edit any event",
+  CAMPUS_ADMIN: "Runs events for one campus",
+  EVENT_MANAGER: "Staff who create and run events without needing approval",
+  ORGANIZER: "Creates event pages; each one needs approval before it goes live",
+  JUDGE: "Scores teams in assigned events",
+  VOLUNTEER: "Checks people in at events",
+  SPEAKER: "Speaks at events",
+  STUDENT: "Registers for events",
+};
+
+export const APPROVAL_STATUSES = ["DRAFT", "PENDING", "APPROVED", "REJECTED"] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
 export const CERTIFICATE_TYPES = [
   "PARTICIPATION", "FINALIST", "WINNER", "RUNNER_UP", "SPECIAL_MENTION", "JUDGE", "SPEAKER", "VOLUNTEER", "MENTOR",

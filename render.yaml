@@ -53,6 +53,11 @@ services:
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+      # "Continue with Google" (Google Cloud → APIs & Services → Credentials → OAuth client ID, type "Web application")
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
       # Optional: AI-written LinkedIn drafts
       - key: ANTHROPIC_API_KEY
         sync: false

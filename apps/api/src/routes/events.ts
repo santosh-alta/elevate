@@ -9,6 +9,7 @@ import {
   EVENT_STATUSES,
   EVENT_TYPES,
   EVENT_TYPE_LABELS,
+  REVIEWER_ROLES,
   createEventSchema,
 } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
@@ -16,17 +17,22 @@ import { requireTenant } from "../plugins/tenant";
 import {
   canManageEvent,
   findEvent,
+  isOrganizer,
   isStaff,
+  requireBrandAdmin,
+  requireEventCreator,
   requireEventManager,
-  requireStaff,
+  requireReviewer,
   roleOf,
 } from "../lib/permissions";
+import { APPROVAL_STATUSES } from "@elevate/shared";
 import { slugify } from "../lib/codes";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { canTransition, runCompletionAutomation } from "../lib/lifecycle";
 import { computeLeaderboard, defaultRoundId, judgesPerTeam, roundTeamIds } from "../lib/judging";
-import { fmtDate, notifyAudience, safely } from "../lib/notify";
+import { enqueue, fmtDate, notifyAudience, safely } from "../lib/notify";
+import { brandBaseUrl } from "../lib/brand";
 import { newToken } from "./guests";
 import { eventWinners } from "./hackathon";
 import { sanitizeHtml, sanitizeSections } from "../lib/html";
@@ -88,7 +94,8 @@ async function validateParent(tenantId: string, parentEventId: string | null | u
   return parent.id;
 }
 
-function validateFee(fee: { feeAmount?: number | null; earlyBirdAmount?: number | null }) {
+function validateFee(fee: { feeAmount?: number | null; earlyBirdAmount?: number | null }, paidAllowed = true) {
+  if (!paidAllowed && fee.feeAmount) throw badRequest("This event can't charge a fee yet. Ask an admin to allow paid registration.");
   if (fee.feeAmount && fee.feeAmount < 100) throw badRequest("The fee must be at least 1.00 (100 paise)");
   if (fee.earlyBirdAmount !== null && fee.earlyBirdAmount !== undefined && fee.feeAmount && fee.earlyBirdAmount > fee.feeAmount) {
     throw badRequest("The early-bird price can't be more than the normal fee");
@@ -155,6 +162,8 @@ export function eventRoutes(app: FastifyInstance) {
         categoryId: z.string().optional(),
         tag: z.union([z.string(), z.array(z.string())]).optional(),
         parentId: z.string().optional(),
+        approval: z.enum(APPROVAL_STATUSES).optional(),
+        mine: z.coerce.boolean().optional(),
         limit: z.coerce.number().int().min(1).max(200).default(50),
         offset: z.coerce.number().int().min(0).default(0),
       })
@@ -178,12 +187,21 @@ export function eventRoutes(app: FastifyInstance) {
       ...(q.parentId && { parentEventId: q.parentId }),
       ...(and.length && { AND: and }),
     };
+    const me = req.auth?.user.id;
+    const extra: Prisma.EventWhereInput[] = [];
+    const ownEvents: Prisma.EventWhereInput = { OR: [{ createdById: me }, { staff: { some: { userId: me, role: "MANAGER" } } }] };
+    if (q.mine && me) extra.push(ownEvents);
+    if (q.approval) extra.push({ approvalStatus: q.approval });
     if (q.status) {
-      if (!staff && HIDDEN_FROM_PUBLIC.includes(q.status)) return [];
+      if (!staff && HIDDEN_FROM_PUBLIC.includes(q.status) && !(me && isOrganizer(req))) return [];
       where.status = q.status;
-    } else if (!staff) {
-      where.status = { notIn: HIDDEN_FROM_PUBLIC };
     }
+    if (!staff) {
+      // The public sees published, approved events; organizers also see their own drafts.
+      const visible: Prisma.EventWhereInput = { status: { notIn: HIDDEN_FROM_PUBLIC }, approvalStatus: "APPROVED" };
+      extra.push(me && isOrganizer(req) ? { OR: [visible, ownEvents] } : visible);
+    }
+    if (extra.length) where.AND = [...and, ...extra];
 
     const [items, total] = await Promise.all([
       prisma.event.findMany({
@@ -214,7 +232,7 @@ export function eventRoutes(app: FastifyInstance) {
     const manager = await canManageEvent(req, base);
     const { preview } = z.object({ preview: z.string().optional() }).parse(req.query);
     const previewing = !!preview && preview === base.previewToken;
-    if (!manager && !previewing && HIDDEN_FROM_PUBLIC.includes(base.status)) throw notFound("Event");
+    if (!manager && !previewing && (HIDDEN_FROM_PUBLIC.includes(base.status) || base.approvalStatus !== "APPROVED")) throw notFound("Event");
 
     const event = await prisma.event.findUniqueOrThrow({
       where: { id: base.id },
@@ -334,9 +352,11 @@ export function eventRoutes(app: FastifyInstance) {
   });
 
   app.post("/events", async (req, reply) => {
-    const auth = requireStaff(req);
+    const auth = requireEventCreator(req);
     const tenant = requireTenant(req);
     const parsed = createSchema.parse(req.body);
+    // Organizers' pages wait for approval and stay free until an admin allows paid registration.
+    const organizer = isOrganizer(req);
     const category = parsed.categoryId ? await resolveCategory(tenant.id, parsed.categoryId, parsed.type) : null;
     if (category?.archivedAt) throw badRequest(`"${category.name}" is archived`);
     const type = category?.baseType ?? parsed.type;
@@ -353,7 +373,7 @@ export function eventRoutes(app: FastifyInstance) {
     }
     if (input.scope === "CAMPUS" && !input.campusIds.length) throw badRequest("Pick at least one campus for a campus-level event");
     await validateCampuses(tenant.id, input.campusIds);
-    validateFee(input);
+    validateFee(input, !organizer);
     const parentEventId = await validateParent(tenant.id, input.parentEventId);
 
     // Base type defaults ⊕ brand type overrides ⊕ explicit modules. Checklist and page templates follow the base type.
@@ -387,6 +407,7 @@ export function eventRoutes(app: FastifyInstance) {
         slug: await uniqueSlug(tenant.id, input.title),
         previewToken: newToken(),
         createdById: auth.user.id,
+        ...(organizer && { approvalStatus: "DRAFT" as const, paidAllowed: false }),
         campuses: { create: campusIds.map((campusId) => ({ campusId })) },
         staff: { create: [{ userId: auth.user.id, role: "MANAGER" }] },
         tasks: { create: checklist },
@@ -420,7 +441,7 @@ export function eventRoutes(app: FastifyInstance) {
     validateFee({
       feeAmount: fields.feeAmount !== undefined ? fields.feeAmount : event.feeAmount,
       earlyBirdAmount: fields.earlyBirdAmount !== undefined ? fields.earlyBirdAmount : event.earlyBirdAmount,
-    });
+    }, event.paidAllowed || fields.feeAmount === undefined);
     const parentId = parentEventId ? await validateParent(event.tenantId, parentEventId, event.id) : parentEventId;
     if (fields.description) fields.description = sanitizeHtml(fields.description);
 
@@ -473,10 +494,98 @@ export function eventRoutes(app: FastifyInstance) {
     if (!canTransition(event.status, status)) {
       throw badRequest(`Can't move an event from ${event.status} to ${status}`);
     }
+    if (event.approvalStatus !== "APPROVED" && !HIDDEN_FROM_PUBLIC.includes(status) && status !== "CANCELLED") {
+      throw badRequest("This event needs approval from an admin or moderator before it can be published. Submit it for review first.");
+    }
     const updated = await prisma.event.update({ where: { id: event.id }, data: { status }, include: { category: CATEGORY_SELECT } });
     await logActivity(event.id, req.auth!.user.id, "status.changed", { from: event.status, to: status });
     if (status === "COMPLETED") runCompletionAutomation(event.id, req.log);
     if (status === "CANCELLED") safely("event.cancelled", () => notifyAudience(event.id, "event.cancelled"));
+    return { ...updated, ...eventMeta(updated) };
+  });
+
+  // ───────── Approval (organizer-created events) ─────────
+
+  app.post<{ Params: { id: string } }>("/events/:id/submit", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    if (event.approvalStatus === "APPROVED") throw badRequest("This event is already approved");
+    if (event.approvalStatus === "PENDING") throw badRequest("This event is already waiting for review");
+    const updated = await prisma.event.update({
+      where: { id: event.id },
+      data: { approvalStatus: "PENDING", submittedAt: new Date() },
+      include: { category: CATEGORY_SELECT },
+    });
+    await logActivity(event.id, req.auth!.user.id, "approval.submitted", {});
+    safely("approval.submitted", async () => {
+      const reviewers = await prisma.membership.findMany({
+        where: { tenantId: event.tenantId, role: { in: REVIEWER_ROLES as ("BRAND_ADMIN" | "MODERATOR")[] } },
+        select: { userId: true },
+      });
+      const url = `${await brandBaseUrl(event.tenantId)}/admin/review`;
+      for (const r of reviewers) {
+        await enqueue({
+          tenantId: event.tenantId, eventId: event.id, userId: r.userId, channels: ["EMAIL", "IN_APP"],
+          template: "approval.submitted",
+          subject: `Review needed: ${event.title}`,
+          body: `${req.auth!.user.name} submitted "${event.title}" for review. It stays hidden until an admin or moderator approves it.`,
+          ctaLabel: "Review events", ctaUrl: url,
+          dedupKey: `approval.submitted:${event.id}:${updated.submittedAt!.getTime()}:${r.userId}`,
+        });
+      }
+    });
+    return { ...updated, ...eventMeta(updated) };
+  });
+
+  app.post<{ Params: { id: string } }>("/events/:id/review", async (req) => {
+    const auth = requireReviewer(req);
+    const event = await findEvent(req, req.params.id);
+    const body = z
+      .object({ decision: z.enum(["APPROVE", "REJECT"]), note: z.string().trim().max(2000).optional() })
+      .parse(req.body);
+    if (body.decision === "REJECT" && !body.note) throw badRequest("Please say what needs to change, so the organizer can fix it");
+    const approved = body.decision === "APPROVE";
+    // Approving publishes the page (as "Announced") if it was still hidden.
+    const publish = approved && HIDDEN_FROM_PUBLIC.includes(event.status);
+    const updated = await prisma.event.update({
+      where: { id: event.id },
+      data: {
+        approvalStatus: approved ? "APPROVED" : "REJECTED",
+        approvalNote: body.note ?? null,
+        reviewedAt: new Date(),
+        reviewedById: auth.user.id,
+        ...(publish && { status: "ANNOUNCED" as const }),
+      },
+      include: { category: CATEGORY_SELECT },
+    });
+    await logActivity(event.id, auth.user.id, approved ? "approval.approved" : "approval.rejected", { note: body.note });
+    if (publish) await logActivity(event.id, auth.user.id, "status.changed", { from: event.status, to: "ANNOUNCED" });
+    if (event.createdById) {
+      const organizerId = event.createdById;
+      safely("approval.reviewed", async () => {
+        const base = await brandBaseUrl(event.tenantId);
+        await enqueue({
+          tenantId: event.tenantId, eventId: event.id, userId: organizerId, channels: ["EMAIL", "IN_APP"],
+          template: approved ? "approval.approved" : "approval.rejected",
+          subject: approved ? `Approved: ${event.title} is live` : `Changes needed: ${event.title}`,
+          body: approved
+            ? `Good news! "${event.title}" has been approved and is now live.${body.note ? `\n\nNote from the reviewer: ${body.note}` : ""}`
+            : `"${event.title}" needs a few changes before it can go live.\n\nWhat to change: ${body.note}\n\nEdit the page and submit it for review again.`,
+          ctaLabel: approved ? "View the page" : "Edit the event",
+          ctaUrl: approved ? `${base}/events/${event.slug}` : `${base}/admin/events/${event.id}`,
+          dedupKey: `approval.reviewed:${event.id}:${updated.reviewedAt!.getTime()}`,
+        });
+      });
+    }
+    return { ...updated, ...eventMeta(updated) };
+  });
+
+  app.post<{ Params: { id: string } }>("/events/:id/paid-allowed", async (req) => {
+    const auth = requireBrandAdmin(req);
+    const event = await findEvent(req, req.params.id);
+    const { allowed } = z.object({ allowed: z.boolean() }).parse(req.body);
+    if (!allowed && event.feeAmount) throw badRequest("Set the fee to free first, then turn off paid registration");
+    const updated = await prisma.event.update({ where: { id: event.id }, data: { paidAllowed: allowed }, include: { category: CATEGORY_SELECT } });
+    await logActivity(event.id, auth.user.id, allowed ? "payments.allowed" : "payments.disallowed", {});
     return { ...updated, ...eventMeta(updated) };
   });
 

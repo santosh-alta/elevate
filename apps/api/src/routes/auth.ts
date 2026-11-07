@@ -6,6 +6,9 @@ import { requireUser } from "../lib/permissions";
 import { otpCode, sha256 } from "../lib/codes";
 import { badRequest } from "../lib/errors";
 import { themeOf } from "../lib/brand";
+import { sendEmail } from "../lib/mailer";
+import { fromAddress, renderEmailHtml } from "../lib/notify";
+import type { Tenant, User } from "@prisma/client";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ACTIVE_CODES = 5;
@@ -59,9 +62,21 @@ export function authRoutes(app: FastifyInstance) {
       data: { userId: user.id, codeHash: sha256(`${user.id}:${code}`), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
 
-    // TODO: send via email provider (brand sender). Until then the code is logged in development.
+    // Sent right away (not through the outbox): the person is waiting for it.
     const dev = process.env.NODE_ENV !== "production";
     if (dev) req.log.info({ email, code }, "OTP code (dev only)");
+    const subject = `${code} is your ${tenant.name} sign-in code`;
+    const text = `Your sign-in code is ${code}\n\nIt expires in 10 minutes. If you didn't ask for it, you can ignore this email.`;
+    try {
+      const sent = await sendEmail({ from: fromAddress(tenant), to: email, subject, text, html: await renderEmailHtml(tenant, subject, text) });
+      if (sent.status === "SKIPPED" && !dev) throw badRequest("Email sign-in isn't available right now. Please continue with Google.");
+    } catch (err) {
+      if (dev) req.log.warn({ err }, "OTP email failed (dev)");
+      else {
+        req.log.error({ err }, "OTP email failed");
+        throw badRequest("We couldn't send the code. Please try again, or continue with Google.");
+      }
+    }
     return { ok: true, ...(dev ? { devCode: code } : {}) };
   });
 
@@ -76,11 +91,74 @@ export function authRoutes(app: FastifyInstance) {
     if (!otp) throw badRequest("Invalid or expired code");
     await prisma.otpCode.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
 
+    return signIn(user, req.tenant);
+  });
+
+  /** Signs a user in and returns their membership in this brand. */
+  async function signIn(user: User, tenant: Tenant | null) {
     const token = app.jwt.sign({ sub: user.id });
-    const membership = req.tenant
-      ? await prisma.membership.findUnique({ where: { tenantId_userId: { tenantId: req.tenant.id, userId: user.id } } })
+    const membership = tenant
+      ? await prisma.membership.findUnique({ where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } } })
       : null;
     return { token, user, membership };
+  }
+
+  /** Whether "Continue with Google" is available (the website asks before showing the button). */
+  app.get("/auth/google/config", async () => ({ clientId: process.env.GOOGLE_CLIENT_ID || null }));
+
+  /**
+   * Google sign-in (OAuth authorization-code flow). The website sends the code Google gave it plus the exact
+   * redirect URI it used; the API exchanges it with Google and reads the verified identity from the ID token.
+   */
+  app.post("/auth/google", async (req) => {
+    const tenant = requireTenant(req);
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) throw badRequest("Google sign-in isn't set up yet");
+    const body = z.object({ code: z.string().min(10), redirectUri: z.string().url() }).parse(req.body);
+
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ code: body.code, client_id: clientId, client_secret: clientSecret, redirect_uri: body.redirectUri, grant_type: "authorization_code" }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const tokens = (await tokenRes.json().catch(() => ({}))) as { id_token?: string; error?: string };
+    if (!tokenRes.ok || !tokens.id_token) {
+      req.log.warn({ status: tokenRes.status, error: tokens.error }, "Google token exchange failed");
+      throw badRequest("Google sign-in failed. Please try again.");
+    }
+    // The ID token came straight from Google over TLS, so its claims can be read without re-verifying the signature.
+    const claims = JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url").toString("utf8")) as {
+      sub?: string; email?: string; email_verified?: boolean; name?: string; picture?: string; aud?: string; iss?: string;
+    };
+    if (claims.aud !== clientId || !["accounts.google.com", "https://accounts.google.com"].includes(claims.iss ?? "")) {
+      throw badRequest("Google sign-in failed. Please try again.");
+    }
+    if (!claims.sub || !claims.email || !claims.email_verified) throw badRequest("Your Google account's email isn't verified");
+    const email = claims.email.toLowerCase();
+
+    let user =
+      (await prisma.user.findUnique({ where: { googleSub: claims.sub } })) ??
+      (await prisma.user.findUnique({ where: { email } }));
+    if (user) {
+      if (!user.googleSub || (!user.avatarUrl && claims.picture)) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleSub: claims.sub, ...(!user.avatarUrl && claims.picture && { avatarUrl: claims.picture }) },
+        });
+      }
+    } else {
+      user = await prisma.user.create({
+        data: { email, name: claims.name?.trim() || email.split("@")[0], googleSub: claims.sub, avatarUrl: claims.picture ?? null },
+      });
+    }
+    await prisma.membership.upsert({
+      where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      create: { tenantId: tenant.id, userId: user.id, role: "STUDENT" },
+      update: {},
+    });
+    return signIn(user, tenant);
   });
 
   app.get("/me", async (req) => {
