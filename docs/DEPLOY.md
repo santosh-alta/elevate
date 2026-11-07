@@ -78,19 +78,31 @@ makes you an admin. It never deletes anything, so you can run it again safely (f
 
 Open `https://elevate-alta.vercel.app/admin`, enter your email, and sign in with the code that arrives.
 
-## 7. "Continue with Google"
+## 7. Sign-in: Google, GitHub and email code
 
-1. console.cloud.google.com → create a project named **Elevate** (or pick an existing one).
-2. **APIs & Services** → **OAuth consent screen** → User type **External** → app name "Alta School of Technology Events",
-   support email, logo (optional) → add the scopes `openid`, `email`, `profile` → **Publish app**.
-3. **APIs & Services** → **Credentials** → **Create credentials** → **OAuth client ID** → type **Web application**.
-   Under **Authorized redirect URIs**, add one line per website address:
+All three can be on at once; each button appears on the sign-in page as soon as its keys are on Render. Nothing is
+needed on Vercel. People who use different methods with the same email end up in the same account.
+
+**Email code** works as soon as `SMTP_URL` is set (step 2).
+
+**Google**
+1. console.cloud.google.com → create a project named **Elevate**.
+2. **APIs & Services** → **OAuth consent screen** → **External** → app name "Alta School of Technology Events", support
+   email → scopes `openid`, `email`, `profile` → **Publish app**.
+3. **Credentials** → **Create credentials** → **OAuth client ID** → **Web application** → **Authorized redirect URIs**:
    - `https://elevate-alta.vercel.app/api/auth/google/callback`
-   - `https://event.altaschool.tech/api/auth/google/callback` (once the domain is connected)
-4. Copy the **Client ID** and **Client secret** into Render → **elevate-api** → **Environment** as `GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`. The button appears on the sign-in page by itself; nothing is needed on Vercel.
+   - later also `https://event.altaschool.tech/api/auth/google/callback`
+4. Put the Client ID and secret on Render as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
-Each new brand domain needs its own redirect URI line in step 3.
+**GitHub**
+1. github.com → your photo → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**
+   (or the same under an organization's settings, so it isn't tied to one person).
+2. Application name "Alta School of Technology Events"; Homepage URL `https://elevate-alta.vercel.app`;
+   Authorization callback URL `https://elevate-alta.vercel.app/api/auth/github/callback` → **Register application**.
+3. **Generate a new client secret**. Put the Client ID and secret on Render as `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+
+A GitHub OAuth App allows only one callback address. When Alta moves to `event.altaschool.tech`, change the callback URL
+to `https://event.altaschool.tech/api/auth/github/callback`. Each additional brand domain needs its own GitHub OAuth App.
 
 ## 8. Roles
 

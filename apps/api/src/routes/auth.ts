@@ -103,8 +103,46 @@ export function authRoutes(app: FastifyInstance) {
     return { token, user, membership };
   }
 
-  /** Whether "Continue with Google" is available (the website asks before showing the button). */
-  app.get("/auth/google/config", async () => ({ clientId: process.env.GOOGLE_CLIENT_ID || null }));
+  /** Which "Continue with …" buttons to show. Only public client ids; secrets stay on the API. */
+  app.get("/auth/providers", async () => ({
+    google: process.env.GOOGLE_CLIENT_ID || null,
+    github: process.env.GITHUB_CLIENT_ID || null,
+  }));
+
+  /**
+   * Finds the user for a social login: by the provider's account id, else by verified email (links the accounts),
+   * else creates them. New people join this brand as users.
+   */
+  async function socialUser(
+    tenant: Tenant,
+    p: { field: "googleSub" | "githubId"; id: string; email: string; name?: string | null; avatarUrl?: string | null; githubUrl?: string | null },
+  ): Promise<User> {
+    const email = p.email.toLowerCase();
+    const byId = p.field === "googleSub"
+      ? await prisma.user.findUnique({ where: { googleSub: p.id } })
+      : await prisma.user.findUnique({ where: { githubId: p.id } });
+    let user = byId ?? (await prisma.user.findUnique({ where: { email } }));
+    if (user) {
+      const fill = {
+        ...(!user[p.field] && { [p.field]: p.id }),
+        ...(!user.avatarUrl && p.avatarUrl && { avatarUrl: p.avatarUrl }),
+        ...(!user.githubUrl && p.githubUrl && { githubUrl: p.githubUrl }),
+      };
+      if (Object.keys(fill).length) user = await prisma.user.update({ where: { id: user.id }, data: fill });
+    } else {
+      user = await prisma.user.create({
+        data: { email, name: p.name?.trim() || email.split("@")[0], [p.field]: p.id, avatarUrl: p.avatarUrl ?? null, githubUrl: p.githubUrl ?? null },
+      });
+    }
+    await prisma.membership.upsert({
+      where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      create: { tenantId: tenant.id, userId: user.id, role: "STUDENT" },
+      update: {},
+    });
+    return user;
+  }
+
+  const codeBody = z.object({ code: z.string().min(10), redirectUri: z.string().url() });
 
   /**
    * Google sign-in (OAuth authorization-code flow). The website sends the code Google gave it plus the exact
@@ -115,7 +153,7 @@ export function authRoutes(app: FastifyInstance) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     if (!clientId || !clientSecret) throw badRequest("Google sign-in isn't set up yet");
-    const body = z.object({ code: z.string().min(10), redirectUri: z.string().url() }).parse(req.body);
+    const body = codeBody.parse(req.body);
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -136,27 +174,43 @@ export function authRoutes(app: FastifyInstance) {
       throw badRequest("Google sign-in failed. Please try again.");
     }
     if (!claims.sub || !claims.email || !claims.email_verified) throw badRequest("Your Google account's email isn't verified");
-    const email = claims.email.toLowerCase();
+    const user = await socialUser(tenant, { field: "googleSub", id: claims.sub, email: claims.email, name: claims.name, avatarUrl: claims.picture });
+    return signIn(user, tenant);
+  });
 
-    let user =
-      (await prisma.user.findUnique({ where: { googleSub: claims.sub } })) ??
-      (await prisma.user.findUnique({ where: { email } }));
-    if (user) {
-      if (!user.googleSub || (!user.avatarUrl && claims.picture)) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { googleSub: claims.sub, ...(!user.avatarUrl && claims.picture && { avatarUrl: claims.picture }) },
-        });
-      }
-    } else {
-      user = await prisma.user.create({
-        data: { email, name: claims.name?.trim() || email.split("@")[0], googleSub: claims.sub, avatarUrl: claims.picture ?? null },
-      });
+  /** GitHub sign-in (OAuth App). Uses the account's primary verified email. */
+  app.post("/auth/github", async (req) => {
+    const tenant = requireTenant(req);
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    if (!clientId || !clientSecret) throw badRequest("GitHub sign-in isn't set up yet");
+    const body = codeBody.parse(req.body);
+
+    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code: body.code, redirect_uri: body.redirectUri }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const tokens = (await tokenRes.json().catch(() => ({}))) as { access_token?: string; error?: string };
+    if (!tokens.access_token) {
+      req.log.warn({ status: tokenRes.status, error: tokens.error }, "GitHub token exchange failed");
+      throw badRequest("GitHub sign-in failed. Please try again.");
     }
-    await prisma.membership.upsert({
-      where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
-      create: { tenantId: tenant.id, userId: user.id, role: "STUDENT" },
-      update: {},
+    const gh = (path: string) =>
+      fetch(`https://api.github.com${path}`, {
+        headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "Elevate" },
+        signal: AbortSignal.timeout(10_000),
+      }).then((r) => (r.ok ? r.json() : null));
+    const [profile, emails] = (await Promise.all([gh("/user"), gh("/user/emails")])) as [
+      { id?: number; login?: string; name?: string | null; avatar_url?: string; html_url?: string } | null,
+      { email: string; primary: boolean; verified: boolean }[] | null,
+    ];
+    if (!profile?.id) throw badRequest("GitHub sign-in failed. Please try again.");
+    const email = emails?.find((e) => e.primary && e.verified)?.email ?? emails?.find((e) => e.verified)?.email;
+    if (!email) throw badRequest("Your GitHub account needs a verified email address");
+    const user = await socialUser(tenant, {
+      field: "githubId", id: String(profile.id), email, name: profile.name || profile.login, avatarUrl: profile.avatar_url, githubUrl: profile.html_url,
     });
     return signIn(user, tenant);
   });

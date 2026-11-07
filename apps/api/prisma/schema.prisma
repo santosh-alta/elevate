@@ -78,6 +78,8 @@ model User {
   isPlatformAdmin Boolean  @default(false)
   /// Google account id ("sub") once the user has signed in with Google
   googleSub       String?  @unique
+  /// GitHub account id once the user has signed in with GitHub
+  githubId        String?  @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
