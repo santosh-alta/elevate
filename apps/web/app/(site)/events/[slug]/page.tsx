@@ -197,6 +197,8 @@ export default async function EventPage({ params, searchParams }: Params) {
               icon={<Users className="h-4 w-4" />}
               {...(outcomeLine
                 ? { label: "Participation", value: outcomeLine }
+                : ended
+                ? { label: "Status", value: event.status === "CANCELLED" ? "Cancelled" : "Completed" }
                 : {
                     label: isTeamEvent && event.config?.maxTeamSize ? `Teams of ${[event.config.minTeamSize, event.config.maxTeamSize].filter(Boolean).join("–")}` : "Seats",
                     value: event.capacity ? `${regs ?? 0} / ${event.capacity} registered` : `${regs ?? 0} registered`,
