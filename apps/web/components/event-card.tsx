@@ -4,24 +4,58 @@ import { eventCampuses, eventCount, eventLabel, fmtRange, humanize } from "@/lib
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge } from "./ui/badge";
 
-/** Event cover image, or a brand-coloured placeholder (optionally with the brand icon as a watermark). */
+/** Short poster date in India time, e.g. "11–12 Apr 2026" or "30 Apr – 2 May 2026". */
+function posterDate(startsAt: string, endsAt: string): string {
+  const tz = "Asia/Kolkata";
+  const a = new Date(startsAt), b = new Date(endsAt);
+  const part = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-IN", { timeZone: tz, ...o });
+  const sameDay = part(a, { dateStyle: "short" }) === part(b, { dateStyle: "short" });
+  if (sameDay) return part(a, { day: "numeric", month: "short", year: "numeric" });
+  if (part(a, { month: "short", year: "numeric" }) === part(b, { month: "short", year: "numeric" })) {
+    return `${part(a, { day: "numeric" })}–${part(b, { day: "numeric", month: "short", year: "numeric" })}`;
+  }
+  return `${part(a, { day: "numeric", month: "short" })} – ${part(b, { day: "numeric", month: "short", year: "numeric" })}`;
+}
+
+/**
+ * Event cover image; without one, a generated brand poster: event type, title, who organised it and when,
+ * on the brand gradient (with the brand mark as a watermark when given). Text scales with the poster's width.
+ */
 export function EventCover({ event, className = "h-40", iconUrl, showLabel = true }: { event: ElevateEvent; className?: string; iconUrl?: string; showLabel?: boolean }) {
   if (event.coverImageUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={event.coverImageUrl} alt="" className={`${className} w-full object-cover`} />;
   }
+  const campuses = eventCampuses(event);
+  const where = event.scope === "CENTRAL"
+    ? "Central (HQ)"
+    : campuses.map((c) => (c.city ? `${c.code || c.name} · ${c.city}` : c.code || c.name)).join(" + ") || "Campus event";
   return (
-    <div className={`${className} relative w-full overflow-hidden bg-hero-bg`}>
+    <div className={`${className} relative w-full overflow-hidden bg-hero-bg text-hero-fg [container-type:inline-size]`}>
       <div
         className="absolute inset-0"
-        style={{ backgroundImage: "radial-gradient(70% 90% at 100% 0%, rgb(var(--gradient-from) / 0.55), transparent 65%), radial-gradient(60% 80% at 0% 100%, rgb(var(--gradient-to) / 0.4), transparent 60%)" }}
+        style={{ backgroundImage: "radial-gradient(70% 90% at 100% 0%, rgb(var(--gradient-from) / 0.6), transparent 65%), radial-gradient(60% 80% at 0% 100%, rgb(var(--gradient-to) / 0.45), transparent 60%)" }}
       />
       {iconUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={iconUrl} alt="" aria-hidden className="absolute -right-[6%] top-1/2 h-[120%] w-auto -translate-y-1/2 opacity-[0.14]" />
       )}
+      {showLabel && (
+        <div className="absolute inset-0 flex flex-col justify-between p-[6cqw]">
+          <span className="w-fit rounded-full bg-hero-fg/10 px-[2.5cqw] py-[0.8cqw] text-[clamp(9px,2.6cqw,14px)] font-semibold uppercase tracking-[0.18em] ring-1 ring-inset ring-hero-fg/25">
+            {eventLabel(event)}
+          </span>
+          <div className="space-y-[2cqw]">
+            <p className="line-clamp-3 max-w-[85%] font-heading text-[clamp(16px,7.5cqw,44px)] font-bold leading-[1.05] tracking-tight">{event.title}</p>
+            <p className="flex flex-wrap items-center gap-x-[2.5cqw] gap-y-1 text-[clamp(10px,2.8cqw,16px)] font-medium text-hero-fg/85">
+              <span className="text-hero-accent">{where}</span>
+              <span aria-hidden>•</span>
+              <span>{posterDate(event.startsAt, event.endsAt)}</span>
+            </p>
+          </div>
+        </div>
+      )}
       <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" />
-      {showLabel && <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-hero-fg">{eventLabel(event)}</span>}
     </div>
   );
 }
@@ -39,7 +73,7 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
       href={href ?? `/events/${event.slug}`}
       className="group flex flex-col overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <EventCover event={event} showLabel={false} />
+      <EventCover event={event} className="aspect-[16/9] h-auto" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap gap-1.5">
           <StatusBadge status={event.status} />
