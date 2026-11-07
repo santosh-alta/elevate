@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Globe, Linkedin, Mail, Phone } from "lucide-react";
 import { apiGet } from "@/lib/api";
-import { fmtDate, humanize, typeLabel } from "@/lib/format";
+import { eventLabel, fmtDate, humanize } from "@/lib/format";
 import type { Guest, GuestProfile } from "@/lib/types";
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Field, Input, LinkButton, StatusBadge, Table, Td, Textarea, Th } from "@/components/ui";
 import { ApiForm } from "@/components/client/api-form";
@@ -50,7 +50,7 @@ export default async function GuestProfilePage({ params }: { params: Promise<{ i
                   <tr key={a.id}>
                     <Td>
                       {a.event ? <Link href={`/admin/events/${a.event.id}?tab=guests&guest=${a.id}`} className="font-medium hover:text-primary">{a.event.title}</Link> : "—"}
-                      {a.event && <span className="block text-xs text-muted">{fmtDate(a.event.startsAt)} · {typeLabel(a.event.type)}</span>}
+                      {a.event && <span className="block text-xs text-muted">{fmtDate(a.event.startsAt)} · {eventLabel(a.event)}</span>}
                     </Td>
                     <Td>{humanize(a.role ?? "SPEAKER")}</Td>
                     <Td className="max-w-xs truncate text-sm">{a.talkTitle ?? "—"}</Td>

@@ -5,7 +5,7 @@ export const EVENT_TYPES = [
   "HACKATHON", "SEMINAR", "WORKSHOP", "GUEST_LECTURE", "COMPETITION",
   "BOOTCAMP", "WEBINAR", "CULTURAL", "ENTREPRENEURSHIP", "STARTUP_PITCH", "CONFERENCE",
   "PANEL_DISCUSSION", "MEETUP", "CAREER_FAIR", "INDUSTRY_VISIT", "ORIENTATION", "ALUMNI_MEET",
-  "SPORTS", "TECH_FEST", "OTHER",
+  "SPORTS", "TECH_FEST", "INDUSTRY_SEMINAR", "CODING_CONTEST", "QUIZ", "OTHER",
 ] as const;
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -14,7 +14,8 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   ENTREPRENEURSHIP: "Entrepreneurship", STARTUP_PITCH: "Startup pitch", CONFERENCE: "Conference",
   PANEL_DISCUSSION: "Panel discussion", MEETUP: "Meetup", CAREER_FAIR: "Career fair",
   INDUSTRY_VISIT: "Industry visit", ORIENTATION: "Orientation", ALUMNI_MEET: "Alumni meet",
-  SPORTS: "Sports", TECH_FEST: "Tech fest", OTHER: "Other",
+  SPORTS: "Sports", TECH_FEST: "Tech fest", INDUSTRY_SEMINAR: "Industry seminar", CODING_CONTEST: "Coding contest",
+  QUIZ: "Quiz", OTHER: "Other",
 };
 
 export const GUEST_ROLES = ["SPEAKER", "CHIEF_GUEST", "PANELIST", "MODERATOR", "JUDGE", "MENTOR", "INVESTOR"] as const;
@@ -85,6 +86,9 @@ export const DEFAULT_MODULES: Record<EventType, EventModules> = {
   ALUMNI_MEET: { ...BASE_MODULES, guests: true, budget: true },
   SPORTS: { ...BASE_MODULES, teams: true, budget: true, sponsors: true },
   TECH_FEST: { ...BASE_MODULES, budget: true, sponsors: true, guests: true },
+  INDUSTRY_SEMINAR: { ...BASE_MODULES, guests: true, budget: true, sponsors: true },
+  CODING_CONTEST: { ...BASE_MODULES, judging: true, submissions: true },
+  QUIZ: { ...BASE_MODULES, teams: true, judging: true },
   OTHER: { ...BASE_MODULES },
 };
 
@@ -171,6 +175,18 @@ const ENTREPRENEURSHIP: ChecklistItem[] = [
   ...POST_COMMON,
 ];
 
+const CONTEST: ChecklistItem[] = [
+  { phase: "PRE", title: "Set questions / problems and difficulty", dueOffsetDays: -14 },
+  { phase: "PRE", title: "Write rules and scoring on the event page", dueOffsetDays: -12 },
+  { phase: "PRE", title: "Confirm platform / venue and prizes", dueOffsetDays: -10 },
+  { phase: "PRE", title: "Announce and open registrations", dueOffsetDays: -10 },
+  { phase: "PRE", title: "Dry run with a test participant", dueOffsetDays: -2 },
+  { phase: "DURING", title: "Attendance check-in", dueOffsetDays: 0 },
+  { phase: "DURING", title: "Run rounds and record scores", dueOffsetDays: 0 },
+  { phase: "DURING", title: "Announce results", dueOffsetDays: 0 },
+  ...POST_COMMON,
+];
+
 export const DEFAULT_CHECKLISTS: Record<EventType, ChecklistItem[]> = {
   HACKATHON: HACKATHON,
   COMPETITION: HACKATHON,
@@ -191,6 +207,9 @@ export const DEFAULT_CHECKLISTS: Record<EventType, ChecklistItem[]> = {
   ALUMNI_MEET: GUEST_EVENT,
   SPORTS: GENERIC,
   TECH_FEST: ENTREPRENEURSHIP,
+  INDUSTRY_SEMINAR: GUEST_EVENT,
+  CODING_CONTEST: CONTEST,
+  QUIZ: CONTEST,
   OTHER: GENERIC,
 };
 
@@ -335,6 +354,8 @@ export const createEventSchema = z.object({
   modules: z.record(z.boolean()).optional(),
   config: z.record(z.unknown()).optional(),
   parentEventId: z.string().optional(),
+  categoryId: z.string().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(15).optional(),
   pageSections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string(), icon: z.string().optional() })).optional(),
   feeAmount: z.number().int().min(0).optional(),
   currency: z.string().length(3).default("INR"),
@@ -449,7 +470,99 @@ export const PAGE_SECTION_TEMPLATES: Record<string, { title: string; html: strin
   COMPETITION: [
     { title: "Eligibility", html: "" }, { title: "Rules", html: "" }, { title: "Prizes", html: "" },
   ],
+  INDUSTRY_SEMINAR: [
+    { title: "About the speaker", html: "" }, { title: "What you'll learn", html: "<ul><li>…</li></ul>" }, { title: "Agenda", html: "" },
+  ],
+  CODING_CONTEST: [
+    { title: "Rules", html: "<ol><li>Individual participation.</li><li>Any language allowed.</li></ol>" },
+    { title: "Scoring", html: "" }, { title: "Prizes", html: "" },
+  ],
+  QUIZ: [{ title: "Format and rounds", html: "" }, { title: "Rules", html: "" }, { title: "Prizes", html: "" }],
+  WORKSHOP: [{ title: "What you'll learn", html: "" }, { title: "Prerequisites", html: "" }, { title: "Agenda", html: "" }],
+  SEMINAR: [{ title: "About the speaker", html: "" }, { title: "Agenda", html: "" }],
   TECH_FEST: [
     { title: "Highlights", html: "" }, { title: "Schedule", html: "" }, { title: "Prizes", html: "" },
   ],
 };
+
+// ───────── Event families (how the type picker and filters group event types) ─────────
+
+export const EVENT_FAMILY_KEYS = ["TALKS", "LEARNING", "COMPETITIONS", "COMMUNITY", "FESTS"] as const;
+export type EventFamily = (typeof EVENT_FAMILY_KEYS)[number];
+
+export interface EventFamilyInfo {
+  key: EventFamily;
+  label: string;
+  description: string;
+  /** lucide icon name */
+  icon: string;
+  types: EventType[];
+}
+
+export const EVENT_FAMILIES: EventFamilyInfo[] = [
+  {
+    key: "TALKS", label: "Talks & sessions", icon: "Mic",
+    description: "Someone comes and speaks: seminars, guest lectures, panels, webinars, conferences",
+    types: ["SEMINAR", "INDUSTRY_SEMINAR", "GUEST_LECTURE", "PANEL_DISCUSSION", "WEBINAR", "CONFERENCE"],
+  },
+  {
+    key: "LEARNING", label: "Hands-on learning", icon: "Wrench",
+    description: "Participants learn by doing: workshops, bootcamps, industry visits",
+    types: ["WORKSHOP", "BOOTCAMP", "INDUSTRY_VISIT"],
+  },
+  {
+    key: "COMPETITIONS", label: "Competitions", icon: "Trophy",
+    description: "Teams or individuals compete and are judged: hackathons, contests, pitches, quizzes, sports",
+    types: ["HACKATHON", "CODING_CONTEST", "COMPETITION", "STARTUP_PITCH", "QUIZ", "SPORTS"],
+  },
+  {
+    key: "COMMUNITY", label: "Community & career", icon: "Users",
+    description: "Meet people and build careers: entrepreneurship meets, meetups, career fairs, alumni meets, orientation",
+    types: ["ENTREPRENEURSHIP", "MEETUP", "CAREER_FAIR", "ALUMNI_MEET", "ORIENTATION"],
+  },
+  {
+    key: "FESTS", label: "Fests", icon: "PartyPopper",
+    description: "Big events that hold other events inside them: tech fests, cultural fests",
+    types: ["TECH_FEST", "CULTURAL", "OTHER"],
+  },
+];
+
+const FAMILY_BY_TYPE = new Map<EventType, EventFamily>(EVENT_FAMILIES.flatMap((f) => f.types.map((t) => [t, f.key] as const)));
+
+/** The family an event type belongs to. */
+export function familyOf(type: EventType): EventFamily {
+  return FAMILY_BY_TYPE.get(type) ?? "FESTS";
+}
+
+/** One-line hint per type for the type picker. */
+export const EVENT_TYPE_HINTS: Partial<Record<EventType, string>> = {
+  SEMINAR: "A talk on a topic, one or more speakers",
+  INDUSTRY_SEMINAR: "Industry expert talks about real-world practice",
+  GUEST_LECTURE: "A guest teaches a class-style session",
+  PANEL_DISCUSSION: "Several guests discuss with a moderator",
+  WEBINAR: "Online talk with a meeting link",
+  CONFERENCE: "Many talks across one or more days",
+  WORKSHOP: "Hands-on session with a trainer",
+  BOOTCAMP: "Multi-day intensive learning",
+  INDUSTRY_VISIT: "Students visit a company or site",
+  HACKATHON: "Teams build projects, judged in rounds",
+  CODING_CONTEST: "Individual coding problems, scored",
+  COMPETITION: "Any judged competition",
+  STARTUP_PITCH: "Founders pitch to judges or investors",
+  QUIZ: "Quiz rounds, individual or teams",
+  SPORTS: "Matches and tournaments",
+  ENTREPRENEURSHIP: "Founders, investors and startup sessions",
+  MEETUP: "Informal community gathering",
+  CAREER_FAIR: "Companies meet students for jobs/internships",
+  ALUMNI_MEET: "Alumni reconnect with the institution",
+  ORIENTATION: "Welcome session for new students",
+  TECH_FEST: "Umbrella event with many sub-events",
+  CULTURAL: "Cultural fest or performances",
+  OTHER: "Anything else",
+};
+
+/** Tags offered in the tag picker (brands can type their own too). */
+export const SUGGESTED_TAGS = [
+  "AI", "Web development", "Data science", "Cybersecurity", "Cloud", "Product", "Design", "Startups",
+  "Placement", "Internship", "Industry", "Alumni", "First-year", "Women in tech", "Open source", "Online", "Free",
+] as const;

@@ -23,15 +23,16 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  domains        TenantDomain[]
-  campuses       Campus[]
-  memberships    Membership[]
-  events         Event[]
-  certTemplates  CertificateTemplate[]
-  taskTemplates  TaskTemplate[]
-  guestProfiles  GuestProfile[]
-  notifications  Notification[]
-  judgingPresets JudgingPreset[]
+  domains         TenantDomain[]
+  campuses        Campus[]
+  memberships     Membership[]
+  events          Event[]
+  certTemplates   CertificateTemplate[]
+  taskTemplates   TaskTemplate[]
+  guestProfiles   GuestProfile[]
+  notifications   Notification[]
+  judgingPresets  JudgingPreset[]
+  eventCategories EventCategory[]
 }
 
 model TenantDomain {
@@ -158,6 +159,9 @@ enum EventType {
   ALUMNI_MEET
   SPORTS
   TECH_FEST
+  INDUSTRY_SEMINAR
+  CODING_CONTEST
+  QUIZ
   OTHER
 }
 
@@ -223,6 +227,10 @@ model Event {
   clonedFromId         String?
   /// Fests: a sub-event points at its umbrella event (e.g. a hackathon inside a tech fest)
   parentEventId        String?
+  /// Brand's own event type (e.g. "Founder Friday"); behaves like `type`
+  categoryId           String?
+  /// Free tags for filtering and reports, e.g. ["AI", "Placement"]
+  tags                 String[]    @default([])
   /// Extra page sections written in the rich-text editor: [{ id, title, html, icon? }] (rules, prizes, timeline, eligibility...)
   pageSections         Json        @default("[]")
   /// Registration fee in the smallest currency unit (paise). 0 or null = free
@@ -267,8 +275,10 @@ model Event {
   payments          Payment[]
   coupons           Coupon[]
   reviews           JudgeReview[]
+  category          EventCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, slug])
+  @@index([tags], type: Gin)
   @@index([tenantId, status])
   @@index([tenantId, startsAt])
 }
@@ -1003,4 +1013,31 @@ model Notification {
 
   @@index([status, scheduledFor])
   @@index([userId, channel, createdAt])
+}
+
+/// A brand's own event type, e.g. "Founder Friday" (behaves like baseType: same modules, checklist and page sections
+/// unless overridden). Shown inside its family in the type picker.
+model EventCategory {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String
+  /// One of EVENT_FAMILIES keys in @elevate/shared: TALKS, LEARNING, COMPETITIONS, COMMUNITY, FESTS
+  family      String
+  baseType    EventType
+  description String?
+  /// lucide icon name
+  icon        String?
+  /// Overrides of the base type's default modules, e.g. { "judging": true }
+  modules     Json?
+  /// Tags added to new events of this type
+  defaultTags String[]  @default([])
+  sortOrder   Int       @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events Event[]
+
+  @@unique([tenantId, name])
 }

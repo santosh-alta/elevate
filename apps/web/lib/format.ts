@@ -1,4 +1,4 @@
-import { EVENT_TYPE_LABELS, formatMoney, type EventType } from "@elevate/shared";
+import { EVENT_FAMILIES, EVENT_TYPE_LABELS, familyOf, formatMoney, type EventFamily, type EventType } from "@elevate/shared";
 import type { Campus, ElevateEvent, Media } from "./types";
 
 const TZ = "Asia/Kolkata";
@@ -51,14 +51,26 @@ export function typeLabel(t: string): string {
   return EVENT_TYPE_LABELS[t as EventType] ?? humanize(t);
 }
 
-/** Event type groups for pickers. */
-export const EVENT_TYPE_GROUPS: { label: string; types: EventType[] }[] = [
-  { label: "Learning", types: ["SEMINAR", "WORKSHOP", "GUEST_LECTURE", "BOOTCAMP", "WEBINAR"] },
-  { label: "Competitions", types: ["HACKATHON", "COMPETITION", "STARTUP_PITCH", "SPORTS"] },
-  { label: "Community", types: ["ENTREPRENEURSHIP", "CONFERENCE", "PANEL_DISCUSSION", "MEETUP", "ALUMNI_MEET", "ORIENTATION", "CULTURAL", "TECH_FEST"] },
-  { label: "Career", types: ["CAREER_FAIR", "INDUSTRY_VISIT"] },
-  { label: "Other", types: ["OTHER"] },
-];
+/** Event type groups for pickers and legends: the shared event families. */
+export const EVENT_TYPE_GROUPS: { key: EventFamily; label: string; types: EventType[] }[] = EVENT_FAMILIES.map((f) => ({ key: f.key, label: f.label, types: f.types }));
+
+/** Display label for an event: the brand's own type name, else the built-in type label. */
+export function eventLabel(e: Pick<ElevateEvent, "type"> & { category?: { name: string } | null }): string {
+  return e.category?.name ?? typeLabel(e.type);
+}
+
+/** Family of an event (from the payload, or computed from its type). */
+export function eventFamily(e: Pick<ElevateEvent, "type"> & { family?: EventFamily }): EventFamily {
+  return e.family ?? familyOf(e.type);
+}
+
+export function familyLabel(f: string): string {
+  return EVENT_FAMILIES.find((x) => x.key === f)?.label ?? humanize(f);
+}
+
+export function isFamily(f: unknown): f is EventFamily {
+  return typeof f === "string" && EVENT_FAMILIES.some((x) => x.key === f);
+}
 
 /** Badge colour per event type (calendar, lists). */
 export function typeColor(t: string): string {

@@ -10,7 +10,7 @@ import { STATUS_COLORS } from "../../src/theme";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Loading, Muted, Row, Screen, Title, formatDate, humanize, useFocusData } from "../../src/ui";
 
 const ACTIVE = ["REGISTERED", "APPROVED", "WAITLISTED", "CHECKED_IN", "PENDING_PAYMENT"];
-const TEAM_TYPES = ["HACKATHON", "COMPETITION", "STARTUP_PITCH"];
+const TEAM_TYPES = ["HACKATHON", "COMPETITION", "STARTUP_PITCH", "QUIZ"];
 
 async function openReceipt(paymentId: string) {
   try {

@@ -2,13 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { DEFAULT_MODULES, EVENT_MODES, EVENT_TYPE_LABELS, type EventModules, type EventType } from "@elevate/shared";
+import { EVENT_MODES, SUGGESTED_TAGS, type EventModules } from "@elevate/shared";
 import { callApi } from "@/components/client/api";
 import { Button, Card, CardBody, CardHeader, Field, FieldGroup, Input, Select, Textarea } from "@/components/ui";
-import { EVENT_TYPE_GROUPS, humanize, paiseToRupees, rupeesToPaise, toLocalInput } from "@/lib/format";
+import { humanize, paiseToRupees, rupeesToPaise, toLocalInput } from "@/lib/format";
 import { UploadField } from "@/components/client/uploader";
 import { RichTextEditor } from "@/components/client/rich-text-editor";
-import type { Campus, ElevateEvent, Track } from "@/lib/types";
+import { EventTypePicker, effectiveModules, type TypeChoice } from "@/components/admin/event-type-picker";
+import { MAX_TAGS, TagsInput, mergeTags } from "@/components/admin/tags-input";
+import { builtInFamilies } from "@/lib/families";
+import type { Campus, ElevateEvent, EventCategory, EventTypesFamily, Track } from "@/lib/types";
 
 /** Keep track ids stable across edits (problem statements and teams point at them). */
 function tracksFromLines(text: string, prev: Track[]): Track[] {
@@ -37,12 +40,27 @@ const MODULE_HELP: Record<keyof EventModules, string> = {
   sponsors: "Show sponsors & partners on the page",
 };
 
-export function EventForm({ campuses, event, parents = [] }: { campuses: Campus[]; event?: ElevateEvent; parents?: { id: string; title: string }[] }) {
+export function EventForm({
+  campuses, event, parents = [], families: familiesProp, tagSuggestions = [],
+}: {
+  campuses: Campus[]; event?: ElevateEvent; parents?: { id: string; title: string }[];
+  /** GET /event-types (families with built-in + brand types). Falls back to the shared families. */
+  families?: EventTypesFamily[];
+  /** Tags already used by this brand (GET /tags), most used first. */
+  tagSuggestions?: string[];
+}) {
   const router = useRouter();
-  const [type, setType] = useState<EventType>(event?.type ?? "HACKATHON");
+  const families = familiesProp?.length ? familiesProp : builtInFamilies();
+  const allCategories: EventCategory[] = families.flatMap((f) => f.custom ?? []);
+  const initialCategory: EventCategory | null = event?.category
+    ? allCategories.find((c) => c.id === event.category!.id) ?? { id: event.category.id, name: event.category.name, icon: event.category.icon, baseType: event.type, family: event.family ?? families.find((f) => f.types.some((t) => t.type === event.type))?.key ?? "FESTS" }
+    : null;
+  const [choice, setChoice] = useState<TypeChoice>({ type: event?.type ?? "HACKATHON", category: initialCategory });
+  const type = choice.type;
+  const [tags, setTags] = useState<string[]>(event?.tags ?? []);
   const [scope, setScope] = useState(event?.scope ?? "CENTRAL");
   const [mode, setMode] = useState(event?.mode ?? "OFFLINE");
-  const [modules, setModules] = useState<EventModules>({ ...DEFAULT_MODULES[event?.type ?? "HACKATHON"], ...(event?.modules ?? {}) });
+  const [modules, setModules] = useState<EventModules>({ ...effectiveModules(event?.type ?? "HACKATHON", event ? null : initialCategory), ...(event?.modules ?? {}) });
   const initialCampuses = (event?.campuses ?? []).map((c) => ("campus" in c ? c.campus.id : c.id));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +70,14 @@ export function EventForm({ campuses, event, parents = [] }: { campuses: Campus[
   if (event?.parentEventId && !parentOptions.some((p) => p.id === event.parentEventId)) {
     parentOptions.unshift({ id: event.parentEventId, title: event.parentEvent?.title ?? "Current parent event" });
   }
-  const typeHint = isHack ? "Teams, submissions and judging are switched on." : modules.guests ? "Guests, check-in and certificates are switched on." : undefined;
+
+  function chooseType(next: TypeChoice) {
+    const prevCat = choice.category;
+    setChoice(next);
+    if (!event) setModules(effectiveModules(next.type, next.category));
+    else if (next.category?.modules) setModules({ ...modules, ...(next.category.modules as Partial<EventModules>) });
+    if (next.category?.defaultTags?.length && next.category.id !== prevCat?.id) setTags((t) => mergeTags(t, next.category!.defaultTags));
+  }
 
   return (
     <form
@@ -63,7 +88,12 @@ export function EventForm({ campuses, event, parents = [] }: { campuses: Campus[
         const s = (k: string) => (fd.get(k) as string | null)?.trim() || undefined;
         const d = (k: string) => (s(k) ? new Date(s(k)!).toISOString() : undefined);
         const body: Record<string, unknown> = {
-          title: s("title"), tagline: s("tagline"), description: s("description") ?? (event?.description ? "" : undefined), type, scope, mode,
+          title: s("title"), tagline: s("tagline"), description: s("description") ?? (event?.description ? "" : undefined), scope, mode,
+          // The base type is fixed after creation (PATCH doesn't take `type`).
+          ...(event ? {} : { type }),
+          // Brand type: send its id; clearing a previous one sends null.
+          categoryId: choice.category?.id ?? (event?.category || event?.categoryId ? null : undefined),
+          tags: mergeTags(tags),
           campusIds: scope === "CAMPUS" ? fd.getAll("campusIds") : [],
           venue: s("venue"), meetingUrl: s("meetingUrl"), coverImageUrl: s("coverImageUrl"),
           startsAt: d("startsAt"), endsAt: d("endsAt"),
@@ -120,23 +150,30 @@ export function EventForm({ campuses, event, parents = [] }: { campuses: Campus[
       }}
     >
       <Card>
+        <CardHeader title="Event type" description="Pick the kind of event first. It sets up the checklist, page template, certificates and modules." />
+        <CardBody>
+          <EventTypePicker families={families} value={choice} onChange={chooseType} lockedType={event?.type} />
+        </CardBody>
+      </Card>
+
+      <Card>
         <CardHeader title="Basics" />
         <CardBody className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" className="sm:col-span-2"><Input name="title" required minLength={3} defaultValue={event?.title} placeholder="e.g. Build for Bharat Hackathon 2026" /></Field>
           <Field label="Tagline" className="sm:col-span-2"><Input name="tagline" defaultValue={event?.tagline ?? ""} placeholder="One line that sells it" /></Field>
-          <Field label="Event type" hint={event ? "Type can't change after creation. Duplicate the event instead." : typeHint}>
-            <Select value={type} disabled={!!event} onChange={(e) => { const t = e.target.value as EventType; setType(t); setModules({ ...DEFAULT_MODULES[t] }); }}>
-              {EVENT_TYPE_GROUPS.map((g) => (
-                <optgroup key={g.label} label={g.label}>
-                  {g.types.map((t) => <option key={t} value={t}>{EVENT_TYPE_LABELS[t]}</option>)}
-                </optgroup>
-              ))}
-            </Select>
-          </Field>
-          <FieldGroup label="Cover image" hint="Wide image, 1600×600 or larger"><UploadField name="coverImageUrl" defaultValue={event?.coverImageUrl} fields={{ eventId: event?.id }} /></FieldGroup>
+          <FieldGroup label="Cover image" className="sm:col-span-2" hint="Wide image, 1600×600 or larger"><UploadField name="coverImageUrl" defaultValue={event?.coverImageUrl} fields={{ eventId: event?.id }} /></FieldGroup>
           <FieldGroup label="Description" className="sm:col-span-2" hint="Shown in the About section of the public page. Add rules, prizes and timeline as page sections in the Event page tab.">
             <RichTextEditor name="description" defaultValue={event?.description} eventId={event?.id} placeholder="What is this event about? Who is it for?" />
           </FieldGroup>
+          <div className="sm:col-span-2">
+            <TagsInput
+              value={tags}
+              onChange={setTags}
+              max={MAX_TAGS}
+              suggestions={mergeTags(tagSuggestions, SUGGESTED_TAGS).slice(0, 60)}
+              hint="Topics and audiences, e.g. AI, Placement, First-year. Students filter events by these."
+            />
+          </div>
           {type !== "TECH_FEST" && (
             <Field label="Part of a fest" className="sm:col-span-2" hint="Sub-events show on the fest's page with their own register button.">
               <Select name="parentEventId" defaultValue={event?.parentEventId ?? ""}>
@@ -217,7 +254,7 @@ export function EventForm({ campuses, event, parents = [] }: { campuses: Campus[
       </Card>
 
       <Card>
-        <CardHeader title="Modules" description="Defaults depend on event type. Switch on whatever this event needs." />
+        <CardHeader title="Modules" description="Defaults come from the event type you picked above. Switch on whatever this event needs." />
         <CardBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(Object.keys(MODULE_HELP) as (keyof EventModules)[]).map((k) => (
             <label key={k} className="flex cursor-pointer gap-3 rounded-lg border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5">

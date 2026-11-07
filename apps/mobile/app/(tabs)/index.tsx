@@ -1,15 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { Api, EVENT_TYPE_LABELS, eventTypeLabel } from "../../src/api";
+import { Api, EVENT_FAMILIES, type EventFamily } from "../../src/api";
 import { EventCard } from "../../src/events";
 import { useSession } from "../../src/session";
 import { STATUS_COLORS } from "../../src/theme";
 import { EmptyState, ErrorBanner, Loading, Screen, Title, useFocusData } from "../../src/ui";
 
-const TYPE_ORDER = Object.keys(EVENT_TYPE_LABELS);
+const FAMILY_FILTERS: { key: EventFamily | null; label: string }[] = [{ key: null, label: "All" }, ...EVENT_FAMILIES];
 
 /** Bell with unread count; refreshes whenever the Events tab gains focus. */
 function NotificationBell() {
@@ -71,19 +71,11 @@ function NotificationBell() {
 
 export default function EventsScreen() {
   const { theme, user, tenant } = useSession();
-  const [filter, setFilter] = useState<string>("ALL");
-  const { data, error, loading, refreshing, refresh } = useFocusData(() => Api.events("upcoming=1"));
-
-  // Only offer filters for the event types that actually have events.
-  const filters = useMemo(() => {
-    const present = new Set((data ?? []).map((e) => e.type));
-    return ["ALL", ...TYPE_ORDER.filter((t) => present.has(t)), ...[...present].filter((t) => !TYPE_ORDER.includes(t))];
-  }, [data]);
-
-  const events = useMemo(
-    () => (data ?? []).filter((e) => filter === "ALL" || e.type === filter),
-    [data, filter],
-  );
+  const [family, setFamily] = useState<EventFamily | null>(null);
+  // The family filter runs on the server (GET /events?family=); reloads whenever it changes.
+  const { data, error, loading, refreshing, refresh } = useFocusData(() => Api.eventsByFamily(family), [family]);
+  const events = data ?? [];
+  const familyLabel = EVENT_FAMILIES.find((f) => f.key === family)?.label;
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
@@ -96,39 +88,39 @@ export default function EventsScreen() {
         <NotificationBell />
       </View>
 
-      {filters.length > 2 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8 }}>
-          {filters.map((f) => {
-            const active = f === filter;
-            return (
-              <Pressable
-                key={f}
-                onPress={() => setFilter(f)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderRadius: 999,
-                  backgroundColor: active ? theme.colors.primary : theme.colors.card,
-                  borderWidth: 1,
-                  borderColor: active ? theme.colors.primary : theme.colors.border,
-                }}
-              >
-                <Text style={{ color: active ? theme.colors.primaryFg : theme.colors.fg, fontWeight: "600" }}>
-                  {f === "ALL" ? "All" : eventTypeLabel(f)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      ) : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
+        {FAMILY_FILTERS.map((f) => {
+          const active = f.key === family;
+          return (
+            <Pressable
+              key={f.key ?? "ALL"}
+              onPress={() => setFamily(f.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: active ? theme.colors.primary : theme.colors.card,
+                borderWidth: 1,
+                borderColor: active ? theme.colors.primary : theme.colors.border,
+              }}
+            >
+              <Text style={{ color: active ? theme.colors.primaryFg : theme.colors.fg, fontWeight: "600" }}>{f.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
       {loading ? (
         <Loading />
       ) : events.length === 0 ? (
-        <EmptyState icon="calendar-outline" title="No events yet" message="New hackathons, seminars, talks and workshops will show up here." />
+        familyLabel ? (
+          <EmptyState icon="calendar-outline" title={`No upcoming ${familyLabel.toLowerCase()}`} message="Try another category, or check back soon." />
+        ) : (
+          <EmptyState icon="calendar-outline" title="No events yet" message="New hackathons, seminars, talks and workshops will show up here." />
+        )
       ) : (
         events.map((e) => <EventCard key={e.id} event={e} onPress={() => router.push(`/event/${e.id}`)} />)
       )}

@@ -6,6 +6,8 @@ import { requireTenant } from "../plugins/tenant";
 import { findEvent, isPlatformAdmin, requireEventManager, requireStaff, requireUser, roleOf } from "../lib/permissions";
 import { badRequest, conflict } from "../lib/errors";
 import { buildOutcome } from "../lib/outcome";
+import { EVENT_FAMILIES, familyOf, type EventType } from "@elevate/shared";
+import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 
 export function reportRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>("/events/:id/feedback", async (req, reply) => {
@@ -60,13 +62,16 @@ export function reportRoutes(app: FastifyInstance) {
       ...(q.type && { type: q.type as never }),
       ...((q.from || q.to) && { startsAt: { ...(q.from && { gte: q.from }), ...(q.to && { lte: q.to }) } }),
     };
-    const eventIds = (await prisma.event.findMany({ where, select: { id: true } })).map((e) => e.id);
+    const eventRows = await prisma.event.findMany({ where, select: { id: true, type: true, tags: true } });
+    const eventIds = eventRows.map((e) => e.id);
     const inEvents = { eventId: { in: eventIds } };
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [byStatus, byType, regTotal, regMonth, checkedIn, certs, liPosted, liTotal, upcoming, live, recentCompleted, overdue, socialPending] =
+    const [regsByEvent, attendedByEvent, byStatus, byType, regTotal, regMonth, checkedIn, certs, liPosted, liTotal, upcoming, live, recentCompleted, overdue, socialPending] =
       await Promise.all([
+        prisma.registration.groupBy({ by: ["eventId"], where: { ...inEvents, status: { notIn: ["CANCELLED", "REJECTED"] } }, _count: true }),
+        prisma.registration.groupBy({ by: ["eventId"], where: { ...inEvents, status: "CHECKED_IN" }, _count: true }),
         prisma.event.groupBy({ by: ["status"], where, _count: true }),
         prisma.event.groupBy({ by: ["type"], where, _count: true }),
         prisma.registration.count({ where: { ...inEvents, status: { notIn: ["CANCELLED", "REJECTED"] } } }),
@@ -79,14 +84,21 @@ export function reportRoutes(app: FastifyInstance) {
           where: { ...where, startsAt: { gte: now }, status: { notIn: ["CANCELLED", "ARCHIVED"] } },
           orderBy: { startsAt: "asc" },
           take: 10,
-          include: { _count: { select: { registrations: true } }, campuses: { include: { campus: { select: { name: true } } } } },
+          include: {
+            _count: { select: { registrations: true } },
+            campuses: { include: { campus: { select: { name: true } } } },
+            category: CATEGORY_SELECT,
+          },
         }),
-        prisma.event.findMany({ where: { ...where, status: { in: ["LIVE", "JUDGING"] } }, include: { _count: { select: { registrations: true } } } }),
+        prisma.event.findMany({
+          where: { ...where, status: { in: ["LIVE", "JUDGING"] } },
+          include: { _count: { select: { registrations: true } }, category: CATEGORY_SELECT },
+        }),
         prisma.event.findMany({
           where: { ...where, status: "COMPLETED" },
           orderBy: { endsAt: "desc" },
           take: 10,
-          include: { _count: { select: { registrations: true, certificates: true, linkedinPosts: true } } },
+          include: { _count: { select: { registrations: true, certificates: true, linkedinPosts: true } }, category: CATEGORY_SELECT },
         }),
         prisma.event.findMany({
           where: { ...where, status: { notIn: ["CANCELLED", "ARCHIVED", "DRAFT"] }, tasks: { some: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, dueAt: { lt: now } } } },
@@ -109,6 +121,39 @@ export function reportRoutes(app: FastifyInstance) {
       prisma.registration.count({ where: { eventId: { in: completedIds }, status: "CHECKED_IN" } }),
     ]);
 
+    // Per family and per tag, for the selected period.
+    const regsOf = new Map(regsByEvent.map((r) => [r.eventId, r._count]));
+    const attendedOf = new Map(attendedByEvent.map((r) => [r.eventId, r._count]));
+    const byFamily = EVENT_FAMILIES.map((f) => {
+      const rows = eventRows.filter((e) => familyOf(e.type as EventType) === f.key);
+      return {
+        family: f.key,
+        label: f.label,
+        events: rows.length,
+        registrations: rows.reduce((s, e) => s + (regsOf.get(e.id) ?? 0), 0),
+        attended: rows.reduce((s, e) => s + (attendedOf.get(e.id) ?? 0), 0),
+      };
+    });
+    // Tags are grouped case-insensitively and shown in their most used spelling.
+    const tagStats = new Map<string, { spellings: Map<string, number>; events: number; registrations: number }>();
+    for (const e of eventRows) {
+      for (const tag of new Set(e.tags)) {
+        const key = tag.toLowerCase();
+        const row = tagStats.get(key) ?? { spellings: new Map<string, number>(), events: 0, registrations: 0 };
+        row.spellings.set(tag, (row.spellings.get(tag) ?? 0) + 1);
+        row.events += 1;
+        row.registrations += regsOf.get(e.id) ?? 0;
+        tagStats.set(key, row);
+      }
+    }
+    const byTag = [...tagStats.values()]
+      .map(({ spellings, events, registrations }) => ({
+        tag: [...spellings].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0],
+        events,
+        registrations,
+      }))
+      .sort((a, b) => b.events - a.events || b.registrations - a.registrations || a.tag.localeCompare(b.tag)).slice(0, 15);
+
     return {
       kpis: {
         events: eventIds.length,
@@ -123,9 +168,11 @@ export function reportRoutes(app: FastifyInstance) {
       },
       byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count])),
       byType: Object.fromEntries(byType.map((t) => [t.type, t._count])),
-      upcoming: upcoming.map(({ campuses, ...e }) => ({ ...e, outcome: undefined, campuses: campuses.map((c) => c.campus.name) })),
-      live: live.map((e) => ({ ...e, outcome: undefined })),
-      recentCompleted: recentCompleted.map((e) => ({ ...e, outcome: undefined })),
+      byFamily,
+      byTag,
+      upcoming: upcoming.map(({ campuses, ...e }) => ({ ...e, ...eventMeta(e), outcome: undefined, campuses: campuses.map((c) => c.campus.name) })),
+      live: live.map((e) => ({ ...e, ...eventMeta(e), outcome: undefined })),
+      recentCompleted: recentCompleted.map((e) => ({ ...e, ...eventMeta(e), outcome: undefined })),
       overdue: overdue.map((e) => ({ ...e, overdueTasks: e._count.tasks })),
     };
   });

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { CalendarDays, MapPin, Users, Video } from "lucide-react";
-import { eventCampuses, eventCount, fmtRange, humanize, typeLabel } from "@/lib/format";
+import { eventCampuses, eventCount, eventLabel, fmtRange, humanize } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge } from "./ui/badge";
 
 /** Event cover image, or a brand-coloured placeholder (optionally with the brand icon as a watermark). */
-export function EventCover({ event, className = "h-40", iconUrl }: { event: ElevateEvent; className?: string; iconUrl?: string }) {
+export function EventCover({ event, className = "h-40", iconUrl, showLabel = true }: { event: ElevateEvent; className?: string; iconUrl?: string; showLabel?: boolean }) {
   if (event.coverImageUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={event.coverImageUrl} alt="" className={`${className} w-full object-cover`} />;
@@ -21,7 +21,7 @@ export function EventCover({ event, className = "h-40", iconUrl }: { event: Elev
         <img src={iconUrl} alt="" aria-hidden className="absolute -right-[6%] top-1/2 h-[120%] w-auto -translate-y-1/2 opacity-[0.14]" />
       )}
       <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" />
-      <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-hero-fg">{typeLabel(event.type)}</span>
+      {showLabel && <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-hero-fg">{eventLabel(event)}</span>}
     </div>
   );
 }
@@ -39,16 +39,23 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
       href={href ?? `/events/${event.slug}`}
       className="group flex flex-col overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <EventCover event={event} />
+      <EventCover event={event} showLabel={false} />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap gap-1.5">
           <StatusBadge status={event.status} />
           <ModeBadge mode={event.mode} />
         </div>
         <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-primary">{eventLabel(event)}</p>
           <h3 className="font-heading text-lg font-bold leading-snug tracking-tight group-hover:underline group-hover:decoration-accent group-hover:decoration-2 group-hover:underline-offset-4">{event.title}</h3>
           {event.tagline && <p className="mt-1 line-clamp-2 text-sm text-muted">{event.tagline}</p>}
         </div>
+        {!!event.tags?.length && (
+          <ul className="flex flex-wrap gap-1" aria-label="Tags">
+            {event.tags.slice(0, 3).map((t) => <li key={t} className="rounded-full bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary ring-1 ring-inset ring-primary/15">#{t}</li>)}
+            {event.tags.length > 3 && <li className="px-1 py-0.5 text-[11px] text-muted">+{event.tags.length - 3}</li>}
+          </ul>
+        )}
         <div className="mt-auto space-y-1 text-xs text-muted">
           <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{fmtRange(event.startsAt, event.endsAt)}</p>
           <p className="flex items-center gap-1.5">

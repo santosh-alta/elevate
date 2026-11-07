@@ -9,6 +9,10 @@ Status: **Built** = in the code and tested · **Later** = planned (see roadmap i
 | Feature | Status |
 |---|---|
 | 19 event types: hackathon, seminar, workshop, guest lecture, competition, bootcamp, webinar, cultural, **entrepreneurship, startup pitch, conference, panel discussion, meetup, career fair, industry visit, orientation, alumni meet, sports, tech fest**, other | Built |
+| 5 event families (Talks & sessions, Hands-on learning, Competitions, Community & career, Fests) with a two-step type picker that shows what each type turns on | Built |
+| New types: industry seminar, coding contest, quiz (23 types in all) | Built |
+| Brand's own event types (e.g. "Founder Friday") that behave like a built-in type, with feature overrides and default tags | Built |
+| Tags on events; filter and search by family, type, tag and text on the website, admin and mobile; reports by type and tag | Built |
 | Central or campus-level, multiple campuses, online / offline / hybrid | Built |
 | Venue, meeting link, livestream link, map link, organiser contact | Built |
 | Dates, registration window, capacity, approval required | Built |

@@ -4,8 +4,11 @@ import type { EventStatus, Prisma } from "@prisma/client";
 import {
   DEFAULT_CHECKLISTS,
   DEFAULT_MODULES,
+  EVENT_FAMILIES,
+  EVENT_FAMILY_KEYS,
   EVENT_STATUSES,
   EVENT_TYPES,
+  EVENT_TYPE_LABELS,
   createEventSchema,
 } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
@@ -28,6 +31,7 @@ import { newToken } from "./guests";
 import { eventWinners } from "./hackathon";
 import { sanitizeHtml, sanitizeSections } from "../lib/html";
 import { currentFee, isPaidEvent, paymentResponse, revenueFor } from "../lib/payments";
+import { CATEGORY_SELECT, eventMeta, normalizeTags, parseTagQuery, storedTagSpellings } from "../lib/tags";
 
 const HIDDEN_FROM_PUBLIC: EventStatus[] = ["DRAFT", "PLANNING"];
 const DAY = 24 * 60 * 60 * 1000;
@@ -38,6 +42,8 @@ const DEFAULT_RUBRIC = [
   { name: "Impact", description: "Usefulness and potential real-world impact", maxScore: 10, weight: 1 },
   { name: "Presentation", description: "Clarity of the demo and pitch", maxScore: 10, weight: 1 },
 ];
+
+const createSchema = createEventSchema.extend({ type: z.enum(EVENT_TYPES).optional() });
 
 const updateEventSchema = createEventSchema
   .omit({ type: true })
@@ -69,6 +75,7 @@ const updateEventSchema = createEventSchema
     earlyBirdEndsAt: z.coerce.date().nullable().optional(),
     submissionsOpenAt: z.coerce.date().nullable().optional(),
     submissionsCloseAt: z.coerce.date().nullable().optional(),
+    categoryId: z.string().nullable().optional(),
   });
 
 /** A fest's sub-event must be another event of the same brand, and not create a cycle. */
@@ -101,6 +108,21 @@ export async function checklistFor(tenantId: string, type: (typeof EVENT_TYPES)[
 }
 
 export const COMPETITION_TYPES = ["HACKATHON", "COMPETITION", "STARTUP_PITCH"];
+/** Scored contests: a "Final" round with a single score criterion instead of the hackathon rubric. */
+export const CONTEST_TYPES = ["CODING_CONTEST", "QUIZ"];
+const CONTEST_RUBRIC = [{ name: "Score", description: "Points scored", maxScore: 100, weight: 1 }];
+
+type EventTypeKey = (typeof EVENT_TYPES)[number];
+
+/** Loads a brand event type (EventCategory) and checks it against an explicit `type`. */
+async function resolveCategory(tenantId: string, categoryId: string, type?: EventTypeKey) {
+  const category = await prisma.eventCategory.findFirst({ where: { id: categoryId, tenantId } });
+  if (!category) throw badRequest("Unknown event type");
+  if (type && type !== category.baseType) {
+    throw badRequest(`"${category.name}" events are ${EVENT_TYPE_LABELS[category.baseType]} events; type must be ${category.baseType}`);
+  }
+  return category;
+}
 
 export async function uniqueSlug(tenantId: string, title: string): Promise<string> {
   const base = slugify(title);
@@ -128,6 +150,10 @@ export function eventRoutes(app: FastifyInstance) {
         upcoming: z.coerce.boolean().optional(),
         past: z.coerce.boolean().optional(),
         search: z.string().optional(),
+        q: z.string().trim().optional(),
+        family: z.enum(EVENT_FAMILY_KEYS).optional(),
+        categoryId: z.string().optional(),
+        tag: z.union([z.string(), z.array(z.string())]).optional(),
         parentId: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(200).default(50),
         offset: z.coerce.number().int().min(0).default(0),
@@ -135,14 +161,22 @@ export function eventRoutes(app: FastifyInstance) {
       .parse(req.query);
 
     const staff = isStaff(req);
+    const familyTypes = q.family ? EVENT_FAMILIES.find((f) => f.key === q.family)!.types : null;
+    const tags = await storedTagSpellings(tenant.id, parseTagQuery(q.tag));
+    const and: Prisma.EventWhereInput[] = [];
+    if (q.campusId) and.push({ OR: [{ scope: "CENTRAL" }, { campuses: { some: { campusId: q.campusId } } }] });
+    if (q.q) and.push({ OR: [{ title: { contains: q.q, mode: "insensitive" } }, { tagline: { contains: q.q, mode: "insensitive" } }] });
+    if (familyTypes) and.push({ type: { in: familyTypes } });
     const where: Prisma.EventWhereInput = {
       tenantId: tenant.id,
       ...(q.type && { type: q.type }),
-      ...(q.campusId && { OR: [{ scope: "CENTRAL" }, { campuses: { some: { campusId: q.campusId } } }] }),
+      ...(q.categoryId && { categoryId: q.categoryId }),
+      ...(tags.length && { tags: { hasSome: tags } }),
       ...(q.upcoming && { endsAt: { gte: new Date() } }),
       ...(q.past && { endsAt: { lt: new Date() } }),
       ...(q.search && { title: { contains: q.search, mode: "insensitive" } }),
       ...(q.parentId && { parentEventId: q.parentId }),
+      ...(and.length && { AND: and }),
     };
     if (q.status) {
       if (!staff && HIDDEN_FROM_PUBLIC.includes(q.status)) return [];
@@ -159,6 +193,7 @@ export function eventRoutes(app: FastifyInstance) {
         skip: q.offset,
         include: {
           campuses: { include: { campus: { select: { id: true, name: true, code: true } } } },
+          category: CATEGORY_SELECT,
           _count: { select: { registrations: true, teams: true } },
         },
       }),
@@ -167,6 +202,7 @@ export function eventRoutes(app: FastifyInstance) {
     reply.header("X-Total-Count", String(total));
     return items.map((e) => ({
       ...e,
+      ...eventMeta(e),
       outcome: undefined,
       previewToken: staff ? e.previewToken : undefined,
       campuses: e.campuses.map((c) => ({ campus: c.campus })),
@@ -197,6 +233,7 @@ export function eventRoutes(app: FastifyInstance) {
             },
         sponsors: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] },
         rubric: { orderBy: { sortOrder: "asc" } },
+        category: CATEGORY_SELECT,
         _count: { select: { registrations: true, teams: true } },
       },
     });
@@ -245,7 +282,8 @@ export function eventRoutes(app: FastifyInstance) {
         orderBy: { startsAt: "asc" },
         select: {
           id: true, slug: true, title: true, tagline: true, type: true, startsAt: true, endsAt: true, mode: true, coverImageUrl: true, status: true,
-          venue: true, feeAmount: true, currency: true, feeType: true, _count: { select: { registrations: true } },
+          venue: true, feeAmount: true, currency: true, feeType: true, tags: true, category: CATEGORY_SELECT,
+          _count: { select: { registrations: true } },
         },
       }),
       event.resultsPublishedAt ? eventWinners(event.id) : Promise.resolve([]),
@@ -271,6 +309,7 @@ export function eventRoutes(app: FastifyInstance) {
 
     return {
       ...event,
+      ...eventMeta(event),
       gallery,
       previewToken: manager ? event.previewToken : undefined,
       outcome: manager ? event.outcome : undefined,
@@ -287,7 +326,7 @@ export function eventRoutes(app: FastifyInstance) {
       })),
       rounds,
       parentEvent: parent && (manager || !HIDDEN_FROM_PUBLIC.includes(parent.status)) ? { id: parent.id, slug: parent.slug, title: parent.title } : null,
-      subEvents,
+      subEvents: subEvents.map((e) => ({ ...e, ...eventMeta(e) })),
       winners,
       submissionsOpenAt: event.submissionsOpenAt,
       submissionsCloseAt: event.submissionsCloseAt,
@@ -297,7 +336,12 @@ export function eventRoutes(app: FastifyInstance) {
   app.post("/events", async (req, reply) => {
     const auth = requireStaff(req);
     const tenant = requireTenant(req);
-    const input = createEventSchema.parse(req.body);
+    const parsed = createSchema.parse(req.body);
+    const category = parsed.categoryId ? await resolveCategory(tenant.id, parsed.categoryId, parsed.type) : null;
+    if (category?.archivedAt) throw badRequest(`"${category.name}" is archived`);
+    const type = category?.baseType ?? parsed.type;
+    if (!type) throw badRequest("type: Required");
+    const input = { ...parsed, type };
     if (input.endsAt < input.startsAt) throw badRequest("endsAt must be after startsAt");
 
     // Campus admins can only create events for their own campus.
@@ -312,15 +356,23 @@ export function eventRoutes(app: FastifyInstance) {
     validateFee(input);
     const parentEventId = await validateParent(tenant.id, input.parentEventId);
 
-    const modules = { ...DEFAULT_MODULES[input.type], ...(input.modules ?? {}) };
+    // Base type defaults ⊕ brand type overrides ⊕ explicit modules. Checklist and page templates follow the base type.
+    const modules = {
+      ...DEFAULT_MODULES[input.type],
+      ...((category?.modules as Record<string, boolean> | null) ?? {}),
+      ...(input.modules ?? {}),
+    };
+    const tags = normalizeTags(input.tags, category?.defaultTags);
     const checklist = await checklistFor(tenant.id, input.type, input.startsAt);
     const isCompetition = COMPETITION_TYPES.includes(input.type);
+    const isContest = CONTEST_TYPES.includes(input.type);
     const config = {
       ...(isCompetition ? { minTeamSize: 2, maxTeamSize: 4, tracks: [] } : {}),
+      ...(isContest && modules.teams ? { minTeamSize: 1, maxTeamSize: 2 } : {}),
       ...(input.config ?? {}),
     };
 
-    const { campusIds, pageSections, ...fields } = input;
+    const { campusIds, pageSections, categoryId: _c, tags: _t, ...fields } = input;
     const event = await prisma.event.create({
       data: {
         ...fields,
@@ -328,6 +380,8 @@ export function eventRoutes(app: FastifyInstance) {
         ...(fields.description !== undefined && { description: sanitizeHtml(fields.description) }),
         ...(pageSections && { pageSections: sanitizeSections(pageSections) }),
         modules,
+        tags,
+        categoryId: category?.id ?? null,
         config: config as Prisma.InputJsonValue,
         tenantId: tenant.id,
         slug: await uniqueSlug(tenant.id, input.title),
@@ -336,20 +390,32 @@ export function eventRoutes(app: FastifyInstance) {
         campuses: { create: campusIds.map((campusId) => ({ campusId })) },
         staff: { create: [{ userId: auth.user.id, role: "MANAGER" }] },
         tasks: { create: checklist },
-        ...(isCompetition && {
-          rubric: { create: DEFAULT_RUBRIC.map((c, i) => ({ ...c, sortOrder: i })) },
+        ...((isCompetition || isContest) && {
+          rubric: { create: (isContest ? CONTEST_RUBRIC : DEFAULT_RUBRIC).map((c, i) => ({ ...c, sortOrder: i })) },
           rounds: { create: [{ name: "Final", sortOrder: 0, isOpen: false }] },
         }),
       },
+      include: { category: CATEGORY_SELECT },
     });
-    await logActivity(event.id, auth.user.id, "event.created", { title: event.title, type: event.type });
-    return reply.status(201).send(event);
+    await logActivity(event.id, auth.user.id, "event.created", {
+      title: event.title, type: event.type, ...(category && { category: category.name }),
+    });
+    return reply.status(201).send({ ...event, ...eventMeta(event) });
   });
 
   app.patch<{ Params: { id: string } }>("/events/:id", async (req) => {
     const event = await requireEventManager(req, req.params.id);
     const input = updateEventSchema.parse(req.body);
-    const { campusIds, modules, config, registrationForm, pageSections, parentEventId, ...fields } = input;
+    const { campusIds, modules, config, registrationForm, pageSections, parentEventId, categoryId, tags, ...fields } = input;
+    // A brand type must be based on the event's type (the type itself can't change after creation).
+    const category = categoryId ? await resolveCategory(event.tenantId, categoryId, event.type) : null;
+    const categoryChanged = categoryId !== undefined && categoryId !== event.categoryId;
+    if (category?.archivedAt && categoryChanged) throw badRequest(`"${category.name}" is archived`);
+    const nextTags =
+      tags !== undefined || (category && categoryChanged)
+        ? normalizeTags(tags ?? event.tags, categoryChanged ? category?.defaultTags : undefined)
+        : undefined;
+    const categoryModules = category && categoryChanged ? ((category.modules as Record<string, boolean> | null) ?? {}) : {};
     if (campusIds) await validateCampuses(event.tenantId, campusIds);
     validateFee({
       feeAmount: fields.feeAmount !== undefined ? fields.feeAmount : event.feeAmount,
@@ -371,12 +437,17 @@ export function eventRoutes(app: FastifyInstance) {
         where: { id: event.id },
         data: {
           ...fields,
-          ...(modules && { modules: { ...(event.modules as object), ...modules } }),
+          ...((modules || Object.keys(categoryModules).length) && {
+            modules: { ...(event.modules as object), ...categoryModules, ...(modules ?? {}) },
+          }),
+          ...(categoryId !== undefined && { categoryId: category?.id ?? null }),
+          ...(nextTags && { tags: nextTags }),
           ...(config && { config: { ...(event.config as object), ...config } as Prisma.InputJsonValue }),
           ...(registrationForm && { registrationForm }),
           ...(pageSections && { pageSections: sanitizeSections(pageSections) }),
           ...(parentId !== undefined && { parentEventId: parentId }),
         },
+        include: { category: CATEGORY_SELECT },
       });
     });
     await logActivity(event.id, req.auth!.user.id, "event.updated", { fields: Object.keys(input) });
@@ -393,7 +464,7 @@ export function eventRoutes(app: FastifyInstance) {
         safely("event.updated", () => notifyAudience(event.id, "event.updated", { changes, dedupSuffix: String(updated.updatedAt.getTime()) }));
       }
     }
-    return updated;
+    return { ...updated, ...eventMeta(updated) };
   });
 
   app.post<{ Params: { id: string } }>("/events/:id/status", async (req) => {
@@ -402,11 +473,11 @@ export function eventRoutes(app: FastifyInstance) {
     if (!canTransition(event.status, status)) {
       throw badRequest(`Can't move an event from ${event.status} to ${status}`);
     }
-    const updated = await prisma.event.update({ where: { id: event.id }, data: { status } });
+    const updated = await prisma.event.update({ where: { id: event.id }, data: { status }, include: { category: CATEGORY_SELECT } });
     await logActivity(event.id, req.auth!.user.id, "status.changed", { from: event.status, to: status });
     if (status === "COMPLETED") runCompletionAutomation(event.id, req.log);
     if (status === "CANCELLED") safely("event.cancelled", () => notifyAudience(event.id, "event.cancelled"));
-    return updated;
+    return { ...updated, ...eventMeta(updated) };
   });
 
   app.get<{ Params: { id: string } }>("/events/:id/dashboard", async (req) => {
@@ -476,8 +547,11 @@ export function eventRoutes(app: FastifyInstance) {
       };
     });
 
+    const eventCategory = event.categoryId
+      ? await prisma.eventCategory.findUnique({ where: { id: event.categoryId }, select: { id: true, name: true, icon: true } })
+      : null;
     return {
-      event,
+      event: { ...event, ...eventMeta({ ...event, category: eventCategory }) },
       registrations: {
         total: sum(regs.filter((r) => !["CANCELLED", "REJECTED"].includes(r.status))),
         checkedIn: regCount("CHECKED_IN"),

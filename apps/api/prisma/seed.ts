@@ -793,6 +793,117 @@ async function main() {
   await prisma.judgeAssignment.create({ data: { eventId: past.id, userId: judge.id } });
   await generateCertificates(past.id);
 
+  // ───────── v1.3: tags, brand event types and the new built-in types ─────────
+  const TAGS: Record<string, string[]> = {
+    "alta-hacks-2026": ["AI", "Web development"],
+    "alta-hacks-2025": ["AI", "Web development"],
+    "alta-build-weekend-2026": ["AI", "Web development", "Startups"],
+    "intro-to-genai-workshop": ["AI", "First-year"],
+    "alta-techfest-2026": ["AI", "Startups", "Industry"],
+    "future-of-work-seminar": ["AI", "Placement"],
+    "guest-lecture-product-management": ["Product", "Industry"],
+    "mirai-open-day-webinar": ["Online", "First-year"],
+    "founders-fireside-campus-to-funded": ["Startups", "Alumni"],
+  };
+  for (const [slug, tags] of Object.entries(TAGS)) await prisma.event.updateMany({ where: { slug }, data: { tags } });
+
+  const founderFriday = await prisma.eventCategory.create({
+    data: {
+      tenantId: alta.id, name: "Founder Friday", family: "COMMUNITY", baseType: "ENTREPRENEURSHIP", icon: "Rocket", sortOrder: 0,
+      description: "Monthly evening with a startup founder: their story, then open Q&A",
+      defaultTags: ["Startups"],
+    },
+  });
+  await prisma.eventCategory.create({
+    data: {
+      tenantId: alta.id, name: "Tech Talk Tuesday", family: "TALKS", baseType: "INDUSTRY_SEMINAR", icon: "Mic", sortOrder: 1,
+      description: "A weekly talk by an engineer from industry",
+      defaultTags: ["Industry"],
+    },
+  });
+
+  const altaCampusIds = alta.campuses.map((c) => ({ campusId: c.id }));
+  const hours = (d: Date, h: number) => new Date(d.getTime() + h * 60 * 60 * 1000);
+
+  const aiStart = days(6);
+  await prisma.event.create({
+    data: {
+      tenantId: alta.id, slug: "building-ai-products-at-scale", title: "Building AI products at scale",
+      tagline: "What it really takes to ship AI to millions of users",
+      description: "<p>An industry seminar on taking AI features from prototype to production: evaluation, cost, latency and safety.</p>",
+      type: "INDUSTRY_SEMINAR", scope: "CENTRAL", mode: "HYBRID", status: "ANNOUNCED",
+      venue: "Bengaluru Campus, Main Auditorium", meetingUrl: "https://meet.example.com/ai-at-scale",
+      startsAt: aiStart, endsAt: hours(aiStart, 2), capacity: 250,
+      modules: { ...DEFAULT_MODULES.INDUSTRY_SEMINAR }, tags: ["AI", "Industry"],
+      createdById: altaAdmin.id,
+      campuses: { create: altaCampusIds },
+      staff: { create: [{ userId: altaAdmin.id, role: "MANAGER" }] },
+      tasks: { create: checklist("INDUSTRY_SEMINAR", aiStart, days(0)) },
+      guests: {
+        create: [{
+          name: "Sanjana Rao", designation: "Director of Engineering, AI Platform", organization: "Example Cloud", role: "SPEAKER",
+          status: "CONFIRMED", email: "sanjana@example.com", talkTitle: "Building AI products at scale", isPublic: true,
+        }],
+      },
+    },
+  });
+
+  const sprintStart = days(12);
+  await prisma.event.create({
+    data: {
+      tenantId: alta.id, slug: "alta-code-sprint", title: "Alta Code Sprint",
+      tagline: "Two hours, six problems, one leaderboard",
+      description: "<p>An individual coding contest. Solve as many problems as you can; ties are broken by time.</p>",
+      type: "CODING_CONTEST", scope: "CENTRAL", mode: "ONLINE", status: "REGISTRATION_OPEN",
+      meetingUrl: "https://contest.example.com/alta-code-sprint",
+      startsAt: sprintStart, endsAt: hours(sprintStart, 2),
+      registrationOpensAt: days(-1), registrationClosesAt: days(11), capacity: 500,
+      modules: { ...DEFAULT_MODULES.CODING_CONTEST }, tags: ["Placement"],
+      createdById: altaAdmin.id,
+      campuses: { create: altaCampusIds },
+      staff: { create: [{ userId: altaAdmin.id, role: "MANAGER" }] },
+      tasks: { create: checklist("CODING_CONTEST", sprintStart, days(0)) },
+      rubric: { create: [{ name: "Score", description: "Points scored", maxScore: 100, weight: 1, sortOrder: 0 }] },
+      rounds: { create: [{ name: "Final", sortOrder: 0, isOpen: false }] },
+    },
+  });
+
+  const quizStart = days(15);
+  await prisma.event.create({
+    data: {
+      tenantId: alta.id, slug: "tech-quiz-night", title: "Tech Quiz Night",
+      tagline: "Teams of two, five rounds, bragging rights",
+      type: "QUIZ", scope: "CAMPUS", mode: "OFFLINE", status: "ANNOUNCED",
+      venue: "Pune Campus, Cafeteria", startsAt: quizStart, endsAt: hours(quizStart, 2.5), capacity: 80,
+      modules: { ...DEFAULT_MODULES.QUIZ }, config: { minTeamSize: 2, maxTeamSize: 2 }, tags: ["First-year"],
+      createdById: altaAdmin.id,
+      campuses: { create: [{ campusId: alta.campuses.find((c) => c.code === "PUN")!.id }] },
+      staff: { create: [{ userId: altaAdmin.id, role: "MANAGER" }] },
+      tasks: { create: checklist("QUIZ", quizStart, days(0)) },
+      rubric: { create: [{ name: "Score", description: "Points scored", maxScore: 100, weight: 1, sortOrder: 0 }] },
+      rounds: { create: [{ name: "Final", sortOrder: 0, isOpen: false }] },
+    },
+  });
+
+  const fridayStart = days(9);
+  await prisma.event.create({
+    data: {
+      tenantId: alta.id, slug: "founder-friday-from-dorm-room-to-seed-round", title: "Founder Friday: From dorm room to seed round",
+      tagline: "An evening with an Alta alum who raised their first round",
+      type: "ENTREPRENEURSHIP", categoryId: founderFriday.id, scope: "CENTRAL", mode: "OFFLINE", status: "REGISTRATION_OPEN",
+      venue: "Bengaluru Campus, Startup Lounge", startsAt: fridayStart, endsAt: hours(fridayStart, 2), capacity: 60,
+      registrationOpensAt: days(-1), registrationClosesAt: hours(fridayStart, -2),
+      modules: { ...DEFAULT_MODULES.ENTREPRENEURSHIP }, tags: ["Startups", "Alumni"],
+      createdById: altaAdmin.id,
+      campuses: { create: altaCampusIds },
+      staff: { create: [{ userId: altaAdmin.id, role: "MANAGER" }] },
+      tasks: { create: checklist("ENTREPRENEURSHIP", fridayStart, days(0)) },
+      guests: {
+        create: [{ name: "Karan Malhotra", designation: "Co-founder & CEO", organization: "Example Labs", role: "SPEAKER", status: "CONFIRMED", email: "karan@example.com", isPublic: true }],
+      },
+    },
+  });
+
   // Unused import guard (serials are generated inside generateCertificates).
   void certificateSerial;
 
@@ -807,6 +918,7 @@ async function main() {
     sponsors: await prisma.sponsor.count(),
     payments: await prisma.payment.count(),
     problemStatements: await prisma.problemStatement.count(),
+    eventCategories: await prisma.eventCategory.count(),
   };
   console.log("Seeded:", counts);
   console.log("Sign in with OTP as admin@elevate.dev (platform admin), admin@altaschool.dev, judge@elevate.dev, volunteer@elevate.dev, student1@example.com");

@@ -52,12 +52,40 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   ORIENTATION: "Orientation",
   ALUMNI_MEET: "Alumni meet",
   SPORTS: "Sports",
+  TECH_FEST: "Tech fest",
+  INDUSTRY_SEMINAR: "Industry seminar",
+  CODING_CONTEST: "Coding contest",
+  QUIZ: "Quiz",
   OTHER: "Other",
 };
 
 export function eventTypeLabel(type?: string | null): string {
   if (!type) return "";
   return EVENT_TYPE_LABELS[type] ?? type.charAt(0) + type.slice(1).toLowerCase().replace(/_/g, " ");
+}
+
+/** Display label of an event: the brand's own type name (e.g. "Founder Friday"), else the built-in type label. */
+export function eventLabel(e: { type: string; category?: EventCategoryRef | null }): string {
+  return e.category?.name ?? eventTypeLabel(e.type);
+}
+
+// ───────── Event families (mirrors packages/shared EVENT_FAMILIES) ─────────
+
+export type EventFamily = "TALKS" | "LEARNING" | "COMPETITIONS" | "COMMUNITY" | "FESTS";
+
+export const EVENT_FAMILIES: { key: EventFamily; label: string }[] = [
+  { key: "TALKS", label: "Talks & sessions" },
+  { key: "LEARNING", label: "Hands-on learning" },
+  { key: "COMPETITIONS", label: "Competitions" },
+  { key: "COMMUNITY", label: "Community & career" },
+  { key: "FESTS", label: "Fests" },
+];
+
+/** A brand's own event type, as embedded in event payloads. */
+export interface EventCategoryRef {
+  id: string;
+  name: string;
+  icon?: string | null;
 }
 
 // ───────── Token storage ─────────
@@ -217,6 +245,10 @@ export interface EventSummary {
   modules?: Record<string, boolean>;
   driveFolderUrl?: string | null;
   campuses?: { campus?: Campus; name?: string; id?: string }[];
+  // v1.3
+  family?: EventFamily;
+  category?: EventCategoryRef | null;
+  tags?: string[];
   _count?: { registrations?: number; teams?: number };
   counts?: { registrations?: number; teams?: number; [k: string]: number | undefined };
 }
@@ -337,6 +369,9 @@ export interface SubEvent {
   mode?: string;
   coverImageUrl?: string | null;
   status: string;
+  family?: EventFamily;
+  category?: EventCategoryRef | null;
+  tags?: string[];
 }
 
 export interface Winner {
@@ -760,6 +795,8 @@ function normaliseEvent(e: any): EventDetail {
       .sort((a: Sponsor, b: Sponsor) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
     faqs: asArray(e.faqs).filter((f: any) => f && f.q),
     gallery: asArray(e.gallery).map(normaliseMedia),
+    category: e.category ?? null,
+    tags: asArray(e.tags).map(String),
   };
 }
 
@@ -889,6 +926,9 @@ export const Api = {
 
   // Events
   events: async (query = "upcoming=1") => list<EventSummary>(await api(`/events?${query}`), "events"),
+  /** Upcoming events, optionally narrowed to one family (GET /events?family=). */
+  eventsByFamily: async (family?: EventFamily | null) =>
+    list<EventSummary>(await api(`/events?upcoming=1${family ? `&family=${family}` : ""}`), "events"),
   event: async (idOrSlug: string) => normaliseEvent(await api<any>(`/events/${encodeURIComponent(idOrSlug)}`)),
   calendarUrl: (idOrSlug: string) => `${API_BASE}/events/${encodeURIComponent(idOrSlug)}/calendar.ics`,
   /** Public event page on the brand's website, when the brand has one configured. */

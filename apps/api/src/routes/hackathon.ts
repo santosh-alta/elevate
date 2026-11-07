@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
-import { EVENT_TYPES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
+import { EVENT_FAMILIES, EVENT_FAMILY_KEYS, EVENT_TYPES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
 import { canManageEvent, findEvent, requireEventManager, requireUser } from "../lib/permissions";
@@ -9,6 +9,7 @@ import { forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { sanitizeHtml } from "../lib/html";
 import { slugify } from "../lib/codes";
+import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 
 const HIDDEN = ["DRAFT", "PLANNING"];
 
@@ -117,6 +118,7 @@ export function hackathonRoutes(app: FastifyInstance) {
     const q = z
       .object({
         type: z.enum(EVENT_TYPES).optional(),
+        family: z.enum(EVENT_FAMILY_KEYS).optional(),
         year: z.coerce.number().int().min(2000).max(2100).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(50),
       })
@@ -128,12 +130,16 @@ export function hackathonRoutes(app: FastifyInstance) {
         status: { notIn: ["DRAFT", "PLANNING", "CANCELLED"] },
         teams: { some: { award: { not: null } } },
         ...(q.type && { type: q.type }),
+        ...(q.family && !q.type && { type: { in: EVENT_FAMILIES.find((f) => f.key === q.family)!.types } }),
         ...(q.year && { startsAt: { gte: new Date(Date.UTC(q.year, 0, 1)), lt: new Date(Date.UTC(q.year + 1, 0, 1)) } }),
       },
       orderBy: { startsAt: "desc" },
       take: q.limit,
-      select: { id: true, slug: true, title: true, type: true, startsAt: true, endsAt: true, coverImageUrl: true, resultsPublishedAt: true },
+      select: {
+        id: true, slug: true, title: true, type: true, startsAt: true, endsAt: true, coverImageUrl: true, resultsPublishedAt: true,
+        tags: true, category: CATEGORY_SELECT,
+      },
     });
-    return Promise.all(events.map(async (e) => ({ event: e, winners: await eventWinners(e.id) })));
+    return Promise.all(events.map(async (e) => ({ event: { ...e, ...eventMeta(e) }, winners: await eventWinners(e.id) })));
   });
 }

@@ -8,6 +8,7 @@ import { canManageEvent, findEvent, requireEventManager, requireStaff, requireUs
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { computeLeaderboard, criteriaForRound, defaultRoundId, judgeTeamIds, judgesPerTeam, roundTeamIds } from "../lib/judging";
 import { logActivity } from "../lib/activity";
+import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 import { notifyResults, notifyRoundOpened, safely } from "../lib/notify";
 
 const AWARDS = ["WINNER", "RUNNER_UP", "SECOND_RUNNER_UP", "SPECIAL_MENTION"] as const;
@@ -410,6 +411,7 @@ export function judgingRoutes(app: FastifyInstance) {
       include: {
         rounds: { orderBy: { sortOrder: "asc" } },
         rubric: { orderBy: { sortOrder: "asc" } },
+        category: CATEGORY_SELECT,
       },
     });
     return Promise.all(
@@ -421,7 +423,7 @@ export function judgingRoutes(app: FastifyInstance) {
         const allowed = roundId ? await judgeTeamIds(e.id, user.id, roundId) : [];
         return {
           id: e.id, slug: e.slug, title: e.title, type: e.type, status: e.status, startsAt: e.startsAt, endsAt: e.endsAt,
-          coverImageUrl: e.coverImageUrl, rounds: e.rounds, rubric: e.rubric.filter((c) => !c.roundId || c.roundId === roundId),
+          coverImageUrl: e.coverImageUrl, ...eventMeta(e), rounds: e.rounds, rubric: e.rubric.filter((c) => !c.roundId || c.roundId === roundId),
           currentRoundId: roundId,
           assignedTeams: allowed.length,
           submittedTeams: submitted,
@@ -442,6 +444,9 @@ export function judgingRoutes(app: FastifyInstance) {
     if (!round) throw notFound("Round");
 
     const allowed = await judgeTeamIds(event.id, user.id, roundId);
+    const category = event.categoryId
+      ? await prisma.eventCategory.findUnique({ where: { id: event.categoryId }, select: CATEGORY_SELECT.select })
+      : null;
     const [teams, rubric, scores, reviews, rounds, comments] = await Promise.all([
       prisma.team.findMany({
         where: { eventId: event.id, id: { in: allowed } },
@@ -459,7 +464,10 @@ export function judgingRoutes(app: FastifyInstance) {
     ]);
 
     return {
-      event: { id: event.id, slug: event.slug, title: event.title, status: event.status, config: event.config },
+      event: {
+        id: event.id, slug: event.slug, title: event.title, type: event.type, status: event.status, config: event.config,
+        ...eventMeta({ ...event, category }),
+      },
       round,
       rounds,
       rubric,

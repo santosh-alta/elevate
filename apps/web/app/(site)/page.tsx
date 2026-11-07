@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, Award, CalendarDays, Users } from "lucide-react";
-import { resolveTheme } from "@elevate/shared";
+import { EVENT_FAMILIES, resolveTheme } from "@elevate/shared";
 import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { eventCount } from "@/lib/format";
+import { eventCount, eventFamily } from "@/lib/format";
+import { EventIcon } from "@/components/event-icon";
 import type { ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
 import { EmptyState, LinkButton } from "@/components/ui";
@@ -64,6 +65,25 @@ export default async function HomePage() {
             <Grid events={live} />
           </Section>
         )}
+        <Section title="Browse by type">
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {EVENT_FAMILIES.map((f) => {
+              const n = upcoming.filter((e) => eventFamily(e) === f.key).length;
+              return (
+                <li key={f.key} className={f.key === "FESTS" ? "col-span-2 sm:col-span-1" : undefined}>
+                  <Link
+                    href={`/events?family=${f.key}${n ? "" : "&when=all"}`}
+                    className="group flex h-full flex-col gap-3 rounded-brand border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-hero-bg text-hero-accent"><EventIcon name={f.icon} className="h-5 w-5" /></span>
+                    <span className="font-heading text-base font-bold leading-tight group-hover:underline group-hover:decoration-accent group-hover:decoration-2 group-hover:underline-offset-4">{f.label}</span>
+                    <span className="mt-auto text-xs text-muted">{n ? `${n} upcoming` : "See past events"}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Section>
         <Section title="Upcoming events" action={<Link href="/events" className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline decoration-accent decoration-2 underline-offset-4 hover:decoration-primary">View all <ArrowRight className="h-3.5 w-3.5" /></Link>}>
           {next.length ? <Grid events={next.slice(0, 6)} /> : <EmptyState title="No upcoming events yet" description="New events will show up here as soon as they are announced." />}
         </Section>

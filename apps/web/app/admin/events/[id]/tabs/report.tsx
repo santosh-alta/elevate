@@ -1,5 +1,5 @@
 import { apiGet } from "@/lib/api";
-import { fmtRange, humanize, typeLabel } from "@/lib/format";
+import { eventLabel, fmtRange, humanize } from "@/lib/format";
 import type { ElevateEvent, Tenant } from "@/lib/types";
 import { KeyValue, numericLeaves } from "@/components/kv";
 import { BrandLogo } from "@/components/brand-logo";
@@ -21,7 +21,7 @@ export async function ReportTab({ event, tenant }: { event: ElevateEvent; tenant
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">Event outcome report</p>
             <h2 className="mt-1 text-2xl font-bold">{event.title}</h2>
-            <p className="text-sm text-muted">{typeLabel(event.type)} · {humanize(event.mode)} · {fmtRange(event.startsAt, event.endsAt)}</p>
+            <p className="text-sm text-muted">{eventLabel(event)} · {humanize(event.mode)} · {fmtRange(event.startsAt, event.endsAt)}</p>
           </div>
           <BrandLogo tenant={tenant} size={40} />
         </div>

@@ -2,12 +2,13 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
 import { computeLeaderboard, defaultRoundId } from "./judging";
 import { revenueFor } from "./payments";
+import { CATEGORY_SELECT, eventMeta } from "./tags";
 
 /** Builds the outcome report for an event and caches it in Event.outcome. */
 export async function buildOutcome(eventId: string) {
   const event = await prisma.event.findUniqueOrThrow({
     where: { id: eventId },
-    include: { campuses: { include: { campus: true } } },
+    include: { campuses: { include: { campus: true } }, category: CATEGORY_SELECT },
   });
 
   const [regByStatus, regByCampus, teams, feedback, media, social, certs, linkedin, expenses, tasks, guests] = await Promise.all([
@@ -41,11 +42,14 @@ export async function buildOutcome(eventId: string) {
   const leaderboard = teams.length ? (await computeLeaderboard(eventId, roundId)).slice(0, 5) : [];
   const winners = teams.filter((t) => t.award).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map((t) => ({ team: t.name, award: t.award, rank: t.rank }));
 
+  const meta = eventMeta(event);
   const outcome = {
     generatedAt: new Date().toISOString(),
+    ...meta,
     event: {
       id: event.id, title: event.title, type: event.type, status: event.status, mode: event.mode, scope: event.scope,
       startsAt: event.startsAt, endsAt: event.endsAt, campuses: event.campuses.map((c) => c.campus.name),
+      ...meta,
     },
     registrations: {
       registered,

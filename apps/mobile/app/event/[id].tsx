@@ -4,9 +4,9 @@ import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import React, { useState } from "react";
 import { Alert, Image, Pressable, Share, Text, View } from "react-native";
-import { AWARD_LABELS, Api, EventDetail, EventFee, Faq, ProblemStatement, Registration, Sponsor, eventTypeLabel, formatMoney } from "../../src/api";
+import { AWARD_LABELS, Api, EventDetail, EventFee, Faq, ProblemStatement, Registration, Sponsor, eventLabel, formatMoney } from "../../src/api";
 import { HtmlContent } from "../../src/html";
-import { modeLabel, statusTone } from "../../src/events";
+import { TagChips, modeLabel, statusTone } from "../../src/events";
 import { useSession } from "../../src/session";
 import { STATUS_COLORS, withAlpha } from "../../src/theme";
 import {
@@ -247,7 +247,7 @@ export default function EventDetailScreen() {
     <Screen edges={[]} refreshing={refreshing} onRefresh={refresh} padded={false}>
       <Stack.Screen
         options={{
-          title: eventTypeLabel(event.type),
+          title: eventLabel(event),
           headerRight: () => (
             <Pressable onPress={share} accessibilityRole="button" accessibilityLabel="Share event" hitSlop={8} style={{ padding: 6 }}>
               <Ionicons name="share-outline" size={22} color={theme.colors.heroFg} />
@@ -268,12 +268,17 @@ export default function EventDetailScreen() {
 
       <View style={{ padding: 16 }}>
         <Row style={{ flexWrap: "wrap", marginBottom: 8 }}>
-          <Badge label={eventTypeLabel(event.type)} tone="primary" />
+          <Badge label={eventLabel(event)} tone="primary" />
           <Badge label={humanize(event.status)} tone={statusTone(event.status)} />
           <Badge label={event.scope === "CENTRAL" ? "Central" : "Campus"} />
         </Row>
         <Text style={{ fontSize: 26, fontWeight: "800", color: theme.colors.fg }}>{event.title}</Text>
         {event.tagline ? <Muted style={{ marginTop: 4, fontSize: 16 }}>{event.tagline}</Muted> : null}
+        {event.tags?.length ? (
+          <View style={{ marginTop: 10 }}>
+            <TagChips tags={event.tags} />
+          </View>
+        ) : null}
 
         <Card style={{ marginTop: 16, gap: 10 }}>
           <Row>
@@ -494,7 +499,7 @@ export default function EventDetailScreen() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={{ fontWeight: "700", color: theme.colors.fg }}>{se.title}</Text>
                     <Muted style={{ fontSize: 13 }}>
-                      {eventTypeLabel(se.type)} · {formatDate(se.startsAt)}
+                      {eventLabel(se)} · {formatDate(se.startsAt)}
                     </Muted>
                     <Badge label={humanize(se.status)} tone={statusTone(se.status)} />
                   </View>

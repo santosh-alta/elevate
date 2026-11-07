@@ -11,6 +11,7 @@ import { registerInputSchema } from "@elevate/shared";
 import type { Payment, RegistrationStatus } from "@prisma/client";
 import { conflict } from "../lib/errors";
 import { teamInviteCode } from "../lib/codes";
+import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 import { findOrCreateMember, promoteWaitlist, seatsLeft } from "../lib/seats";
 import {
   PAYMENT_TTL_MS, attachOrder, evaluateCoupon, getPaymentConfig, isPaidEvent, markPaymentPaid, newReceiptNo, paymentResponse,
@@ -278,19 +279,20 @@ export function registrationRoutes(app: FastifyInstance) {
   app.get("/me/registrations", async (req) => {
     const { user } = requireUser(req);
     const tenant = requireTenant(req);
-    return prisma.registration.findMany({
+    const regs = await prisma.registration.findMany({
       where: { userId: user.id, event: { tenantId: tenant.id } },
       orderBy: { event: { startsAt: "desc" } },
       include: {
         event: {
           select: {
             id: true, slug: true, title: true, type: true, mode: true, status: true, startsAt: true, endsAt: true,
-            venue: true, meetingUrl: true, coverImageUrl: true,
+            venue: true, meetingUrl: true, coverImageUrl: true, tags: true, category: CATEGORY_SELECT,
           },
         },
         payment: { select: { id: true, status: true, amount: true, currency: true, receiptNo: true, expiresAt: true, paidAt: true } },
       },
     });
+    return regs.map((r) => ({ ...r, event: { ...r.event, ...eventMeta(r.event) } }));
   });
 
   app.get<{ Params: { ticketCode: string } }>("/registrations/:ticketCode/qr.png", async (req, reply) => {

@@ -4,12 +4,13 @@ import Link from "next/link";
 import {
   ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Star, Ticket, Trophy, Users, Video,
 } from "lucide-react";
-import { SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
+import { EVENT_FAMILIES, SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
+import { EventIcon } from "@/components/event-icon";
 import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe, isStaff } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
-import { eventCampuses, eventCount, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, typeLabel } from "@/lib/format";
+import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
 import type { ElevateEvent, Guest, Media, Registration, Sponsor, Team, Winner } from "@/lib/types";
 import { EventCover, ModeBadge } from "@/components/event-card";
@@ -33,7 +34,7 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   const { preview } = await searchParams;
   const [e, tenant, origin] = await Promise.all([apiGet<ElevateEvent>(eventPath(slug, preview)), getTenant(), getOrigin()]);
   if (!e) return { title: "Event" };
-  const description = e.tagline ?? (htmlToText(e.description).slice(0, 180) || `${typeLabel(e.type)} by ${tenant?.name ?? "us"}`);
+  const description = e.tagline ?? (htmlToText(e.description).slice(0, 180) || `${eventLabel(e)} by ${tenant?.name ?? "us"}`);
   const url = `${origin}/events/${e.slug}`;
   const theme = resolveTheme(tenant?.theme);
   const cover = absoluteUrl(e.coverImageUrl, origin);
@@ -135,7 +136,10 @@ export default async function EventPage({ params, searchParams }: Params) {
             )}
             <div className="flex flex-wrap gap-2">
               <StatusBadge status={event.status} />
-              <Badge tone="highlight">{typeLabel(event.type)}</Badge>
+              <Badge tone="highlight">{eventLabel(event)}</Badge>
+              <Link href={`/events?family=${eventFamily(event)}`} className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-hero-fg/10 px-2.5 py-0.5 text-xs font-medium text-hero-fg ring-1 ring-inset ring-hero-fg/30 hover:bg-hero-fg/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                <EventIcon name={EVENT_FAMILIES.find((f) => f.key === eventFamily(event))?.icon} className="h-3 w-3" />{familyLabel(eventFamily(event))}
+              </Link>
               <ModeBadge mode={event.mode} />
               <Badge>{event.scope === "CENTRAL" ? "Central event" : "Campus event"}</Badge>
               {campuses.map((c) => <Badge key={c.id} tone="gray"><MapPin className="h-3 w-3" />{c.name}</Badge>)}
@@ -183,6 +187,18 @@ export default async function EventPage({ params, searchParams }: Params) {
               value={event.capacity ? `${regs ?? 0} / ${event.capacity} registered` : `${regs ?? 0} registered`}
             />
           </div>
+          {!!event.tags?.length && (
+            <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted">Topics</span>
+              <ul className="flex flex-wrap gap-1.5">
+                {event.tags.map((t) => (
+                  <li key={t}>
+                    <Link href={`/events?tag=${encodeURIComponent(t)}&when=all`} className="inline-flex rounded-full bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20 hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">#{t}</Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             <div className="flex flex-wrap gap-2">
               {myTeam && <LinkButton href={`/events/${event.slug}/team`} size="sm" variant="secondary"><Users className="h-4 w-4" />My team</LinkButton>}
@@ -218,7 +234,7 @@ export default async function EventPage({ params, searchParams }: Params) {
                       <Link href={`/events/${s.slug}`} className="group">
                         <EventCover event={s as ElevateEvent} className="h-28" />
                         <div className="space-y-1 p-4 pb-2">
-                          <div className="flex flex-wrap gap-1.5"><Badge tone="primary">{typeLabel(s.type)}</Badge><ModeBadge mode={s.mode} /></div>
+                          <div className="flex flex-wrap gap-1.5"><Badge tone="primary">{eventLabel(s)}</Badge><ModeBadge mode={s.mode} /></div>
                           <p className="font-semibold group-hover:text-primary">{s.title}</p>
                           <p className="flex items-center gap-1.5 text-xs text-muted"><CalendarDays className="h-3.5 w-3.5" />{fmtDateTime(s.startsAt)}</p>
                         </div>

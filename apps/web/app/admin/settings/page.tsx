@@ -10,12 +10,17 @@ import { ApiButton } from "@/components/client/api-button";
 import { ApiForm } from "@/components/client/api-form";
 import { CopyButton } from "@/components/client/misc";
 import { ThemeEditor } from "./theme-editor";
+import { EventTypesManager } from "./event-types-manager";
+import { getEventTypes, getTags } from "@/lib/catalog";
+import { EventIcon } from "@/components/event-icon";
+import { SUGGESTED_TAGS } from "@elevate/shared";
 
 export const metadata = { title: "Brand settings" };
 
 const TABS = [
   { key: "theme", label: "Theme" },
   { key: "contact", label: "Contact & certificates" },
+  { key: "types", label: "Event types" },
   { key: "campuses", label: "Campuses" },
   { key: "members", label: "Team & roles" },
   { key: "domains", label: "Custom domains" },
@@ -37,9 +42,51 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <Tabs tabs={TABS} active={active} baseHref="/admin/settings" />
       {active === "theme" && <ThemeEditor tenant={tenant} />}
       {active === "contact" && <ContactSettings settings={tenant.settings as Record<string, unknown>} />}
+      {active === "types" && <EventTypes canEdit={isBrandAdmin(me)} />}
       {active === "campuses" && <Campuses />}
       {active === "members" && <Members campuses={tenant.campuses} />}
       {active === "domains" && <Domains />}
+    </div>
+  );
+}
+
+async function EventTypes({ canEdit }: { canEdit: boolean }) {
+  const [families, tags] = await Promise.all([getEventTypes(true), getTags(true)]);
+  const suggestions = [...tags.map((t) => t.tag), ...SUGGESTED_TAGS];
+  return (
+    <div className="space-y-8">
+      <EventTypesManager families={families} canEdit={canEdit} tagSuggestions={suggestions} />
+      <section aria-labelledby="builtin-types">
+        <h2 id="builtin-types" className="font-heading text-lg font-bold">Built-in types</h2>
+        <p className="mb-4 text-sm text-muted">Every brand gets these, grouped into five families. They set the default modules, checklist and page template.</p>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {families.map((f) => (
+            <Card key={f.key}>
+              <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><EventIcon name={f.icon} className="h-5 w-5" /></span>
+                <div>
+                  <h3 className="font-semibold">{f.label}</h3>
+                  <p className="text-xs text-muted">{f.description}</p>
+                </div>
+              </div>
+              <ul className="divide-y divide-border">
+                {f.types.map((t) => (
+                  <li key={t.type} className="px-5 py-2.5">
+                    <p className="text-sm font-medium">{t.label}</p>
+                    {t.hint && <p className="text-xs text-muted">{t.hint}</p>}
+                  </li>
+                ))}
+                {f.custom.filter((c) => !c.archived && !c.archivedAt).map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-2 px-5 py-2.5">
+                    <span className="text-sm font-medium">{c.name}</span>
+                    <Badge tone="highlight">Your brand</Badge>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

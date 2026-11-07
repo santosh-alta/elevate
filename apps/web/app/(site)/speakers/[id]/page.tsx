@@ -6,7 +6,7 @@ import { apiGet } from "@/lib/api";
 import { resolveTheme } from "@elevate/shared";
 import { getOrigin, getTenant } from "@/lib/tenant";
 import { absoluteUrl } from "@/lib/theme";
-import { fmtDate, fmtDateTime, humanize, typeLabel } from "@/lib/format";
+import { eventLabel, fmtDate, fmtDateTime, humanize } from "@/lib/format";
 import type { ElevateEvent, Guest } from "@/lib/types";
 import { Badge, Card, LinkButton } from "@/components/ui";
 import { GuestAvatar } from "@/components/guest-avatar";
@@ -108,7 +108,7 @@ export default async function SpeakerPage({ params }: Props) {
                   <li key={event.id}>
                     <Link href={`/events/${event.slug}`} className="block rounded-lg border border-border bg-card p-3 text-sm transition hover:border-primary/50">
                       <p className="font-medium">{event.title}</p>
-                      <p className="flex items-center gap-1 text-xs text-muted"><CalendarDays className="h-3 w-3" />{fmtDate(event.startsAt)} · {typeLabel(event.type)}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted"><CalendarDays className="h-3 w-3" />{fmtDate(event.startsAt)} · {eventLabel(event)}</p>
                       {talkTitle && <p className="mt-1 text-xs text-fg/80">“{talkTitle}”</p>}
                     </Link>
                   </li>

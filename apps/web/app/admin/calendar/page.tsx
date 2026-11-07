@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { apiList } from "@/lib/api";
-import { EVENT_TYPE_GROUPS, typeColor, typeLabel } from "@/lib/format";
+import { EVENT_TYPE_GROUPS, eventLabel, typeColor } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Card, LinkButton, buttonClass } from "@/components/ui";
 import { cn } from "@/components/ui/cn";
@@ -81,7 +81,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                     <li key={e.id}>
                       <Link
                         href={`/admin/events/${e.id}`}
-                        title={`${e.title} · ${typeLabel(e.type)} · ${e.status}`}
+                        title={`${e.title} · ${eventLabel(e)} · ${e.status}`}
                         className={cn("block truncate rounded border px-1.5 py-0.5 text-[11px] font-medium hover:brightness-95", typeColor(e.type), e.status === "CANCELLED" && "line-through opacity-60")}
                       >
                         {dayKey(new Date(e.startsAt)) === k && <span className="mr-1 tabular-nums">{new Date(e.startsAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: TZ })}</span>}

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Trophy } from "lucide-react";
-import { EVENT_TYPES } from "@elevate/shared";
+import { EVENT_FAMILIES } from "@elevate/shared";
 import { apiGet } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { fmtDate, typeLabel } from "@/lib/format";
+import { eventFamily, eventLabel, fmtDate, isFamily, typeLabel } from "@/lib/format";
 import type { ElevateEvent, Winner } from "@/lib/types";
 import { Badge, Button, EmptyState, Select } from "@/components/ui";
 import { PageHero } from "@/components/page-hero";
@@ -12,7 +12,7 @@ import { WinnersPodium } from "@/components/event-extras";
 
 export const metadata: Metadata = { title: "Winners hall of fame" };
 
-interface HallEntry { event: Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "coverImageUrl">; winners: Winner[] }
+interface HallEntry { event: Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "coverImageUrl" | "category" | "family">; winners: Winner[] }
 
 /** Accepts `[{ event, winners }]` or events carrying `winners` (or `teams`) directly. */
 function normalize(raw: unknown): HallEntry[] {
@@ -32,13 +32,16 @@ function normalize(raw: unknown): HallEntry[] {
   }).filter((e) => e.event?.slug && e.winners.length);
 }
 
-export default async function WinnersPage({ searchParams }: { searchParams: Promise<{ type?: string; year?: string }> }) {
+export default async function WinnersPage({ searchParams }: { searchParams: Promise<{ type?: string; year?: string; family?: string }> }) {
   const sp = await searchParams;
   const tenant = await requireTenant();
   const qs = new URLSearchParams();
+  const family = isFamily(sp.family) ? sp.family : undefined;
+  if (family) qs.set("family", family);
   if (sp.type) qs.set("type", sp.type);
   if (sp.year) qs.set("year", sp.year);
   const entries = normalize(await apiGet<unknown>(`/winners${qs.size ? `?${qs}` : ""}`))
+    .filter((e) => !family || eventFamily(e.event) === family)
     .sort((a, b) => +new Date(b.event.startsAt) - +new Date(a.event.startsAt));
   const thisYear = new Date().getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => thisYear - i);
@@ -52,10 +55,16 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
       className="pb-10"
     />
     <div className="mx-auto max-w-6xl px-4 pb-10">
-      <form className="relative -mt-8 grid gap-3 rounded-brand border border-border bg-card p-4 shadow-lg sm:grid-cols-3">
+      <form className="relative -mt-8 grid gap-3 rounded-brand border border-border bg-card p-4 shadow-lg sm:grid-cols-4">
+        <Select name="family" defaultValue={family ?? ""} aria-label="Kind of event">
+          <option value="">All kinds of events</option>
+          {EVENT_FAMILIES.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </Select>
         <Select name="type" defaultValue={sp.type ?? ""} aria-label="Event type">
           <option value="">All event types</option>
-          {EVENT_TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
+          {EVENT_FAMILIES.filter((f) => !family || f.key === family).map((f) => (
+            <optgroup key={f.key} label={f.label}>{f.types.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}</optgroup>
+          ))}
         </Select>
         <Select name="year" defaultValue={sp.year ?? ""} aria-label="Year">
           <option value="">All years</option>
@@ -72,7 +81,7 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
                 <Link href={`/events/${e.event.slug}`} className="font-heading text-2xl font-bold tracking-tight underline decoration-transparent decoration-2 underline-offset-4 hover:decoration-accent">{e.event.title}</Link>
                 <p className="text-sm text-muted">{fmtDate(e.event.startsAt)}</p>
               </div>
-              <Badge tone="primary">{typeLabel(e.event.type)}</Badge>
+              <Badge tone="primary">{eventLabel(e.event)}</Badge>
             </div>
             <WinnersPodium winners={e.winners} />
           </section>

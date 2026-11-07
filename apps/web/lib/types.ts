@@ -1,6 +1,6 @@
 // Loose client-side shapes for the Elevate API (see docs/API.md). Fields are optional where the
 // contract does not pin them down, so the UI degrades gracefully.
-import type { BrandTheme, EventModules, EventStatus, EventType, Role } from "@elevate/shared";
+import type { BrandTheme, EventFamily, EventModules, EventStatus, EventType, Role } from "@elevate/shared";
 
 export interface Campus { id: string; name: string; code: string; city?: string | null; address?: string | null }
 
@@ -81,11 +81,34 @@ export interface ElevateEvent {
   rubricPublic?: { name: string; description?: string | null; maxScore: number; weight: number; roundName?: string | null }[];
   rounds?: Round[];
   parentEvent?: { slug: string; title: string } | null;
-  subEvents?: Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "mode" | "coverImageUrl" | "status">[];
+  subEvents?: Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "mode" | "coverImageUrl" | "status" | "category" | "family" | "tags">[];
   winners?: Winner[];
   myTeam?: Team | null;
   myPayment?: Payment | null;
+  // v1.3
+  family?: EventFamily;
+  categoryId?: string | null;
+  category?: EventCategoryRef | null;
+  tags?: string[];
 }
+
+/** Compact category reference carried on every event payload. */
+export interface EventCategoryRef { id: string; name: string; icon?: string | null }
+
+/** A brand's own event type (GET /event-types → families[].custom, or the admin category endpoints). */
+export interface EventCategory {
+  id: string; name: string; description?: string | null; icon?: string | null;
+  baseType: EventType; family: EventFamily; defaultTags?: string[];
+  modules?: Partial<EventModules> | null; eventCount?: number;
+  archived?: boolean; archivedAt?: string | null; sortOrder?: number;
+}
+export interface EventTypesFamily {
+  key: EventFamily; label: string; description: string; icon: string;
+  types: { type: EventType; label: string; hint?: string; builtIn?: boolean }[];
+  custom: EventCategory[];
+}
+export interface EventTypesResponse { families: EventTypesFamily[] }
+export interface TagCount { tag: string; count: number }
 
 export interface PageSection { id: string; title: string; html: string; icon?: string }
 export interface EventFee {

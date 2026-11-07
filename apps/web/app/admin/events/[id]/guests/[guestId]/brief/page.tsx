@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiGet } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { fmtDateTime, fmtRange, humanize, typeLabel } from "@/lib/format";
+import { eventLabel, fmtDateTime, fmtRange, humanize } from "@/lib/format";
 import type { ElevateEvent, EventSession, Guest, GuestDocument, GuestProfile, Task, User } from "@/lib/types";
 import { PrintButton } from "@/components/client/misc";
 import { GuestAvatar } from "@/components/guest-avatar";
@@ -51,7 +51,7 @@ export default async function GuestBriefPage({ params }: Props) {
 
         {event && (
           <Section title="Event">
-            <Row label="Event" value={`${event.title} (${typeLabel(event.type)})`} />
+            <Row label="Event" value={`${event.title} (${eventLabel(event)})`} />
             <Row label="When" value={fmtRange(event.startsAt, event.endsAt)} />
             <Row label="Where" value={[event.venue, event.mode !== "OFFLINE" ? event.meetingUrl : null].filter(Boolean).join(" · ") || "—"} />
           </Section>

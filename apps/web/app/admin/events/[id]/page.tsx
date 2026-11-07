@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { apiGet, apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { eventCampuses, fmtRange, typeLabel } from "@/lib/format";
+import { eventCampuses, eventLabel, fmtRange } from "@/lib/format";
+import { getEventTypes, getTags } from "@/lib/catalog";
 import type { ElevateEvent, Payment } from "@/lib/types";
 import { Badge, StatusBadge, Tabs } from "@/components/ui";
 import { ModeBadge } from "@/components/event-card";
@@ -69,7 +70,7 @@ export default async function EventCommandCentre({ params, searchParams }: Props
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={event.status} />
-              <Badge tone="primary">{typeLabel(event.type)}</Badge>
+              <Badge tone="primary">{eventLabel(event)}</Badge>
               <ModeBadge mode={event.mode} />
               <Badge>{event.scope === "CENTRAL" ? "Central" : campuses.map((c) => c.name).join(", ") || "Campus"}</Badge>
             </div>
@@ -109,6 +110,10 @@ export default async function EventCommandCentre({ params, searchParams }: Props
 }
 
 async function DetailsTab({ event, campuses }: { event: ElevateEvent; campuses: import("@/lib/types").Campus[] }) {
-  const fests = event.type === "TECH_FEST" ? [] : await apiList<ElevateEvent>("/events?type=TECH_FEST");
-  return <div className="max-w-4xl"><EventForm campuses={campuses} event={event} parents={fests.map((f) => ({ id: f.id, title: f.title }))} /></div>;
+  const [fests, families, tags] = await Promise.all([
+    event.type === "TECH_FEST" ? Promise.resolve([] as ElevateEvent[]) : apiList<ElevateEvent>("/events?type=TECH_FEST"),
+    getEventTypes(true),
+    getTags(true),
+  ]);
+  return <div className="max-w-4xl"><EventForm campuses={campuses} event={event} parents={fests.map((f) => ({ id: f.id, title: f.title }))} families={families} tagSuggestions={tags.map((t) => t.tag)} /></div>;
 }

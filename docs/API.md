@@ -254,3 +254,30 @@ The event dashboard and outcome report gain `revenue: { paid, refunded, pending,
 
 ## New notification kinds
 `team.added`, `payment.receipt`, `payment.failed`, `payment.expired`, `results.published`, `round.opened` (to the event's judges), `gallery.ready`.
+
+---
+
+# v1.3 additions: event families, brand event types, tags
+
+Shared (`@elevate/shared`): `EVENT_FAMILIES` (5 families → types), `familyOf(type)`, `EVENT_TYPE_HINTS`, `SUGGESTED_TAGS`; new types `INDUSTRY_SEMINAR`, `CODING_CONTEST`, `QUIZ` with default modules, checklists and page templates.
+
+## Brand event types (EventCategory)
+A brand's own type, e.g. "Founder Friday", that behaves like `baseType` (modules, checklist, page templates, certificates), optionally with module overrides and default tags.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/event-types` | – | The picker data for this brand: `{ families: [{ key, label, description, icon, types: [{ type, label, hint, builtIn: true }], custom: [{ id, name, description, icon, baseType, family, defaultTags, eventCount }] }] }`. Archived categories are left out unless `?all=1` (staff) |
+| POST | `/event-categories` | brand admin | `{ name, family, baseType, description?, icon?, modules?, defaultTags?, sortOrder? }`. `baseType` must be one of the family's types (400 otherwise). Name unique per brand (409) |
+| PATCH | `/event-categories/:id` | brand admin | Same fields, plus `archived: boolean` (sets/clears `archivedAt`) |
+| DELETE | `/event-categories/:id` | brand admin | Only when no events use it (409 with count otherwise; archive instead) |
+
+## Events
+- `POST /events` / `PATCH /events/:id` accept `categoryId` and `tags[]`. With `categoryId`: `type` defaults to the category's `baseType` (if `type` is sent it must equal it), modules = base defaults ⊕ category `modules` ⊕ explicit `modules`, and the category's `defaultTags` are merged into `tags`. Tags are trimmed, de-duplicated case-insensitively (first spelling wins), max 15.
+- Every event payload (list, detail, admin, calendar, judge, winners) gains `family` (computed with `familyOf(type)`), `category: { id, name, icon } | null` and `tags`. Display label everywhere: `category?.name ?? EVENT_TYPE_LABELS[type]`.
+- `GET /events` filters: `family=TALKS|LEARNING|COMPETITIONS|COMMUNITY|FESTS`, `categoryId=`, `tag=` (repeatable or comma-separated; events having any of them), `q=` (title/tagline search, case-insensitive), alongside existing `type`, `status`, `campusId`, `upcoming`, `parentId`.
+- `GET /tags` (public) → `[{ tag, count }]`: tags used on this brand's public events, most used first. Staff with `?all=1` get tags across all statuses.
+- `GET /winners` accepts `family=`.
+
+## Reports
+- Brand dashboard `GET /dashboard` gains `byFamily: [{ family, label, events, registrations, attended }]` and `byTag: [{ tag, events, registrations }]` (top 15), for the selected period.
+- Outcome report of an event includes `family`, `category`, `tags`.

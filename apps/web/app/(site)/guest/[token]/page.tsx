@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CalendarDays, MapPin, Video } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { fmtRange, humanize, typeLabel } from "@/lib/format";
+import { eventLabel, fmtRange, humanize } from "@/lib/format";
 import type { ElevateEvent, Guest } from "@/lib/types";
 import { Badge, Card, CardBody } from "@/components/ui";
 import { GuestPortalForm } from "./portal-form";
@@ -36,7 +36,7 @@ export default async function GuestPortalPage({ params }: Props) {
       {event && (
         <Card className="mt-6">
           <CardBody className="space-y-2">
-            <div className="flex flex-wrap gap-2"><Badge tone="primary">{typeLabel(event.type)}</Badge><Badge>{humanize(event.mode)}</Badge></div>
+            <div className="flex flex-wrap gap-2"><Badge tone="primary">{eventLabel(event)}</Badge><Badge>{humanize(event.mode)}</Badge></div>
             <p className="text-lg font-semibold">{event.title}</p>
             {event.tagline && <p className="text-sm text-muted">{event.tagline}</p>}
             <div className="grid gap-2 text-sm sm:grid-cols-2">

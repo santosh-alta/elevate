@@ -8,7 +8,8 @@ import { assertManageable, canManageEvent, findEvent, requireEventManager, requi
 import { badRequest, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { eventPageUrl } from "../lib/brand";
-import { COMPETITION_TYPES, checklistFor, uniqueSlug } from "./events";
+import { COMPETITION_TYPES, CONTEST_TYPES, checklistFor, uniqueSlug } from "./events";
+import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 import { newToken } from "./guests";
 
 const HIDDEN = ["DRAFT", "PLANNING"];
@@ -123,11 +124,12 @@ export function eventPageRoutes(app: FastifyInstance) {
       orderBy: { startsAt: "asc" },
       select: {
         id: true, slug: true, title: true, type: true, status: true, scope: true, mode: true, startsAt: true, endsAt: true, venue: true,
+        tags: true, category: CATEGORY_SELECT,
         campuses: { select: { campus: { select: { id: true, name: true, code: true } } } },
         _count: { select: { registrations: true } },
       },
     });
-    return events;
+    return events.map((e) => ({ ...e, ...eventMeta(e) }));
   });
 
   /** Copies an event into a new DRAFT: details, form, rubric, sessions, sponsors and guests (as PROPOSED), with a fresh checklist. */
@@ -147,7 +149,7 @@ export function eventPageRoutes(app: FastifyInstance) {
       where: { id: src.id },
       include: { campuses: true, rubric: true, rounds: true, sessions: true, sponsors: true, guests: true },
     });
-    const isCompetition = COMPETITION_TYPES.includes(src.type);
+    const isCompetition = COMPETITION_TYPES.includes(src.type) || CONTEST_TYPES.includes(src.type);
     const event = await prisma.event.create({
       data: {
         tenantId: src.tenantId,
@@ -165,6 +167,7 @@ export function eventPageRoutes(app: FastifyInstance) {
         pageSections: src.pageSections as Prisma.InputJsonValue, parentEventId: src.parentEventId,
         feeAmount: src.feeAmount, currency: src.currency, feeType: src.feeType, earlyBirdAmount: src.earlyBirdAmount,
         earlyBirdEndsAt: move(src.earlyBirdEndsAt), submissionsOpenAt: move(src.submissionsOpenAt), submissionsCloseAt: move(src.submissionsCloseAt),
+        categoryId: src.categoryId, tags: src.tags,
         clonedFromId: src.id,
         createdById: req.auth!.user.id,
         campuses: { create: full.campuses.map((c) => ({ campusId: c.campusId })) },
@@ -197,6 +200,7 @@ export function eventPageRoutes(app: FastifyInstance) {
             })),
         },
       },
+      include: { category: CATEGORY_SELECT },
     });
     // Round-specific criteria move with their (new) round.
     const roundCriteria = full.rubric.filter((c) => c.roundId);
@@ -213,7 +217,7 @@ export function eventPageRoutes(app: FastifyInstance) {
     }
     await logActivity(event.id, req.auth!.user.id, "event.cloned", { from: src.id, fromTitle: src.title });
     await logActivity(src.id, req.auth!.user.id, "event.cloned_to", { to: event.id, title: event.title });
-    return reply.status(201).send(event);
+    return reply.status(201).send({ ...event, ...eventMeta(event) });
   });
 
   // ───────── Sponsors / partners ─────────
