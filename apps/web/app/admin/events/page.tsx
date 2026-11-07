@@ -80,7 +80,7 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
                       </span>
                     ) : <span className="text-muted">—</span>}
                   </Td>
-                  <Td className="text-muted">{e.scope === "CENTRAL" ? "Central" : eventCampuses(e).map((c) => c.code || c.name).join(", ")} · {humanize(e.mode)}</Td>
+                  <Td className="text-muted">{e.scope === "CENTRAL" ? "Central (HQ)" : eventCampuses(e).map((c) => c.code || c.name).join(" + ")} · {humanize(e.mode)}</Td>
                   <Td className="whitespace-nowrap text-muted">{fmtRange(e.startsAt, e.endsAt)}</Td>
                   <Td className="tabular-nums">{eventCount(e, "registrations") ?? "—"}</Td>
                   <Td>

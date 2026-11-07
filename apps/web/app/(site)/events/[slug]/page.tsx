@@ -93,7 +93,7 @@ export default async function EventPage({ params, searchParams }: Params) {
   const pageUrl = `${origin}/events/${event.slug}`;
   const ended = new Date(event.endsAt).getTime() < Date.now();
   const canDownloadZip = galleryPage.items.length > 0 && (isStaff(me) || (!!registration && ATTENDED.includes(registration.status)));
-  const where = [event.venue, event.scope === "CENTRAL" ? "All campuses" : campuses.map((c) => c.name).join(", "), event.mode !== "OFFLINE" ? "Online" : null]
+  const where = [event.venue, event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.name).join(" + "), event.mode !== "OFFLINE" ? "Online" : null]
     .filter(Boolean).join(" · ") || "To be announced";
   const registerHref = `/events/${event.slug}/register`;
   const isTeamEvent = !!event.modules?.teams;
@@ -141,7 +141,7 @@ export default async function EventPage({ params, searchParams }: Params) {
                 <EventIcon name={EVENT_FAMILIES.find((f) => f.key === eventFamily(event))?.icon} className="h-3 w-3" />{familyLabel(eventFamily(event))}
               </Link>
               <ModeBadge mode={event.mode} />
-              <Badge>{event.scope === "CENTRAL" ? "Central event" : "Campus event"}</Badge>
+              <Badge>{event.scope === "CENTRAL" ? "Central (HQ) event" : campuses.length > 1 ? "Joint campus event" : "Campus event"}</Badge>
               {campuses.map((c) => <Badge key={c.id} tone="gray"><MapPin className="h-3 w-3" />{c.name}</Badge>)}
             </div>
             <h1 className="mt-5 font-heading text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">{event.title}</h1>

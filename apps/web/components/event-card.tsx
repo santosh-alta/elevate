@@ -60,7 +60,7 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
           <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{fmtRange(event.startsAt, event.endsAt)}</p>
           <p className="flex items-center gap-1.5">
             <MapPin className="h-3.5 w-3.5" />
-            {event.scope === "CENTRAL" ? "All campuses" : campuses.map((c) => c.name).join(", ") || "Campus event"}
+            {event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.name).join(" + ") || "Campus event"}
           </p>
           {regs !== undefined && <p className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{regs} registered</p>}
         </div>

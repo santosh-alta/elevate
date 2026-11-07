@@ -190,8 +190,8 @@ export function EventForm({
         <CardBody className="grid gap-4 sm:grid-cols-2">
           <Field label="Level">
             <Select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)}>
-              <option value="CENTRAL">Central (all campuses)</option>
-              <option value="CAMPUS">Campus level</option>
+              <option value="CENTRAL">Central (HQ, for all campuses)</option>
+              <option value="CAMPUS">Campus (pick one, or several for a joint event)</option>
             </Select>
           </Field>
           <Field label="Mode">
