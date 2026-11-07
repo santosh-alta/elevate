@@ -5,7 +5,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
-import type { BrandTheme } from "./theme";
+import type { ThemeInput } from "./theme";
 
 export interface BrandConfig {
   slug: string;
@@ -15,6 +15,8 @@ export interface BrandConfig {
   iconColor: string;
   apiUrl: string;
   webUrl?: string;
+  /** Built-in theme used before /v1/tenant loads (and offline); the tenant theme wins */
+  theme?: ThemeInput;
 }
 
 export const brand: BrandConfig = (Constants.expoConfig?.extra?.brand as BrandConfig) ?? {
@@ -172,7 +174,7 @@ export interface Tenant {
   id: string;
   slug: string;
   name: string;
-  theme: Partial<BrandTheme>;
+  theme: ThemeInput;
   settings: { hashtags?: string[]; linkedinOrgUrl?: string; [k: string]: unknown };
   campuses: Campus[];
 }

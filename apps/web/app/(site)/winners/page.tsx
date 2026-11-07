@@ -7,6 +7,7 @@ import { requireTenant } from "@/lib/tenant";
 import { fmtDate, typeLabel } from "@/lib/format";
 import type { ElevateEvent, Winner } from "@/lib/types";
 import { Badge, Button, EmptyState, Select } from "@/components/ui";
+import { PageHero } from "@/components/page-hero";
 import { WinnersPodium } from "@/components/event-extras";
 
 export const metadata: Metadata = { title: "Winners hall of fame" };
@@ -43,16 +44,15 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
   const years = Array.from({ length: 6 }, (_, i) => thisYear - i);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <div className="flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15"><Trophy className="h-6 w-6 text-accent" /></span>
-        <div>
-          <h1 className="text-3xl font-bold">Hall of fame</h1>
-          <p className="text-muted">Winning teams from hackathons and competitions at {tenant.name}.</p>
-        </div>
-      </div>
-
-      <form className="mt-6 grid gap-3 rounded-brand border border-border bg-card p-4 sm:grid-cols-3">
+    <>
+    <PageHero
+      eyebrow={<span className="inline-flex items-center gap-2 font-semibold uppercase tracking-[0.16em]"><Trophy className="h-4 w-4 text-hero-accent" />Winners</span>}
+      title="Hall of fame"
+      description={`Winning teams from hackathons and competitions at ${tenant.name}.`}
+      className="pb-10"
+    />
+    <div className="mx-auto max-w-6xl px-4 pb-10">
+      <form className="relative -mt-8 grid gap-3 rounded-brand border border-border bg-card p-4 shadow-lg sm:grid-cols-3">
         <Select name="type" defaultValue={sp.type ?? ""} aria-label="Event type">
           <option value="">All event types</option>
           {EVENT_TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
@@ -69,7 +69,7 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
           <section key={e.event.id ?? e.event.slug}>
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <div>
-                <Link href={`/events/${e.event.slug}`} className="text-xl font-semibold hover:text-primary">{e.event.title}</Link>
+                <Link href={`/events/${e.event.slug}`} className="font-heading text-2xl font-bold tracking-tight underline decoration-transparent decoration-2 underline-offset-4 hover:decoration-accent">{e.event.title}</Link>
                 <p className="text-sm text-muted">{fmtDate(e.event.startsAt)}</p>
               </div>
               <Badge tone="primary">{typeLabel(e.event.type)}</Badge>
@@ -79,5 +79,6 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
         )) : <EmptyState title="No winners yet" description="Results show up here once organisers publish them." />}
       </div>
     </div>
+    </>
   );
 }

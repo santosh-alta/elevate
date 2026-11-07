@@ -5,5 +5,17 @@
   "scheme": "sunstoneevents",
   "iconColor": "#f97316",
   "apiUrl": "http://localhost:4000",
-  "webUrl": "http://sunstone.localhost:3000"
+  "webUrl": "http://sunstone.localhost:3000",
+  "theme": {
+    "colors": {
+      "primary": "#d97706",
+      "primaryFg": "#ffffff",
+      "accent": "#0f766e",
+      "bg": "#fffbeb",
+      "fg": "#1c1917",
+      "muted": "#78716c",
+      "card": "#ffffff",
+      "border": "#f5e6c8"
+    }
+  }
 }

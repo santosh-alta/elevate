@@ -9,7 +9,20 @@ export interface BrandSettings {
   linkedinOrgId?: string;
   emailFrom?: string;
   supportEmail?: string;
+  /** Public website shown in email footers, e.g. "https://altaschool.tech" */
+  website?: string;
+  phone?: string;
+  /** Profile URLs by network: instagram, facebook, linkedin, x, youtube */
   social?: Record<string, string>;
+  /** Default certificate signatories (a CertificateTemplate's design.signatories wins) */
+  signatories?: Signatory[];
+}
+
+export interface Signatory {
+  name?: string;
+  title?: string;
+  /** PNG/JPEG signature image (site-relative or absolute) */
+  signatureUrl?: string;
 }
 
 export function themeOf(tenant: Tenant): BrandTheme {

@@ -18,7 +18,7 @@ export default async function GuestLibraryPage({ searchParams }: { searchParams:
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Guest library</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Guest library</h1>
         <p className="text-sm text-muted">Every speaker, founder, investor and chief guest who has joined our events, with their full history.</p>
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">

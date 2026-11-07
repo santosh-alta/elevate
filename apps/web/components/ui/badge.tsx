@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
 
-export type Tone = "gray" | "blue" | "green" | "amber" | "red" | "purple" | "primary" | "teal";
+export type Tone = "gray" | "blue" | "green" | "amber" | "red" | "purple" | "primary" | "teal" | "highlight" | "secondary";
 
 const TONES: Record<Tone, string> = {
   gray: "bg-slate-100 text-slate-700 ring-slate-200",
@@ -12,6 +12,9 @@ const TONES: Record<Tone, string> = {
   purple: "bg-violet-50 text-violet-700 ring-violet-200",
   teal: "bg-teal-50 text-teal-700 ring-teal-200",
   primary: "bg-primary/10 text-primary ring-primary/20",
+  /** Brand highlight (e.g. Alta yellow): use sparingly, for "new", "featured", ribbons */
+  highlight: "bg-highlight text-highlight-fg ring-highlight",
+  secondary: "bg-secondary/15 text-fg ring-secondary/40",
 };
 
 export function Badge({ tone = "gray", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {

@@ -4,6 +4,7 @@ import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
 import { humanize, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
+import { PageHero } from "@/components/page-hero";
 import { EventCard } from "@/components/event-card";
 import { Button, EmptyState, Select } from "@/components/ui";
 
@@ -20,11 +21,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   if (sp.mode) events = events.filter((e) => e.mode === sp.mode);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="text-3xl font-bold">Events</h1>
-      <p className="mt-1 text-muted">Find hackathons, workshops, seminars and more across {tenant.name}.</p>
-
-      <form className="mt-6 grid gap-3 rounded-brand border border-border bg-card p-4 sm:grid-cols-5">
+    <>
+    <PageHero title="Events" description={`Find hackathons, workshops, seminars and more across ${tenant.name}.`} className="pb-10" />
+    <div className="mx-auto max-w-6xl px-4 pb-10">
+      <form className="relative -mt-8 grid gap-3 rounded-brand border border-border bg-card p-4 shadow-lg sm:grid-cols-5">
         <Select name="type" defaultValue={sp.type ?? ""}>
           <option value="">All types</option>
           {EVENT_TYPES.map((t) => <option key={t} value={t}>{typeLabel(t)}</option>)}
@@ -52,5 +52,6 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         )}
       </div>
     </div>
+    </>
   );
 }

@@ -105,7 +105,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       status,
       tenant,
       tenantError,
-      theme: resolveTheme(tenant?.theme, brand.iconColor),
+      theme: resolveTheme(tenant?.theme, brand.theme ?? { colors: { primary: brand.iconColor } }),
       user,
       membership,
       isStaff,

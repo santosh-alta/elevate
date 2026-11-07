@@ -11,12 +11,32 @@
   --muted: 100 116 139;
   --card: 255 255 255;
   --border: 226 232 240;
+  --secondary: 14 165 233;
+  --secondary-fg: 255 255 255;
+  --highlight: 245 158 11;
+  --highlight-fg: 15 23 42;
+  --hero-bg: 30 27 75;
+  --hero-fg: 255 255 255;
+  --hero-accent: 245 158 11;
+  --gradient-from: 79 70 229;
+  --gradient-to: 245 158 11;
   --radius: 12px;
   --font-brand: "Inter";
+  --font-heading: "Inter";
 }
 
 html { -webkit-text-size-adjust: 100%; }
 body { background: rgb(var(--bg)); color: rgb(var(--fg)); }
+
+@layer base {
+  h1, h2, h3 {
+    font-family: var(--font-heading), var(--font-brand), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.015em;
+  }
+  h1 { letter-spacing: -0.025em; }
+  ::selection { background: rgb(var(--accent) / 0.25); }
+  :focus-visible { outline-color: rgb(var(--accent)); }
+}
 
 @media print {
   body { background: white; }

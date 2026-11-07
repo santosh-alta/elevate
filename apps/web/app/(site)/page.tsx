@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Award, CalendarDays, Users } from "lucide-react";
+import { resolveTheme } from "@elevate/shared";
 import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
 import { eventCount } from "@/lib/format";
@@ -16,26 +17,43 @@ export default async function HomePage() {
   const live = upcoming.filter((e) => e.status === "LIVE");
   const next = upcoming.filter((e) => e.status !== "LIVE");
   const totalParticipants = past.reduce((s, e) => s + (eventCount(e, "registrations") ?? 0), 0);
-  const tagline = (tenant.settings.tagline as string) ?? "Hackathons, workshops, seminars and guest lectures — all in one place.";
+  const theme = resolveTheme(tenant.theme);
+  const headlineText = theme.tagline ?? "Learn, build and grow at our events.";
+  const settingsTagline = tenant.settings.tagline as string | undefined;
+  const subline = settingsTagline && settingsTagline !== headlineText ? settingsTagline : "Hackathons, workshops, seminars and guest lectures, all in one place.";
+  const headline = splitHeadline(headlineText);
 
   return (
     <>
-      <section className="relative overflow-hidden border-b border-border bg-card">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
-        <div className="relative mx-auto max-w-6xl px-4 py-16 sm:py-24">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary">{tenant.name}</p>
-          <h1 className="mt-3 max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">Learn, build and grow at our events.</h1>
-          <p className="mt-4 max-w-xl text-lg text-muted">{tagline}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <LinkButton href="/events" size="lg">Explore events <ArrowRight className="h-4 w-4" /></LinkButton>
-            <LinkButton href="/me" size="lg" variant="outline">My tickets & certificates</LinkButton>
+      <section className="relative isolate overflow-hidden bg-hero-bg text-hero-fg">
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10 opacity-60"
+          style={{ backgroundImage: "radial-gradient(60% 80% at 100% 0%, rgb(var(--gradient-from) / 0.35), transparent 60%), radial-gradient(50% 70% at 85% 100%, rgb(var(--gradient-to) / 0.25), transparent 60%)" }}
+        />
+        {theme.iconUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={theme.iconUrl} alt="" aria-hidden className="pointer-events-none absolute -right-16 top-1/2 -z-10 hidden h-[130%] max-h-[560px] w-auto -translate-y-1/2 opacity-[0.12] md:block" />
+        )}
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:py-24">
+          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-hero-fg/85 sm:text-sm">
+            <span className="h-0.5 w-8 rounded-full bg-brand-gradient" aria-hidden />{tenant.name} Events
+          </p>
+          <h1 className="mt-5 max-w-3xl font-heading text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
+            {headline.before}<span className="text-hero-accent">{headline.word}</span>{headline.after}
+          </h1>
+          <div className="mt-6 h-1.5 w-24 rounded-full bg-brand-gradient" aria-hidden />
+          <p className="mt-6 max-w-xl text-lg text-hero-fg/85 sm:text-xl">{subline}</p>
+          <div className="mt-9 flex flex-wrap gap-3">
+            <LinkButton href="/events" size="lg" variant="cta">Explore events <ArrowRight className="h-4 w-4" /></LinkButton>
+            <LinkButton href="/me" size="lg" variant="ghost" className="text-hero-fg ring-1 ring-inset ring-hero-fg/40 hover:bg-hero-fg/10">My tickets &amp; certificates</LinkButton>
           </div>
           {past.length > 0 && (
-            <div className="mt-12 grid max-w-lg grid-cols-3 gap-6">
+            <dl className="mt-14 grid max-w-xl grid-cols-3 gap-4 border-t border-hero-fg/15 pt-8 sm:gap-8">
               <HeroStat icon={<CalendarDays className="h-4 w-4" />} value={past.length} label="Events held" />
               <HeroStat icon={<Users className="h-4 w-4" />} value={totalParticipants} label="Participants" />
               <HeroStat icon={<Award className="h-4 w-4" />} value={tenant.campuses.length || "—"} label="Campuses" />
-            </div>
+            </dl>
           )}
         </div>
       </section>
@@ -46,7 +64,7 @@ export default async function HomePage() {
             <Grid events={live} />
           </Section>
         )}
-        <Section title="Upcoming events" action={<Link href="/events" className="text-sm font-medium text-primary hover:underline">View all</Link>}>
+        <Section title="Upcoming events" action={<Link href="/events" className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline decoration-accent decoration-2 underline-offset-4 hover:decoration-primary">View all <ArrowRight className="h-3.5 w-3.5" /></Link>}>
           {next.length ? <Grid events={next.slice(0, 6)} /> : <EmptyState title="No upcoming events yet" description="New events will show up here as soon as they are announced." />}
         </Section>
         {past.length > 0 && (
@@ -59,11 +77,17 @@ export default async function HomePage() {
   );
 }
 
+/** Highlight the last word of the headline (Alta-style coloured keyword), e.g. "… for an AI *World*". */
+function splitHeadline(text: string) {
+  const m = text.trim().match(/^(.*\s)?(\S+?)([.!?]?)$/);
+  return m ? { before: m[1] ?? "", word: m[2], after: m[3] } : { before: text, word: "", after: "" };
+}
+
 function HeroStat({ icon, value, label }: { icon: React.ReactNode; value: React.ReactNode; label: string }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-muted">{icon}<span className="text-xs">{label}</span></div>
-      <div className="mt-1 text-2xl font-bold">{value}</div>
+      <dt className="flex items-center gap-1.5 text-hero-fg/80">{icon}<span className="text-xs sm:text-sm">{label}</span></dt>
+      <dd className="mt-1 font-heading text-2xl font-bold sm:text-3xl">{value}</dd>
     </div>
   );
 }
@@ -72,7 +96,10 @@ function Section({ title, action, children }: { title: string; action?: React.Re
   return (
     <section>
       <div className="mb-5 flex items-end justify-between">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        <div>
+          <h2 className="font-heading text-2xl font-bold tracking-tight">{title}</h2>
+          <div className="mt-2 h-1 w-10 rounded-full bg-brand-gradient" aria-hidden />
+        </div>
         {action}
       </div>
       {children}

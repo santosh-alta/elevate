@@ -29,7 +29,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Brand settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Brand settings</h1>
         <p className="text-sm text-muted">How {tenant.name} looks and who runs it. Changes apply to the web and mobile apps.</p>
       </div>
       {!isBrandAdmin(me) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Only brand admins can change these settings.</p>}

@@ -1,8 +1,9 @@
-import { PDFDocument, StandardFonts, rgb, type RGB } from "pdf-lib";
+import { PDFDocument, rgb, type RGB } from "pdf-lib";
 import QRCode from "qrcode";
 import type { Certificate, CertificateType, Event, RegistrationStatus, Tenant } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
-import { brandBaseUrl, settingsOf, themeOf, verifyUrl } from "./brand";
+import { brandBaseUrl, settingsOf, themeOf, verifyUrl, type Signatory } from "./brand";
+import { embedBrandImage, embedFonts, hexToRgb, shade, type PdfFont } from "./brandAssets";
 import { certificateSerial } from "./codes";
 import { notifyCertificate, safely } from "./notify";
 
@@ -164,77 +165,348 @@ export async function generateCertificates(eventId: string): Promise<{ created: 
   return { created, total };
 }
 
-function hexToRgb(hex: string, fallback: RGB = rgb(0.3, 0.27, 0.9)): RGB {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return fallback;
-  const n = parseInt(m[1], 16);
-  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+// ───────── PDF ─────────
+
+const DISPLAY_TZ = process.env.DISPLAY_TZ ?? "Asia/Kolkata";
+
+/** Second title line, under "CERTIFICATE OF". */
+const TITLE_WORD: Record<CertificateType, string> = {
+  PARTICIPATION: "PARTICIPATION",
+  WINNER: "EXCELLENCE",
+  RUNNER_UP: "EXCELLENCE",
+  SPECIAL_MENTION: "MERIT",
+  FINALIST: "ACHIEVEMENT",
+  JUDGE: "APPRECIATION",
+  SPEAKER: "APPRECIATION",
+  MENTOR: "APPRECIATION",
+  VOLUNTEER: "APPRECIATION",
+};
+
+const ROLE_KICKER: Partial<Record<CertificateType, string>> = {
+  FINALIST: "Finalist", JUDGE: "Judge", SPEAKER: "Speaker", MENTOR: "Mentor", VOLUNTEER: "Volunteer",
+};
+
+const DEFAULT_SIGNATORIES: Signatory[] = [{ title: "Event Lead" }, { title: "Director" }];
+
+interface TemplateDesign {
+  title?: string;
+  signatories?: Signatory[];
 }
 
-/** WinAnsi-safe text for the standard PDF fonts. */
-function safe(text: string): string {
-  return text.replace(/[—–]/g, "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+function eventDates(start: Date, end: Date): string {
+  const fmt = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-IN", { timeZone: DISPLAY_TZ, ...o });
+  const full = (d: Date) => fmt(d, { day: "numeric", month: "long", year: "numeric" });
+  if (full(start) === full(end) || end < start) return full(start);
+  const sameMonth = fmt(start, { month: "long", year: "numeric" }) === fmt(end, { month: "long", year: "numeric" });
+  return sameMonth ? `${fmt(start, { day: "numeric" })}–${full(end)}` : `${fmt(start, { day: "numeric", month: "long" })} – ${full(end)}`;
+}
+
+/** Headline, kicker and detail line for each certificate type. */
+function wording(cert: Certificate, eventTitle: string, dates: string) {
+  const [first, ...rest] = (cert.detail ?? "").split(" — ");
+  const firstIsLabel = !!first && !first.startsWith('"');
+  let kicker = ROLE_KICKER[cert.type];
+  let detail = cert.detail ?? "";
+  let body: string;
+  switch (cert.type) {
+    case "WINNER":
+    case "RUNNER_UP":
+    case "SPECIAL_MENTION":
+      kicker = firstIsLabel ? first : cert.type === "SPECIAL_MENTION" ? "Special Mention" : "Winner";
+      detail = firstIsLabel ? rest.join(" — ") : detail;
+      body = `in recognition of exceptional performance at ${eventTitle}`;
+      break;
+    case "FINALIST":
+      detail = first === "Finalist" ? rest.join(" — ") : detail;
+      body = `for reaching the finals of ${eventTitle}`;
+      break;
+    case "JUDGE":
+      body = `in appreciation of serving as a judge at ${eventTitle}`;
+      break;
+    case "SPEAKER":
+      if (firstIsLabel) {
+        kicker = first;
+        detail = rest.join(" — ");
+      }
+      body = `in appreciation of speaking at ${eventTitle}`;
+      break;
+    case "MENTOR":
+      body = `in appreciation of mentoring participants at ${eventTitle}`;
+      break;
+    case "VOLUNTEER":
+      body = `in appreciation of volunteering at ${eventTitle}`;
+      break;
+    default:
+      body = `for participating in ${eventTitle}`;
+  }
+  return { kicker, body, sub: [detail, dates].filter(Boolean).join("  ·  ") };
+}
+
+/** Small deterministic PRNG so a brand's panel pattern is stable between renders. */
+function prng(seedText: string) {
+  let a = [...seedText].reduce((h, ch) => Math.imul(h ^ ch.charCodeAt(0), 16777619), 2166136261) >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function wrap(text: string, f: PdfFont, size: number, max: number, maxLines = 2): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (cur && f.width(next, size) > max) {
+      lines.push(cur);
+      cur = w;
+    } else cur = next;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) {
+    const kept = lines.slice(0, maxLines);
+    let last = `${kept[maxLines - 1]} ${lines.slice(maxLines).join(" ")}`;
+    while (last.length > 1 && f.width(`${last}…`, size) > max) last = last.slice(0, -1);
+    kept[maxLines - 1] = `${last.trimEnd()}…`;
+    return kept;
+  }
+  return lines;
 }
 
 export type CertificateWithRelations = Certificate & { event: Event & { tenant: Tenant } };
 
-/** Renders a landscape A4 certificate PDF on demand. */
+/**
+ * Renders a landscape A4 certificate PDF on demand, in the brand's colours and logo:
+ * accent frame, hero-coloured side panel with the logo and verification QR, serif title,
+ * script recipient name, signatories, and a seal in the highlight colour.
+ */
 export async function renderCertificatePdf(cert: CertificateWithRelations): Promise<Uint8Array> {
   const tenant = cert.event.tenant;
   const theme = themeOf(tenant);
-  const primary = hexToRgb(theme.colors.primary);
-  const accent = hexToRgb(theme.colors.accent, rgb(0.96, 0.62, 0.04));
-  const ink = hexToRgb(theme.colors.fg, rgb(0.06, 0.09, 0.16));
-  const muted = hexToRgb(theme.colors.muted, rgb(0.4, 0.45, 0.53));
+  const settings = settingsOf(tenant);
+  const c = theme.colors;
+  const accent = hexToRgb(c.accent);
+  const heroBg = hexToRgb(c.heroBg);
+  const heroFg = hexToRgb(c.heroFg, rgb(1, 1, 1));
+  const ink = hexToRgb(c.fg, rgb(0.06, 0.09, 0.16));
+  const muted = hexToRgb(c.muted, rgb(0.4, 0.45, 0.53));
+  const highlight = hexToRgb(c.highlight, rgb(0.99, 0.75, 0.15));
+  const white = rgb(1, 1, 1);
+
+  const template = await prisma.certificateTemplate
+    .findUnique({ where: { tenantId_type: { tenantId: tenant.id, type: cert.type } } })
+    .catch(() => null);
+  const design = (template?.design ?? {}) as TemplateDesign;
 
   const doc = await PDFDocument.create();
   doc.setTitle(`${TITLES[cert.type]} - ${cert.recipientName}`);
   doc.setAuthor(tenant.name);
+  doc.setCreator("Elevate");
   const page = doc.addPage([841.89, 595.28]); // A4 landscape
-  const { width, height } = page.getSize();
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const serif = await doc.embedFont(StandardFonts.TimesRomanBoldItalic);
+  const { width: W, height: H } = page.getSize();
+  const fonts = await embedFonts(doc);
 
-  // Frame
-  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
-  page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: primary });
-  page.drawRectangle({ x: 0, y: 0, width, height: 18, color: primary });
-  page.drawRectangle({ x: 28, y: 36, width: width - 56, height: height - 72, borderColor: accent, borderWidth: 2 });
-
-  const center = (text: string, y: number, size: number, font = regular, color = ink) => {
-    const t = safe(text);
-    const w = font.widthOfTextAtSize(t, size);
-    page.drawText(t, { x: (width - w) / 2, y, size, font, color });
+  const text = (t: string, x: number, y: number, size: number, f: PdfFont, color: RGB, opacity = 1) => {
+    const p = f.pick(t);
+    page.drawText(p.text, { x, y, size, font: p.font, color, opacity });
   };
-  const fit = (text: string, max: number, font = regular, start = 34) => {
-    let size = start;
-    while (size > 12 && font.widthOfTextAtSize(safe(text), size) > max) size -= 1;
-    return size;
+  const fitSize = (t: string, f: PdfFont, start: number, min: number, max: number) => {
+    let s = start;
+    while (s > min && f.width(t, s) > max) s -= 0.5;
+    return s;
+  };
+  const tracked = (t: string, x: number, y: number, size: number, f: PdfFont, color: RGB, spacing: number) => {
+    let cx = x;
+    for (const ch of t) {
+      text(ch, cx, y, size, f, color);
+      cx += f.width(ch, size) + spacing;
+    }
+    return cx - x;
   };
 
-  center(tenant.name.toUpperCase(), height - 90, 16, bold, primary);
-  center(TITLES[cert.type], height - 140, fit(TITLES[cert.type], width - 160, bold, 28), bold, ink);
-  center("This is to certify that", height - 190, 14, regular, muted);
-  center(cert.recipientName, height - 245, fit(cert.recipientName, width - 200, serif, 44), serif, primary);
-  page.drawLine({ start: { x: width / 2 - 180, y: height - 258 }, end: { x: width / 2 + 180, y: height - 258 }, thickness: 1, color: accent });
+  // ── Frame: accent border and a thin inner rule
+  const FRAME = 14;
+  page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: accent });
+  page.drawRectangle({ x: FRAME, y: FRAME, width: W - FRAME * 2, height: H - FRAME * 2, color: white });
+  const INSET = 24;
+  page.drawRectangle({ x: INSET, y: INSET, width: W - INSET * 2, height: H - INSET * 2, borderColor: heroBg, borderWidth: 0.8, borderOpacity: 0.55 });
 
-  const verb = ["JUDGE", "SPEAKER", "VOLUNTEER", "MENTOR"].includes(cert.type) ? "contributed to" : "participated in";
-  center(`has ${verb}`, height - 290, 14, regular, muted);
-  center(cert.event.title, height - 322, fit(cert.event.title, width - 200, bold, 22), bold, ink);
-  if (cert.detail) center(cert.detail, height - 350, 14, regular, ink);
-  const dateStr = cert.event.startsAt.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-  center(`held on ${dateStr}`, height - 375, 12, regular, muted);
+  // ── Left panel with a faceted pattern
+  const PX = INSET + 6;
+  const PY = INSET + 6;
+  const PW = 214;
+  const PH = H - PY * 2;
+  page.drawRectangle({ x: PX, y: PY, width: PW, height: PH, color: heroBg });
+  const rand = prng(tenant.slug);
+  const cols = 4;
+  const rows = 8;
+  const pts: { x: number; y: number }[][] = [];
+  for (let r = 0; r <= rows; r++) {
+    pts.push([]);
+    for (let q = 0; q <= cols; q++) {
+      const edgeX = q === 0 || q === cols;
+      const edgeY = r === 0 || r === rows;
+      pts[r].push({
+        x: PX + (q / cols) * PW + (edgeX ? 0 : (rand() - 0.5) * (PW / cols) * 0.8),
+        y: PY + (r / rows) * PH + (edgeY ? 0 : (rand() - 0.5) * (PH / rows) * 0.8),
+      });
+    }
+  }
+  const tri = (a: { x: number; y: number }, b: { x: number; y: number }, d: { x: number; y: number }) => {
+    // drawSvgPath flips y: path coordinates are measured downwards from the origin.
+    const path = `M ${a.x} ${-a.y} L ${b.x} ${-b.y} L ${d.x} ${-d.y} Z`;
+    const light = rand() < 0.5;
+    page.drawSvgPath(path, { x: 0, y: 0, color: light ? heroFg : rgb(0, 0, 0), opacity: light ? 0.02 + rand() * 0.07 : 0.03 + rand() * 0.08 });
+  };
+  for (let r = 0; r < rows; r++) {
+    for (let q = 0; q < cols; q++) {
+      const [p00, p10, p01, p11] = [pts[r][q], pts[r][q + 1], pts[r + 1][q], pts[r + 1][q + 1]];
+      if (rand() < 0.5) {
+        tri(p00, p10, p11);
+        tri(p00, p11, p01);
+      } else {
+        tri(p00, p10, p01);
+        tri(p10, p11, p01);
+      }
+    }
+  }
 
-  // Verification block
+  // Logo (dark-background version) or the brand name
+  const logo = await embedBrandImage(doc, theme.logoDarkUrl ?? theme.logoUrl);
+  const logoTop = H - PY - 44;
+  if (logo) {
+    const lw = Math.min(PW - 56, (logo.width / logo.height) * 64);
+    const lh = (logo.height / logo.width) * lw;
+    page.drawImage(logo, { x: PX + (PW - lw) / 2, y: logoTop - lh, width: lw, height: lh });
+  } else {
+    const lines = wrap(tenant.name.toUpperCase(), fonts.sansBold, 18, PW - 48, 3);
+    lines.forEach((l, i) => {
+      const s = fitSize(l, fonts.sansBold, 18, 10, PW - 48);
+      text(l, PX + (PW - fonts.sansBold.width(l, s)) / 2, logoTop - 18 - i * 22, s, fonts.sansBold, heroFg);
+    });
+  }
+  if (theme.tagline) {
+    const tl = wrap(theme.tagline, fonts.sans, 9.5, PW - 60, 2);
+    const ty = logoTop - (logo ? (logo.height / logo.width) * Math.min(PW - 56, (logo.width / logo.height) * 64) : 60) - 26;
+    page.drawLine({ start: { x: PX + PW / 2 - 18, y: ty + 14 }, end: { x: PX + PW / 2 + 18, y: ty + 14 }, thickness: 1.5, color: accent });
+    tl.forEach((l, i) => text(l, PX + (PW - fonts.sans.width(l, 9.5)) / 2, ty - i * 13, 9.5, fonts.sans, heroFg, 0.85));
+  }
+
+  // Verification QR on a white tile at the bottom of the panel
   const base = await brandBaseUrl(tenant.id);
   const url = verifyUrl(base, cert.serial);
-  const qrPng = await QRCode.toBuffer(url, { margin: 0, width: 240 });
+  const qrPng = await QRCode.toBuffer(url, { margin: 0, width: 300, color: { dark: c.heroBg.length === 7 ? `${c.heroBg}ff` : "#000000ff", light: "#ffffffff" } });
   const qr = await doc.embedPng(qrPng);
-  page.drawImage(qr, { x: width - 150, y: 60, width: 80, height: 80 });
-  page.drawText(safe(`Certificate ID: ${cert.serial}`), { x: 60, y: 84, size: 10, font: bold, color: ink });
-  page.drawText(safe(`Verify at ${url}`), { x: 60, y: 68, size: 9, font: regular, color: muted });
-  page.drawText(safe(`Issued ${cert.issuedAt.toISOString().slice(0, 10)} · Powered by Elevate`), { x: 60, y: 52, size: 8, font: regular, color: muted });
+  const QR = 74;
+  const tile = QR + 14;
+  const tileX = PX + (PW - tile) / 2;
+  const tileY = PY + 46;
+  page.drawRectangle({ x: tileX, y: tileY, width: tile, height: tile, color: white });
+  page.drawImage(qr, { x: tileX + 7, y: tileY + 7, width: QR, height: QR });
+  const scan = "SCAN TO VERIFY";
+  const scanW = (() => { let w = 0; for (const ch of scan) w += fonts.sansSemi.width(ch, 7.5) + 1.2; return w - 1.2; })();
+  tracked(scan, PX + (PW - scanW) / 2, PY + 28, 7.5, fonts.sansSemi, heroFg, 1.2);
+
+  // ── Ribbon and seal (top right)
+  const sealX = W - INSET - 92;
+  const ribbonW = 40;
+  const sealY = H - INSET - 104;
+  page.drawRectangle({ x: sealX - ribbonW / 2, y: sealY, width: ribbonW, height: H - INSET - 0.4 - sealY, color: heroBg });
+  const tailColor = shade(highlight, -0.22);
+  for (const dir of [-1, 1]) {
+    // Ribbon tails with a V notch
+    const x0 = sealX + dir * 8;
+    const pts2 = [
+      [x0 - 9, sealY - 0], [x0 + 9, sealY - 0],
+      [x0 + 9 + dir * 12, sealY - 56], [x0 + dir * 12, sealY - 48], [x0 - 9 + dir * 12, sealY - 56],
+    ];
+    page.drawSvgPath(`M ${pts2.map(([x, y]) => `${x} ${-y}`).join(" L ")} Z`, { x: 0, y: 0, color: tailColor });
+  }
+  const starburst = (cx: number, cy: number, n: number, ro: number, ri: number) => {
+    const parts: string[] = [];
+    for (let i = 0; i < n * 2; i++) {
+      const r = i % 2 === 0 ? ro : ri;
+      const a = (Math.PI * i) / n - Math.PI / 2;
+      parts.push(`${i === 0 ? "M" : "L"} ${cx + r * Math.cos(a)} ${-(cy + r * Math.sin(a))}`);
+    }
+    return `${parts.join(" ")} Z`;
+  };
+  page.drawSvgPath(starburst(sealX, sealY, 30, 36, 32.5), { x: 0, y: 0, color: highlight });
+  page.drawCircle({ x: sealX, y: sealY, size: 27, color: shade(highlight, 0.18), borderColor: shade(highlight, -0.3), borderWidth: 1.2 });
+  page.drawCircle({ x: sealX, y: sealY, size: 23, borderColor: shade(highlight, -0.3), borderWidth: 0.5, borderOpacity: 0.7 });
+  page.drawSvgPath(starburst(sealX, sealY, 5, 12, 5), { x: 0, y: 0, color: shade(highlight, -0.3) });
+
+  // ── Content
+  const X = PX + PW + 48;
+  const RIGHT = W - INSET - 40;
+  const titleMax = sealX - 46 - X;
+  const dates = eventDates(cert.event.startsAt, cert.event.endsAt);
+  const words = wording(cert, cert.event.title, dates);
+
+  let y = H - INSET - 92;
+  if (words.kicker) tracked(words.kicker.toUpperCase(), X, y, 9.5, fonts.sansBold, accent, 1.8);
+  y -= 44;
+  const titleLines = design.title
+    ? wrap(design.title.toUpperCase(), fonts.serif, 34, titleMax, 2)
+    : ["CERTIFICATE OF", TITLE_WORD[cert.type]];
+  for (const l of titleLines) {
+    text(l, X, y, fitSize(l, fonts.serif, 38, 20, titleMax), fonts.serif, ink);
+    y -= 44;
+  }
+  y += 12;
+  text("This certificate is proudly presented to", X, y, 11, fonts.sans, muted);
+
+  // Recipient name in script, with a rule underneath
+  const nameMax = RIGHT - X;
+  const nameSize = fitSize(cert.recipientName, fonts.script, 60, 26, nameMax);
+  y -= 68;
+  text(cert.recipientName, X, y, nameSize, fonts.script, ink);
+  y -= 18;
+  page.drawLine({ start: { x: X, y }, end: { x: RIGHT, y }, thickness: 0.8, color: muted, opacity: 0.6 });
+
+  y -= 34;
+  for (const l of wrap(words.body, fonts.sansSemi, 13.5, nameMax, 2)) {
+    text(l, X, y, 13.5, fonts.sansSemi, ink);
+    y -= 19;
+  }
+  y -= 6;
+  for (const l of wrap(words.sub, fonts.sans, 11, nameMax, 2)) {
+    text(l, X, y, 11, fonts.sans, muted);
+    y -= 15;
+  }
+
+  // Signatories
+  const signatories = (design.signatories?.length ? design.signatories : settings.signatories?.length ? settings.signatories : DEFAULT_SIGNATORIES).slice(0, 3);
+  const sigW = signatories.length > 2 ? 140 : 165;
+  const sigGap = signatories.length > 2 ? 22 : 40;
+  const sigY = 124;
+  for (const [i, s] of signatories.entries()) {
+    const sx = X + i * (sigW + sigGap);
+    const sig = await embedBrandImage(doc, s.signatureUrl);
+    if (sig) {
+      const sh = 34;
+      const sw = Math.min(sigW, (sig.width / sig.height) * sh);
+      page.drawImage(sig, { x: sx, y: sigY + 4, width: sw, height: (sig.height / sig.width) * sw });
+    }
+    page.drawLine({ start: { x: sx, y: sigY }, end: { x: sx + sigW, y: sigY }, thickness: 0.8, color: muted, opacity: 0.7 });
+    let ly = sigY - 15;
+    if (s.name) {
+      text(s.name, sx, ly, fitSize(s.name, fonts.sansSemi, 10.5, 7, sigW), fonts.sansSemi, ink);
+      ly -= 13;
+    }
+    if (s.title) text(s.title, sx, ly, fitSize(s.title, fonts.sans, 9, 6.5, sigW), fonts.sans, muted);
+  }
+
+  // Serial and verification link
+  const idLabel = `Certificate ID  ${cert.serial}`;
+  text(idLabel, X, INSET + 20, 8, fonts.sansSemi, ink);
+  const verifyText = `Verify at ${url.replace(/^https?:\/\//, "")}`;
+  text(verifyText, X + fonts.sansSemi.width(idLabel, 8) + 14, INSET + 20, 8, fonts.sans, muted);
+  const issued = `Issued ${cert.issuedAt.toLocaleDateString("en-IN", { timeZone: DISPLAY_TZ, day: "numeric", month: "short", year: "numeric" })}`;
+  text(issued, RIGHT - fonts.sans.width(issued, 8), INSET + 20, 8, fonts.sans, muted);
 
   return doc.save();
 }

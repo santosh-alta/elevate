@@ -1,34 +1,51 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { resolveTheme } from "@elevate/shared";
-import { getHost, getTenant } from "@/lib/tenant";
-import { googleFontHref, themeCss } from "@/lib/theme";
+import { getHost, getOrigin, getTenant } from "@/lib/tenant";
+import { absoluteUrl, googleFontHrefs, themeCss } from "@/lib/theme";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const tenant = await getTenant();
+  const [tenant, origin] = await Promise.all([getTenant(), getOrigin()]);
   if (!tenant) return { title: "Elevate" };
   const theme = resolveTheme(tenant.theme);
+  const siteName = `${tenant.name} Events`;
+  const description = theme.tagline ?? (tenant.settings.tagline as string | undefined) ?? `Events, hackathons, workshops and seminars at ${tenant.name}.`;
+  const og = absoluteUrl(theme.ogImageUrl, origin);
+  const icon = theme.faviconUrl ?? theme.iconUrl;
+  const apple = theme.appleTouchIconUrl ?? theme.iconUrl;
+  let metadataBase: URL | undefined;
+  try { metadataBase = new URL(origin); } catch { /* unknown host */ }
   return {
-    title: { default: `${tenant.name} Events`, template: `%s · ${tenant.name} Events` },
-    description: (tenant.settings.tagline as string) ?? `Events, hackathons, workshops and seminars at ${tenant.name}.`,
-    icons: theme.faviconUrl ? { icon: theme.faviconUrl } : undefined,
+    metadataBase,
+    title: { default: siteName, template: `%s · ${siteName}` },
+    description,
+    applicationName: siteName,
+    icons: icon || apple ? { icon: icon ? [{ url: icon }] : undefined, apple: apple ? [{ url: apple }] : undefined } : undefined,
+    openGraph: { type: "website", siteName, title: siteName, description, images: og ? [{ url: og, width: 1200, height: 630, alt: tenant.name }] : undefined },
+    twitter: { card: og ? "summary_large_image" : "summary", title: siteName, description, images: og ? [og] : undefined },
   };
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const tenant = await getTenant();
+  return { themeColor: resolveTheme(tenant?.theme).colors.heroBg };
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const tenant = await getTenant();
   const theme = resolveTheme(tenant?.theme);
-  const fontHref = googleFontHref(theme.font);
+  const fontHrefs = googleFontHrefs(theme);
   return (
     <html lang="en">
       <head>
         <style dangerouslySetInnerHTML={{ __html: themeCss(tenant?.theme) }} />
-        {fontHref && (
+        {theme.fontCssUrl && <link rel="stylesheet" href={theme.fontCssUrl} />}
+        {fontHrefs.length > 0 && (
           <>
             <link rel="preconnect" href="https://fonts.googleapis.com" />
             <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-            <link rel="stylesheet" href={fontHref} />
+            {fontHrefs.map((href) => <link key={href} rel="stylesheet" href={href} />)}
           </>
         )}
       </head>

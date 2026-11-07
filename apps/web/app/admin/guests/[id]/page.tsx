@@ -27,7 +27,7 @@ export default async function GuestProfilePage({ params }: { params: Promise<{ i
       <div className="flex flex-wrap items-center gap-5">
         <GuestAvatar guest={p} size="h-20 w-20" />
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold">{p.name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{p.name}</h1>
           <p className="text-muted">{[p.designation, p.organization].filter(Boolean).join(", ")}{p.city ? ` · ${p.city}` : ""}</p>
           <div className="mt-2 flex flex-wrap gap-1">{(p.expertise ?? []).map((x) => <Badge key={x}>{x}</Badge>)}</div>
         </div>

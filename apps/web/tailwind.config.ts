@@ -11,6 +11,9 @@ export default {
       colors: {
         primary: { DEFAULT: v("primary"), fg: v("primary-fg") },
         accent: v("accent"),
+        secondary: { DEFAULT: v("secondary"), fg: v("secondary-fg") },
+        highlight: { DEFAULT: v("highlight"), fg: v("highlight-fg") },
+        hero: { bg: v("hero-bg"), fg: v("hero-fg"), accent: v("hero-accent") },
         bg: v("bg"),
         fg: v("fg"),
         muted: v("muted"),
@@ -22,6 +25,11 @@ export default {
       },
       fontFamily: {
         sans: ["var(--font-brand)", "ui-sans-serif", "system-ui", "sans-serif"],
+        heading: ["var(--font-heading)", "var(--font-brand)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+      backgroundImage: {
+        "brand-gradient": "linear-gradient(90deg, rgb(var(--gradient-from)), rgb(var(--gradient-to)))",
+        "brand-gradient-diagonal": "linear-gradient(135deg, rgb(var(--gradient-from)), rgb(var(--gradient-to)))",
       },
       typography: {
         brand: {
@@ -47,7 +55,8 @@ export default {
         DEFAULT: {
           css: {
             maxWidth: "none",
-            a: { textDecoration: "underline", textUnderlineOffset: "2px", fontWeight: "500" },
+            a: { textDecoration: "underline", textDecorationColor: raw("accent"), textDecorationThickness: "2px", textUnderlineOffset: "3px", fontWeight: "500" },
+            "h1, h2, h3, h4": { fontFamily: "var(--font-heading), var(--font-brand), ui-sans-serif, system-ui, sans-serif", letterSpacing: "-0.015em" },
             "code::before": { content: "none" },
             "code::after": { content: "none" },
             code: { backgroundColor: raw("fg", 0.06), borderRadius: "4px", padding: "0.1em 0.35em", fontWeight: "500" },

@@ -1,7 +1,8 @@
-import { PDFDocument, StandardFonts, rgb, type RGB } from "pdf-lib";
+import { PDFDocument, rgb, type RGB } from "pdf-lib";
 import type { Coupon, Event, Payment, Team, Tenant, User } from "@prisma/client";
 import { createHmac } from "node:crypto";
-import { apiBaseUrl, themeOf } from "./brand";
+import { apiBaseUrl, settingsOf, themeOf } from "./brand";
+import { drawGradientBar, embedBrandImage, embedFonts, hexToRgb, roundedRectPath, type PdfFont } from "./brandAssets";
 
 /** Signed token for receipt links in emails (opened without a login). */
 export function receiptToken(paymentId: string): string {
@@ -19,18 +20,6 @@ export type PaymentForReceipt = Payment & {
   coupon: Coupon | null;
 };
 
-function hexToRgb(hex: string, fallback: RGB = rgb(0.15, 0.39, 0.92)): RGB {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return fallback;
-  const n = parseInt(m[1], 16);
-  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
-}
-
-/** WinAnsi-safe text for the standard PDF fonts (no ₹ glyph, so amounts are written as "INR 499.00"). */
-function safe(text: string): string {
-  return text.replace(/[—–]/g, "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
-}
-
 export function money(amount: number, currency: string): string {
   return `${currency} ${(amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -39,64 +28,102 @@ const STATUS_LABEL: Record<string, string> = {
   PAID: "PAID", CREATED: "AWAITING PAYMENT", FAILED: "FAILED", EXPIRED: "EXPIRED", REFUNDED: "REFUNDED",
 };
 
-/** A4 portrait receipt in the brand's colours. */
+/** A4 portrait receipt in the brand's colours: hero-coloured header with the logo, gradient rule, amount, line items. */
 export async function renderReceiptPdf(p: PaymentForReceipt): Promise<Uint8Array> {
   const tenant = p.event.tenant;
   const theme = themeOf(tenant);
-  const primary = hexToRgb(theme.colors.primary);
-  const ink = hexToRgb(theme.colors.fg, rgb(0.06, 0.09, 0.16));
-  const muted = hexToRgb(theme.colors.muted, rgb(0.4, 0.45, 0.53));
-  const line = rgb(0.88, 0.9, 0.93);
+  const settings = settingsOf(tenant);
+  const c = theme.colors;
+  const heroBg = hexToRgb(c.heroBg);
+  const heroFg = hexToRgb(c.heroFg, rgb(1, 1, 1));
+  const ink = hexToRgb(c.fg, rgb(0.06, 0.09, 0.16));
+  const muted = hexToRgb(c.muted, rgb(0.4, 0.45, 0.53));
+  const line = hexToRgb(c.border, rgb(0.88, 0.9, 0.93));
+  const [g1, g2] = theme.gradient ?? [c.primary, c.accent];
 
   const doc = await PDFDocument.create();
   doc.setTitle(`Receipt ${p.receiptNo}`);
   doc.setAuthor(tenant.name);
   const page = doc.addPage([595.28, 841.89]);
   const { width, height } = page.getSize();
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const fonts = await embedFonts(doc);
   const left = 56;
   const right = width - 56;
 
-  page.drawRectangle({ x: 0, y: height - 110, width, height: 110, color: primary });
-  page.drawText(safe(tenant.name), { x: left, y: height - 60, size: 22, font: bold, color: rgb(1, 1, 1) });
-  page.drawText("Payment receipt", { x: left, y: height - 85, size: 12, font: regular, color: rgb(1, 1, 1) });
-  const status = STATUS_LABEL[p.status] ?? p.status;
-  const sw = bold.widthOfTextAtSize(status, 12);
-  page.drawText(status, { x: right - sw, y: height - 60, size: 12, font: bold, color: rgb(1, 1, 1) });
+  const text = (t: string, x: number, y: number, size: number, f: PdfFont, color: RGB, opacity = 1) => {
+    const picked = f.pick(t);
+    page.drawText(picked.text, { x, y, size, font: picked.font, color, opacity });
+  };
+  const textRight = (t: string, xr: number, y: number, size: number, f: PdfFont, color: RGB, opacity = 1) =>
+    text(t, xr - f.width(t, size), y, size, f, color, opacity);
 
-  let y = height - 160;
+  // Header band
+  const BAND = 104;
+  page.drawRectangle({ x: 0, y: height - BAND, width, height: BAND, color: heroBg });
+  drawGradientBar(page, 0, height - BAND - 4, width, 4, hexToRgb(g1), hexToRgb(g2));
+  const logo = await embedBrandImage(doc, theme.logoDarkUrl ?? theme.logoUrl);
+  if (logo) {
+    const lh = Math.min(42, (logo.height / logo.width) * 170);
+    const lw = (logo.width / logo.height) * lh;
+    page.drawImage(logo, { x: left, y: height - BAND / 2 - lh / 2, width: lw, height: lh });
+  } else {
+    text(tenant.name, left, height - BAND / 2 - 8, 22, fonts.sansBold, heroFg);
+  }
+  textRight("PAYMENT RECEIPT", right, height - 46, 9, fonts.sansSemi, heroFg, 0.75);
+  textRight(p.receiptNo ?? "", right, height - 66, 14, fonts.sansBold, heroFg);
+
+  // Status pill and amount
+  const status = STATUS_LABEL[p.status] ?? p.status;
+  const paid = p.status === "PAID";
+  const pillBg = paid ? hexToRgb(c.secondary) : p.status === "CREATED" ? hexToRgb(c.highlight) : hexToRgb(c.muted);
+  const pillFg = paid ? hexToRgb(c.secondaryFg, rgb(1, 1, 1)) : p.status === "CREATED" ? ink : rgb(1, 1, 1);
+  const pw = fonts.sansBold.width(status, 9) + 22;
+  let y = height - BAND - 46;
+  page.drawSvgPath(roundedRectPath(left, y - 6, pw, 20, 10), { x: 0, y: 0, color: pillBg });
+  text(status, left + 11, y, 9, fonts.sansBold, pillFg);
+  y -= 38;
+  text(p.status === "REFUNDED" ? "Amount refunded" : paid ? "Amount paid" : "Amount", left, y + 4, 10, fonts.sans, muted);
+  y -= 30;
+  text(money(p.amount, p.currency), left, y, 28, fonts.sansBold, ink);
+  y -= 38;
+
   const row = (label: string, value: string | null | undefined, opts: { strong?: boolean } = {}) => {
     if (value === null || value === undefined || value === "") return;
-    page.drawText(safe(label), { x: left, y, size: 10, font: regular, color: muted });
-    const v = safe(value);
-    const font = opts.strong ? bold : regular;
-    const size = opts.strong ? 12 : 11;
-    // Right-align, shrinking long values to fit.
-    let s = size;
-    while (s > 7 && font.widthOfTextAtSize(v, s) > right - left - 160) s -= 0.5;
-    page.drawText(v, { x: right - font.widthOfTextAtSize(v, s), y, size: s, font, color: ink });
+    text(label, left, y, 10, fonts.sans, muted);
+    const f = opts.strong ? fonts.sansBold : fonts.sans;
+    let s = opts.strong ? 12 : 11;
+    while (s > 7 && f.width(value, s) > right - left - 160) s -= 0.5;
+    textRight(value, right, y, s, f, ink);
     y -= 24;
   };
   const rule = () => {
-    page.drawLine({ start: { x: left, y: y + 10 }, end: { x: right, y: y + 10 }, thickness: 1, color: line });
+    page.drawLine({ start: { x: left, y: y + 10 }, end: { x: right, y: y + 10 }, thickness: 0.8, color: line });
     y -= 10;
+  };
+  const section = (label: string) => {
+    y -= 6;
+    text(label.toUpperCase(), left, y, 8.5, fonts.sansSemi, hexToRgb(c.accent));
+    y -= 20;
   };
 
   const date = (d: Date | null) =>
     d ? d.toLocaleString("en-IN", { timeZone: process.env.DISPLAY_TZ ?? "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : null;
 
+  rule();
   row("Receipt no.", p.receiptNo, { strong: true });
   row("Date", date(p.paidAt ?? p.createdAt));
   rule();
+  section("Event");
   row("Event", p.event.title);
   row("Event date", date(p.event.startsAt));
   if (p.team) row("Team", p.team.name);
   rule();
+  section("Billed to");
   row("Paid by", p.user.name);
   row("Email", p.user.email);
   row("Phone", p.user.phone);
   rule();
+  section("Payment");
   const gross = p.amount + p.discount;
   const unit = p.quantity > 0 ? Math.round(gross / p.quantity) : gross;
   row(
@@ -112,9 +139,11 @@ export async function renderReceiptPdf(p: PaymentForReceipt): Promise<Uint8Array
   if (p.status === "REFUNDED") row("Refunded on", date(p.refundedAt));
   if (p.notes) row("Notes", p.notes.slice(0, 80));
 
-  page.drawText(safe(`This is a computer-generated receipt from ${tenant.name}. No signature is required.`), {
-    x: left, y: 70, size: 9, font: regular, color: muted,
-  });
-  page.drawText("Powered by Elevate", { x: left, y: 56, size: 8, font: regular, color: muted });
+  // Footer
+  drawGradientBar(page, left, 104, right - left, 2, hexToRgb(g1), hexToRgb(g2));
+  const contact = [settings.website?.replace(/^https?:\/\//, "").replace(/\/$/, ""), settings.supportEmail, settings.phone].filter(Boolean).join("   |   ");
+  if (contact) text(contact, left, 84, 9, fonts.sansSemi, ink);
+  text(`This is a computer-generated receipt from ${tenant.name}. No signature is required.`, left, contact ? 68 : 84, 8.5, fonts.sans, muted);
+  text("Powered by Elevate", left, contact ? 54 : 70, 7.5, fonts.sans, muted);
   return doc.save();
 }

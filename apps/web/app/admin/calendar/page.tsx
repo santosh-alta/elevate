@@ -50,7 +50,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Calendar</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Calendar</h1>
           <p className="text-sm text-muted">{monthCount} event{monthCount === 1 ? "" : "s"} starting in {label}</p>
         </div>
         <div className="flex items-center gap-2">

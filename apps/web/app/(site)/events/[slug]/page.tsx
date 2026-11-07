@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
-  CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Star, Trophy, Users, Video,
+  ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Star, Ticket, Trophy, Users, Video,
 } from "lucide-react";
-import { SPONSOR_TIERS } from "@elevate/shared";
+import { SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
+import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe, isStaff } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
@@ -34,14 +35,18 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   if (!e) return { title: "Event" };
   const description = e.tagline ?? (htmlToText(e.description).slice(0, 180) || `${typeLabel(e.type)} by ${tenant?.name ?? "us"}`);
   const url = `${origin}/events/${e.slug}`;
-  const images = e.coverImageUrl ? [{ url: e.coverImageUrl, alt: e.title }] : tenant?.theme.logoUrl ? [{ url: tenant.theme.logoUrl }] : undefined;
+  const theme = resolveTheme(tenant?.theme);
+  const cover = absoluteUrl(e.coverImageUrl, origin);
+  const fallback = absoluteUrl(theme.ogImageUrl ?? theme.logoUrl, origin);
+  const images = cover ? [{ url: cover, alt: e.title }] : fallback ? [{ url: fallback, alt: tenant?.name ?? e.title }] : undefined;
+  const large = !!cover || !!theme.ogImageUrl;
   return {
     title: e.title,
     description,
     alternates: { canonical: url },
     robots: preview ? { index: false, follow: false } : undefined,
     openGraph: { type: "website", title: e.title, description, url, siteName: tenant ? `${tenant.name} Events` : undefined, images },
-    twitter: { card: e.coverImageUrl ? "summary_large_image" : "summary", title: e.title, description, images: images?.map((i) => i.url) },
+    twitter: { card: large ? "summary_large_image" : "summary", title: e.title, description, images: images?.map((i) => i.url) },
   };
 }
 
@@ -52,6 +57,7 @@ export default async function EventPage({ params, searchParams }: Params) {
   const { preview } = await searchParams;
   const event = await apiGet<ElevateEvent>(eventPath(slug, preview));
   if (!event) notFound();
+  const theme = resolveTheme((await getTenant())?.theme);
 
   const me = await getMe();
   const [myRegs, myTeams, galleryRaw, media, sponsorsList, legacyBoard, origin] = await Promise.all([
@@ -113,33 +119,57 @@ export default async function EventPage({ params, searchParams }: Params) {
           <Eye className="mr-1.5 inline h-4 w-4" />Preview: this page is not public yet. Only people with this link can see it.
         </div>
       )}
-      <div className="relative">
-        <EventCover event={event} className="h-56 sm:h-80" />
-      </div>
-      <div className="mx-auto max-w-6xl px-4">
-        <div className="relative -mt-16 rounded-brand border border-border bg-card p-6 shadow-sm sm:p-8">
-          {event.parentEvent && (
-            <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1 text-sm text-muted">
-              <Link href={`/events/${event.parentEvent.slug}`} className="font-medium text-primary hover:underline">{event.parentEvent.title}</Link>
-              <ChevronRight className="h-3.5 w-3.5" /><span className="truncate">{event.title}</span>
-            </nav>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge status={event.status} />
-            <Badge tone="primary">{typeLabel(event.type)}</Badge>
-            <ModeBadge mode={event.mode} />
-            <Badge>{event.scope === "CENTRAL" ? "Central event" : "Campus event"}</Badge>
-            {campuses.map((c) => <Badge key={c.id} tone="gray"><MapPin className="h-3 w-3" />{c.name}</Badge>)}
-          </div>
-          <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{event.title}</h1>
-              {event.tagline && <p className="mt-2 text-lg text-muted">{event.tagline}</p>}
-              <div className="mt-3"><PriceTag event={event} /></div>
+      <section className="relative isolate overflow-hidden bg-hero-bg text-hero-fg">
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10"
+          style={{ backgroundImage: "radial-gradient(55% 90% at 100% 0%, rgb(var(--gradient-from) / 0.28), transparent 60%), radial-gradient(45% 70% at 0% 100%, rgb(var(--gradient-to) / 0.18), transparent 60%)" }}
+        />
+        <div className="mx-auto grid max-w-6xl items-center gap-8 px-4 pb-24 pt-8 sm:pt-12 lg:grid-cols-[1.1fr_1fr] lg:gap-12 lg:pb-28">
+          <div className="order-2 min-w-0 lg:order-1">
+            {event.parentEvent && (
+              <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-1 text-sm text-hero-fg/80">
+                <Link href={`/events/${event.parentEvent.slug}`} className="font-medium text-hero-fg underline decoration-accent decoration-2 underline-offset-4">{event.parentEvent.title}</Link>
+                <ChevronRight className="h-3.5 w-3.5" /><span className="truncate">{event.title}</span>
+              </nav>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge status={event.status} />
+              <Badge tone="highlight">{typeLabel(event.type)}</Badge>
+              <ModeBadge mode={event.mode} />
+              <Badge>{event.scope === "CENTRAL" ? "Central event" : "Campus event"}</Badge>
+              {campuses.map((c) => <Badge key={c.id} tone="gray"><MapPin className="h-3 w-3" />{c.name}</Badge>)}
             </div>
-            {!ended && event.status !== "CANCELLED" && <Countdown startsAt={event.startsAt} endsAt={event.endsAt} />}
+            <h1 className="mt-5 font-heading text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">{event.title}</h1>
+            {event.tagline && <p className="mt-3 max-w-xl text-lg text-hero-fg/85">{event.tagline}</p>}
+            <div className="mt-5 h-1.5 w-20 rounded-full bg-brand-gradient" aria-hidden />
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              {event.status === "REGISTRATION_OPEN" && !registration && (
+                <LinkButton href={me ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} size="lg" variant="cta">
+                  {isTeamEvent ? "Register your team" : "Register now"} <ArrowRight className="h-4 w-4" />
+                </LinkButton>
+              )}
+              {registration?.status === "PENDING_PAYMENT" && <LinkButton href={registerHref} size="lg" variant="cta"><CreditCard className="h-4 w-4" />Complete payment</LinkButton>}
+              {registration && registration.status !== "PENDING_PAYMENT" && (
+                <a href="#register" className="inline-flex items-center gap-2 rounded-full bg-hero-fg/10 px-4 py-2 text-sm font-medium ring-1 ring-inset ring-hero-fg/25 hover:bg-hero-fg/15"><Ticket className="h-4 w-4" />You&apos;re registered · view ticket</a>
+              )}
+              <span className="rounded-full bg-card px-3 py-1.5 text-fg shadow-sm"><PriceTag event={event} size="sm" /></span>
+            </div>
+            {!ended && event.status !== "CANCELLED" && <div className="mt-6"><Countdown startsAt={event.startsAt} endsAt={event.endsAt} tone="dark" /></div>}
           </div>
-          <div className="mt-6 grid gap-4 text-sm sm:grid-cols-3">
+          <div className="order-1 lg:order-2">
+            <div className="relative mr-3 mb-3 sm:mr-4 sm:mb-4">
+              <div aria-hidden className="absolute inset-0 translate-x-3 translate-y-3 rounded-brand bg-brand-gradient-diagonal sm:translate-x-4 sm:translate-y-4" />
+              <div className="relative overflow-hidden rounded-brand bg-hero-bg shadow-2xl ring-1 ring-hero-fg/10">
+                <EventCover event={event} className="aspect-[16/9] h-auto" iconUrl={theme.iconUrl} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="relative -mt-14 rounded-brand border border-border bg-card p-5 shadow-lg sm:p-6">
+          <div className="grid gap-4 text-sm sm:grid-cols-3">
             <Info icon={<CalendarDays className="h-4 w-4" />} label="When" value={fmtRange(event.startsAt, event.endsAt)} />
             <Info
               icon={event.mode === "ONLINE" ? <Video className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
@@ -153,10 +183,8 @@ export default async function EventPage({ params, searchParams }: Params) {
               value={event.capacity ? `${regs ?? 0} / ${event.capacity} registered` : `${regs ?? 0} registered`}
             />
           </div>
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
             <div className="flex flex-wrap gap-2">
-              {event.status === "REGISTRATION_OPEN" && !registration && <LinkButton href={me ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} size="sm">{isTeamEvent ? "Register your team" : "Register now"}</LinkButton>}
-              {registration?.status === "PENDING_PAYMENT" && <LinkButton href={registerHref} size="sm"><CreditCard className="h-4 w-4" />Complete payment</LinkButton>}
               {myTeam && <LinkButton href={`/events/${event.slug}/team`} size="sm" variant="secondary"><Users className="h-4 w-4" />My team</LinkButton>}
               {event.livestreamUrl && <LinkButton href={event.livestreamUrl} external size="sm" variant="secondary"><Radio className="h-4 w-4" />Watch livestream</LinkButton>}
               {event.meetingUrl && event.mode !== "OFFLINE" && registration && registration.status !== "PENDING_PAYMENT" && <LinkButton href={event.meetingUrl} external size="sm" variant="secondary"><Video className="h-4 w-4" />Join online</LinkButton>}
@@ -196,7 +224,7 @@ export default async function EventPage({ params, searchParams }: Params) {
                         </div>
                       </Link>
                       <div className="mt-auto flex gap-2 p-4 pt-2">
-                        {s.status === "REGISTRATION_OPEN" && <LinkButton href={`/events/${s.slug}/register`} size="sm">Register</LinkButton>}
+                        {s.status === "REGISTRATION_OPEN" && <LinkButton href={`/events/${s.slug}/register`} size="sm" variant="cta">Register</LinkButton>}
                         <LinkButton href={`/events/${s.slug}`} size="sm" variant="outline">Details</LinkButton>
                       </div>
                     </div>
@@ -318,7 +346,7 @@ function Section({ id, title, icon, action, children }: { id: string; title: str
   return (
     <section id={id} className="scroll-mt-32">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">{icon}{title}</h2>
+        <h2 className="flex items-center gap-2 font-heading text-2xl font-bold tracking-tight">{icon}{title}</h2>
         {action}
       </div>
       {children}
@@ -358,7 +386,7 @@ function JudgingParameters({ rubric }: { rubric: NonNullable<ElevateEvent["rubri
 function SpeakersSection({ guests }: { guests: Guest[] }) {
   return (
     <section id="speakers" className="scroll-mt-32">
-      <h2 className="mb-3 text-xl font-semibold">Speakers & guests</h2>
+      <h2 className="mb-3 font-heading text-2xl font-bold tracking-tight">Speakers & guests</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         {guests.map((g) => (
           <Link key={g.id} href={`/speakers/${g.id}`} className="group flex gap-4 rounded-brand border border-border bg-card p-4 shadow-sm transition hover:border-primary/50 hover:shadow-md">
@@ -382,7 +410,7 @@ function SponsorsSection({ sponsors }: { sponsors: Sponsor[] }) {
   const tiers = [...new Set(sponsors.map((s) => s.tier ?? "PARTNER"))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
   return (
     <section id="sponsors" className="scroll-mt-32">
-      <h2 className="mb-3 text-xl font-semibold">Sponsors & partners</h2>
+      <h2 className="mb-3 font-heading text-2xl font-bold tracking-tight">Sponsors & partners</h2>
       <div className="space-y-5">
         {tiers.map((tier) => (
           <div key={tier}>
@@ -409,7 +437,7 @@ function SponsorsSection({ sponsors }: { sponsors: Sponsor[] }) {
 function Info({ icon, label, value, link }: { icon: React.ReactNode; label: string; value: string; link?: { href: string; label: string } }) {
   return (
     <div className="flex gap-3">
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div>
+      <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-primary">{icon}</div>
       <div>
         <p className="text-xs text-muted">{label}</p>
         <p className="font-medium">{value}</p>
@@ -426,14 +454,15 @@ function RegistrationBox({ event, registration, signedIn }: { event: ElevateEven
   const team = !!event.modules?.teams && event.config?.teamRegistration !== "JOIN_LATER";
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
+      <div className="h-1.5 bg-brand-gradient" aria-hidden />
       <CardHeader title="Registration" description={event.registrationClosesAt ? `Closes ${fmtDateTime(event.registrationClosesAt)}` : undefined} />
       <CardBody className="space-y-4">
         {registration?.status === "PENDING_PAYMENT" ? (
           <>
             <div className="flex items-center justify-between"><span className="text-sm text-muted">Your status</span><StatusBadge status={registration.status} /></div>
             <p className="text-sm text-muted">Your seat is held while you complete the payment.</p>
-            <LinkButton href={registerHref} className="w-full" size="lg"><CreditCard className="h-4 w-4" />Complete payment</LinkButton>
+            <LinkButton href={registerHref} className="w-full" size="lg" variant="cta"><CreditCard className="h-4 w-4" />Complete payment</LinkButton>
           </>
         ) : registration ? (
           <>
@@ -457,7 +486,7 @@ function RegistrationBox({ event, registration, signedIn }: { event: ElevateEven
           <>
             <PriceTag event={event} size="sm" />
             {team && <p className="text-sm text-muted">The team leader registers the whole team{event.config?.maxTeamSize ? ` (${[event.config.minTeamSize, event.config.maxTeamSize].filter(Boolean).join("–")} members)` : ""}. Members get an email with their ticket.</p>}
-            <LinkButton href={signedIn ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} className="w-full" size="lg">
+            <LinkButton href={signedIn ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} className="w-full" size="lg" variant="cta">
               {signedIn ? (team ? "Register your team" : "Register now") : "Sign in to register"}
             </LinkButton>
             {event.requiresApproval && <p className="text-xs text-muted">Registrations are reviewed by the organisers.</p>}

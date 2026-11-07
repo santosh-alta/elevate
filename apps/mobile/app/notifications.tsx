@@ -59,7 +59,7 @@ export default function NotificationsScreen() {
           headerRight: () =>
             unread > 0 ? (
               <Pressable onPress={markAll} disabled={marking} accessibilityRole="button" hitSlop={8} style={{ paddingHorizontal: 8, paddingVertical: 6 }}>
-                <Text style={{ color: theme.colors.primary, fontWeight: "700", opacity: marking ? 0.5 : 1 }}>Mark all read</Text>
+                <Text style={{ color: theme.colors.heroFg, fontWeight: "700", opacity: marking ? 0.5 : 1 }}>Mark all read</Text>
               </Pressable>
             ) : null,
         }}

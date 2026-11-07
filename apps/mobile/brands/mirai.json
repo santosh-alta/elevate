@@ -5,5 +5,17 @@
   "scheme": "miraievents",
   "iconColor": "#0ea5e9",
   "apiUrl": "http://localhost:4000",
-  "webUrl": "http://mirai.localhost:3000"
+  "webUrl": "http://mirai.localhost:3000",
+  "theme": {
+    "colors": {
+      "primary": "#7c3aed",
+      "primaryFg": "#ffffff",
+      "accent": "#ec4899",
+      "bg": "#faf5ff",
+      "fg": "#1e1b4b",
+      "muted": "#6b7280",
+      "card": "#ffffff",
+      "border": "#e9d5ff"
+    }
+  }
 }

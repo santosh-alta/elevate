@@ -11,7 +11,7 @@ export default async function NewEventPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Create event</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Create event</h1>
         <p className="text-sm text-muted">A planning checklist is generated automatically for the event type you pick.</p>
       </div>
       <EventForm campuses={tenant.campuses} parents={fests.map((f) => ({ id: f.id, title: f.title }))} />

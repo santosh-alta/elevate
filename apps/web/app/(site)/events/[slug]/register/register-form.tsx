@@ -240,7 +240,7 @@ export function RegisterForm({
 
       {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" size="lg" disabled={busy || checking}>
+        <Button type="submit" size="lg" variant="cta" disabled={busy || checking}>
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           {fee && total > 0 ? `Continue to pay ${formatMoney(total, cur)}` : teamMode ? "Register team" : "Register"}
         </Button>

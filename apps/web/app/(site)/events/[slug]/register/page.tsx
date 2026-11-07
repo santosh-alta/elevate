@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { eventFee, fmtDateTime, fmtRange } from "@/lib/format";
 import type { ElevateEvent, Payment, ProblemStatement, Registration } from "@/lib/types";
 import { Card, CardBody, EmptyState, LinkButton } from "@/components/ui";
+import { PageHero } from "@/components/page-hero";
 import { PriceTag } from "@/components/event-extras";
 import { PaymentPanel } from "@/components/client/payment-panel";
 import { RegisterForm } from "./register-form";
@@ -45,10 +46,15 @@ export default async function RegisterPage({ params }: Props) {
   const questions = Array.isArray(event.registrationForm) ? event.registrationForm : [];
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      <Link href={`/events/${event.slug}`} className="text-sm text-muted hover:text-fg">← {event.title}</Link>
-      <h1 className="mt-2 text-3xl font-bold">{teamMode ? "Register your team" : "Register"}</h1>
-      <Card className="mt-4">
+    <>
+    <PageHero
+      size="sm"
+      className="pb-8"
+      eyebrow={<Link href={`/events/${event.slug}`} className="font-medium underline decoration-accent decoration-2 underline-offset-4 hover:text-hero-fg">← {event.title}</Link>}
+      title={teamMode ? "Register your team" : "Register"}
+    />
+    <div className="mx-auto max-w-3xl px-4 pb-10">
+      <Card className="relative -mt-8 shadow-lg">
         <CardBody className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1 text-sm">
             <p className="font-semibold">{event.title}</p>
@@ -82,5 +88,6 @@ export default async function RegisterPage({ params }: Props) {
         )}
       </div>
     </div>
+    </>
   );
 }

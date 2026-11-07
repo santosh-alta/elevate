@@ -4,6 +4,7 @@ import { prisma } from "../plugins/prisma";
 import { formatMoney } from "@elevate/shared";
 import { apiBaseUrl, brandBaseUrl, settingsOf, themeOf, verifyUrl } from "./brand";
 import { receiptUrl as receiptLink } from "./receipt";
+import { absoluteAssetUrl } from "./brandAssets";
 
 /**
  * Notification outbox. Every message is a Notification row; src/worker.ts sends due EMAIL rows.
@@ -85,27 +86,112 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** Brand-themed HTML from the plain-text body (paragraphs split on blank lines, URLs linked). */
-export function renderEmailHtml(tenant: Tenant, subject: string, body: string, cta?: { label?: string; url?: string }): string {
+const SOCIAL_LABELS: Record<string, string> = {
+  instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", x: "X", twitter: "X", youtube: "YouTube",
+};
+
+export interface EmailRenderOptions {
+  /** Public web URL of the brand (links and relative logo URLs). Defaults to brandBaseUrl(tenant.id). */
+  baseUrl?: string;
+}
+
+/**
+ * Brand-themed HTML email (table-based, 600px, inline styles) from the plain-text body:
+ * hero-coloured header with the logo, white body, CTA in the brand's secondary colour,
+ * hero-coloured footer with website / phone / email / social links and a manage-notifications link.
+ */
+export async function renderEmailHtml(
+  tenant: Tenant,
+  subject: string,
+  body: string,
+  cta?: { label?: string; url?: string },
+  opts: EmailRenderOptions = {},
+): Promise<string> {
   const theme = themeOf(tenant);
+  const settings = settingsOf(tenant);
   const c = theme.colors;
+  const base = (opts.baseUrl ?? (await brandBaseUrl(tenant.id))).replace(/\/$/, "");
+  const [g1, g2] = theme.gradient ?? [c.primary, c.accent];
+  const font = `${theme.font ? `'${theme.font}',` : ""}Helvetica,Arial,sans-serif`;
+  const headingFont = `${theme.headingFont ? `'${theme.headingFont}',` : ""}${font}`;
+  const radius = Math.min(theme.radius ?? 10, 24);
+
   const paragraphs = body
     .split(/\n{2,}/)
-    .map((p) => esc(p).replace(/(https?:\/\/[^\s<]+)/g, `<a href="$1" style="color:${c.primary}">$1</a>`).replace(/\n/g, "<br>"))
-    .map((p) => `<p style="margin:0 0 14px;line-height:1.6">${p}</p>`)
-    .join("");
+    .map((p) => esc(p).replace(/https?:\/\/[^\s<]+/g, (m) => {
+      // Leave trailing punctuation such as ")" "." "," outside the link.
+      const url = m.replace(/[).,;:!?]+$/, "");
+      return `<a href="${url}" style="color:${c.accent};text-decoration:underline;word-break:break-all">${url}</a>${m.slice(url.length)}`;
+    }).replace(/\n/g, "<br>"))
+    .map((p) => `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:${c.muted}">${p}</p>`)
+    .join("\n");
+
   const button =
     cta?.url && cta.label
-      ? `<p style="margin:22px 0"><a href="${esc(cta.url)}" style="display:inline-block;background:${c.primary};color:${c.primaryFg};text-decoration:none;font-weight:600;padding:12px 20px;border-radius:${theme.radius ?? 10}px">${esc(cta.label)}</a></p>`
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 8px"><tr>
+<td align="center" bgcolor="${c.secondary}" style="border-radius:${radius}px;background:${c.secondary}">
+<a href="${esc(cta.url)}" target="_blank" style="display:inline-block;padding:14px 30px;font-family:${font};font-size:14px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:${c.secondaryFg};text-decoration:none;border-radius:${radius}px">${esc(cta.label)}</a>
+</td></tr></table>`
       : "";
-  const logo = theme.logoUrl ? `<img src="${esc(theme.logoUrl)}" alt="" height="28" style="vertical-align:middle;margin-right:10px">` : "";
-  return `<!doctype html><html><body style="margin:0;background:${c.bg};font-family:${theme.font ?? "Inter"},Arial,sans-serif;color:${c.fg}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${c.card};border:1px solid ${c.border};border-radius:12px;overflow:hidden">
-<tr><td style="background:${c.primary};color:${c.primaryFg};padding:18px 24px;font-weight:700;font-size:16px">${logo}${esc(tenant.name)}</td></tr>
-<tr><td style="padding:24px"><h1 style="margin:0 0 16px;font-size:20px">${esc(subject)}</h1>${paragraphs}${button}</td></tr>
-<tr><td style="padding:14px 24px;border-top:1px solid ${c.border};color:${c.muted};font-size:12px">Sent by ${esc(tenant.name)} · Powered by Elevate</td></tr>
-</table></td></tr></table></body></html>`;
+
+  const logoUrl = absoluteAssetUrl(theme.logoDarkUrl ?? theme.logoUrl, base);
+  const brandMark = logoUrl
+    ? `<a href="${esc(base)}" target="_blank" style="text-decoration:none"><img src="${esc(logoUrl)}" width="140" alt="${esc(tenant.name)}" style="display:block;width:140px;max-width:140px;height:auto;border:0;outline:none;color:${c.heroFg};font-family:${font};font-size:18px;font-weight:700"></a>`
+    : `<a href="${esc(base)}" target="_blank" style="font-family:${headingFont};font-size:20px;font-weight:700;color:${c.heroFg};text-decoration:none">${esc(tenant.name)}</a>`;
+
+  const link = (href: string, label: string, style = "") =>
+    `<a href="${esc(href)}" target="_blank" style="color:${c.heroFg};text-decoration:none;${style}">${esc(label)}</a>`;
+  const website = settings.website?.trim();
+  const contact = [
+    settings.phone ? link(`tel:${settings.phone.replace(/[^\d+]/g, "")}`, settings.phone) : null,
+    settings.supportEmail ? link(`mailto:${settings.supportEmail}`, settings.supportEmail) : null,
+  ].filter(Boolean).join(`<span style="opacity:0.6">&nbsp;&nbsp;|&nbsp;&nbsp;</span>`);
+  const socials = Object.entries(settings.social ?? {})
+    .filter(([k, v]) => SOCIAL_LABELS[k.toLowerCase()] && /^https?:\/\//.test(v ?? ""))
+    .map(([k, v]) => link(v, SOCIAL_LABELS[k.toLowerCase()], "display:inline-block;margin:0 8px;font-weight:600"))
+    .join("");
+  const footerRows = [
+    `<p style="margin:0 0 10px;font-size:14px;font-weight:700">${website ? link(website, website.replace(/^https?:\/\//, "").replace(/\/$/, "")) : esc(tenant.name)}</p>`,
+    contact ? `<p style="margin:0 0 16px;font-size:13px">${contact}</p>` : "",
+    socials ? `<p style="margin:0 0 18px;font-size:13px">${socials}</p>` : "",
+    theme.tagline ? `<p style="margin:0 0 18px;font-size:12px;opacity:0.75">${esc(theme.tagline)}</p>` : "",
+    `<p style="margin:0 0 6px;font-size:12px;opacity:0.75">You're receiving this because you have an account or event registration with ${esc(tenant.name)}.</p>`,
+    `<p style="margin:0;font-size:12px">${link(`${base}/me#notifications`, "Unsubscribe or manage notifications", "text-decoration:underline")}</p>`,
+  ].join("\n");
+
+  const preheader = esc(body.replace(/\s+/g, " ").slice(0, 140));
+  const fontLink = theme.fontCssUrl
+    ? `<link href="${esc(theme.fontCssUrl)}" rel="stylesheet">`
+    : theme.font
+      ? `<link href="https://fonts.googleapis.com/css2?family=${[...new Set([theme.font, theme.headingFont].filter(Boolean))].map((f) => encodeURIComponent(f!).replace(/%20/g, "+") + ":wght@400;600;700").join("&family=")}&display=swap" rel="stylesheet">`
+      : "";
+
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
+<title>${esc(subject)}</title>
+${fontLink}
+<style>@media (max-width:620px){.px{padding-left:24px!important;padding-right:24px!important}}</style>
+</head>
+<body style="margin:0;padding:0;background:${c.bg};-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${preheader}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${c.bg}" style="background:${c.bg}"><tr><td align="center" style="padding:24px 8px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;font-family:${font}">
+<tr><td align="center" valign="middle" height="90" bgcolor="${c.heroBg}" style="height:90px;background:${c.heroBg};padding:0 24px">${brandMark}</td></tr>
+<tr><td height="4" bgcolor="${g1}" style="height:4px;line-height:4px;font-size:0;background:${g1};background-image:linear-gradient(90deg,${g1},${g2})">&nbsp;</td></tr>
+<tr><td class="px" bgcolor="${c.card}" style="background:${c.card};padding:40px 48px 36px">
+<h1 style="margin:0 0 20px;font-family:${headingFont};font-size:24px;line-height:1.3;font-weight:700;color:${c.fg}">${esc(subject)}</h1>
+${paragraphs}
+${button}
+</td></tr>
+<tr><td height="3" bgcolor="${c.accent}" style="height:3px;line-height:3px;font-size:0;background:${c.accent}">&nbsp;</td></tr>
+<tr><td class="px" align="center" valign="middle" height="200" bgcolor="${c.heroBg}" style="height:200px;background:${c.heroBg};color:${c.heroFg};padding:36px 48px;font-family:${font};text-align:center">
+${footerRows}
+</td></tr>
+<tr><td align="center" style="padding:16px 0 0;font-family:${font};font-size:11px;color:${c.muted}">Powered by Elevate</td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
 }
 
 export function fromAddress(tenant: Tenant): string {

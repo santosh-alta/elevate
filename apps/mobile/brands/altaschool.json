@@ -3,7 +3,31 @@
   "appName": "Alta Events",
   "bundleId": "tech.altaschool.events",
   "scheme": "altaevents",
-  "iconColor": "#4f46e5",
+  "iconColor": "#191445",
   "apiUrl": "http://localhost:4000",
-  "webUrl": "http://altaschool.localhost:3000"
+  "webUrl": "http://altaschool.localhost:3000",
+  "theme": {
+    "colors": {
+      "primary": "#191445",
+      "primaryFg": "#ffffff",
+      "accent": "#22ACD1",
+      "secondary": "#08C191",
+      "secondaryFg": "#191445",
+      "highlight": "#FDC025",
+      "heroBg": "#191445",
+      "heroFg": "#ffffff",
+      "bg": "#F6F8FB",
+      "fg": "#191445",
+      "muted": "#565656",
+      "card": "#ffffff",
+      "border": "#E2E6EF"
+    },
+    "font": "Figtree",
+    "radius": 10,
+    "gradient": [
+      "#22ACD1",
+      "#08C191"
+    ],
+    "tagline": "Creating Builders for an AI World"
+  }
 }

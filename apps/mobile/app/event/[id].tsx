@@ -250,7 +250,7 @@ export default function EventDetailScreen() {
           title: eventTypeLabel(event.type),
           headerRight: () => (
             <Pressable onPress={share} accessibilityRole="button" accessibilityLabel="Share event" hitSlop={8} style={{ padding: 6 }}>
-              <Ionicons name="share-outline" size={22} color={theme.colors.primary} />
+              <Ionicons name="share-outline" size={22} color={theme.colors.heroFg} />
             </Pressable>
           ),
         }}
@@ -258,7 +258,12 @@ export default function EventDetailScreen() {
       {event.coverImageUrl ? (
         <Image source={{ uri: event.coverImageUrl }} style={{ width: "100%", height: 200 }} resizeMode="cover" />
       ) : (
-        <View style={{ height: 120, backgroundColor: withAlpha(theme.colors.primary, 0.12) }} />
+        <View style={{ height: 120, backgroundColor: theme.colors.heroBg, justifyContent: "flex-end" }}>
+          <View style={{ flexDirection: "row", height: 4 }}>
+            <View style={{ flex: 1, backgroundColor: theme.gradient?.[0] ?? theme.colors.accent }} />
+            <View style={{ flex: 1, backgroundColor: theme.gradient?.[1] ?? theme.colors.secondary }} />
+          </View>
+        </View>
       )}
 
       <View style={{ padding: 16 }}>
@@ -272,20 +277,20 @@ export default function EventDetailScreen() {
 
         <Card style={{ marginTop: 16, gap: 10 }}>
           <Row>
-            <Ionicons name="calendar-outline" size={18} color={theme.colors.primary} />
+            <Ionicons name="calendar-outline" size={18} color={theme.colors.accent} />
             <Body>{formatDate(event.startsAt)}</Body>
           </Row>
           <Row>
-            <Ionicons name="flag-outline" size={18} color={theme.colors.primary} />
+            <Ionicons name="flag-outline" size={18} color={theme.colors.accent} />
             <Body>Ends {formatDate(event.endsAt)}</Body>
           </Row>
           <Row>
-            <Ionicons name={event.mode === "ONLINE" ? "videocam-outline" : "location-outline"} size={18} color={theme.colors.primary} />
+            <Ionicons name={event.mode === "ONLINE" ? "videocam-outline" : "location-outline"} size={18} color={theme.colors.accent} />
             <Body style={{ flex: 1 }}>{modeLabel(event)}</Body>
           </Row>
           {registrations !== undefined ? (
             <Row>
-              <Ionicons name="people-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="people-outline" size={18} color={theme.colors.accent} />
               <Body>
                 {registrations} registered{event.capacity ? ` · ${event.capacity} seats` : ""}
               </Body>
@@ -293,7 +298,7 @@ export default function EventDetailScreen() {
           ) : null}
           {price ? (
             <Row style={{ alignItems: "flex-start" }}>
-              <Ionicons name="pricetag-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="pricetag-outline" size={18} color={theme.colors.accent} />
               <View style={{ flex: 1 }}>
                 <Body style={{ fontWeight: "700" }}>{price.main}</Body>
                 {price.sub ? <Muted style={{ fontSize: 13 }}>{price.sub}</Muted> : null}
@@ -301,13 +306,13 @@ export default function EventDetailScreen() {
             </Row>
           ) : canRegister ? (
             <Row>
-              <Ionicons name="pricetag-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="pricetag-outline" size={18} color={theme.colors.accent} />
               <Body>Free</Body>
             </Row>
           ) : null}
           {isTeamEvent && (event.config?.minTeamSize || event.config?.maxTeamSize) ? (
             <Row>
-              <Ionicons name="people-circle-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="people-circle-outline" size={18} color={theme.colors.accent} />
               <Body>
                 Teams of {String(event.config?.minTeamSize ?? 1)}–{String(event.config?.maxTeamSize ?? event.config?.minTeamSize ?? 1)}
               </Body>
@@ -315,20 +320,20 @@ export default function EventDetailScreen() {
           ) : null}
           {event.submissionsCloseAt ? (
             <Row>
-              <Ionicons name="cloud-upload-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="cloud-upload-outline" size={18} color={theme.colors.accent} />
               <Body style={{ flex: 1 }}>Submissions close {formatDate(event.submissionsCloseAt)}</Body>
             </Row>
           ) : null}
           {event.registrationClosesAt ? (
             <Row>
-              <Ionicons name="hourglass-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="hourglass-outline" size={18} color={theme.colors.accent} />
               <Body>Registration closes {formatDate(event.registrationClosesAt)}</Body>
             </Row>
           ) : null}
           {event.venueMapUrl ? (
             <Pressable onPress={() => openUrl(event.venueMapUrl!)} accessibilityRole="link">
               <Row>
-                <Ionicons name="map-outline" size={18} color={theme.colors.primary} />
+                <Ionicons name="map-outline" size={18} color={theme.colors.accent} />
                 <Body style={{ flex: 1, color: theme.colors.primary, fontWeight: "600" }}>Open venue in Maps</Body>
               </Row>
             </Pressable>
@@ -336,7 +341,7 @@ export default function EventDetailScreen() {
           {event.livestreamUrl ? (
             <Pressable onPress={() => openUrl(event.livestreamUrl!)} accessibilityRole="link">
               <Row>
-                <Ionicons name="radio-outline" size={18} color={theme.colors.primary} />
+                <Ionicons name="radio-outline" size={18} color={theme.colors.accent} />
                 <Body style={{ flex: 1, color: theme.colors.primary, fontWeight: "600" }}>Watch the livestream</Body>
               </Row>
             </Pressable>
@@ -363,7 +368,7 @@ export default function EventDetailScreen() {
               Your seat is held for a short time. Complete the payment on the website to confirm your registration
               {event.myPayment?.amount ? ` (${formatMoney(event.myPayment.amount, event.myPayment.currency)})` : ""}.
             </Muted>
-            <Button title="Complete payment" icon="card" onPress={() => openOnWeb(registerUrl)} />
+            <Button variant="cta" title="Complete payment" icon="card" onPress={() => openOnWeb(registerUrl)} />
             {isTeamEvent ? <Button title="My team" icon="people" variant="secondary" onPress={() => router.push(`/team/${event.id}`)} /> : null}
           </Card>
         ) : mine ? (
@@ -400,6 +405,7 @@ export default function EventDetailScreen() {
               title={fee ? `Register on web · ${formatMoney(fee.currentAmount || fee.amount, fee.currency)}` : "Register your team on web"}
               icon="open-outline"
               size="lg"
+              variant="cta"
               onPress={() => openOnWeb(registerUrl)}
             />
             <Muted style={{ fontSize: 13, textAlign: "center" }}>
@@ -411,7 +417,7 @@ export default function EventDetailScreen() {
             </Muted>
           </Card>
         ) : canRegister ? (
-          <Button title="Register now" icon="ticket" size="lg" onPress={register} loading={busy} style={{ marginBottom: 12 }} />
+          <Button variant="cta" title="Register now" icon="ticket" size="lg" onPress={register} loading={busy} style={{ marginBottom: 12 }} />
         ) : (
           <Card>
             <Muted>
@@ -425,7 +431,7 @@ export default function EventDetailScreen() {
         {event.parentEvent ? (
           <Card onPress={() => router.push(`/event/${event.parentEvent!.id ?? event.parentEvent!.slug}`)}>
             <Row>
-              <Ionicons name="albums-outline" size={18} color={theme.colors.primary} />
+              <Ionicons name="albums-outline" size={18} color={theme.colors.accent} />
               <Body style={{ flex: 1 }}>
                 Part of <Text style={{ fontWeight: "700" }}>{event.parentEvent.title}</Text>
               </Body>
@@ -651,7 +657,7 @@ export default function EventDetailScreen() {
               {event.contactEmail ? (
                 <Pressable onPress={() => openUrl(`mailto:${event.contactEmail}`)} accessibilityRole="link">
                   <Row>
-                    <Ionicons name="mail-outline" size={18} color={theme.colors.primary} />
+                    <Ionicons name="mail-outline" size={18} color={theme.colors.accent} />
                     <Body style={{ color: theme.colors.primary, fontWeight: "600" }}>{event.contactEmail}</Body>
                   </Row>
                 </Pressable>
@@ -659,7 +665,7 @@ export default function EventDetailScreen() {
               {event.contactPhone ? (
                 <Pressable onPress={() => openUrl(`tel:${event.contactPhone!.replace(/\s+/g, "")}`)} accessibilityRole="link">
                   <Row>
-                    <Ionicons name="call-outline" size={18} color={theme.colors.primary} />
+                    <Ionicons name="call-outline" size={18} color={theme.colors.accent} />
                     <Body style={{ color: theme.colors.primary, fontWeight: "600" }}>{event.contactPhone}</Body>
                   </Row>
                 </Pressable>

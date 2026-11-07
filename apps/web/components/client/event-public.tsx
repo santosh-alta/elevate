@@ -10,7 +10,7 @@ function parts(ms: number) {
 }
 
 /** Live countdown to the event start; shows "Happening now" between start and end. */
-export function Countdown({ startsAt, endsAt }: { startsAt: string; endsAt: string }) {
+export function Countdown({ startsAt, endsAt, tone = "light" }: { startsAt: string; endsAt: string; tone?: "light" | "dark" }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
@@ -25,9 +25,9 @@ export function Countdown({ startsAt, endsAt }: { startsAt: string; endsAt: stri
   return (
     <div className="flex gap-2" aria-label="Time until the event starts">
       {([["d", "days"], ["h", "hrs"], ["m", "min"], ["s", "sec"]] as const).map(([k, l]) => (
-        <div key={k} className="min-w-[56px] rounded-lg bg-primary/10 px-2 py-1.5 text-center">
-          <p className="text-xl font-bold tabular-nums text-primary">{String(p[k]).padStart(2, "0")}</p>
-          <p className="text-[10px] uppercase tracking-wide text-muted">{l}</p>
+        <div key={k} className={tone === "dark" ? "min-w-[60px] rounded-lg bg-hero-fg/10 px-2 py-1.5 text-center ring-1 ring-inset ring-hero-fg/20" : "min-w-[56px] rounded-lg bg-primary/10 px-2 py-1.5 text-center"}>
+          <p className={`font-heading text-xl font-bold tabular-nums ${tone === "dark" ? "text-hero-fg" : "text-primary"}`}>{String(p[k]).padStart(2, "0")}</p>
+          <p className={`text-[10px] uppercase tracking-wide ${tone === "dark" ? "text-hero-fg/80" : "text-muted"}`}>{l}</p>
         </div>
       ))}
     </div>

@@ -3,7 +3,7 @@
  * Run: npm run seed -w @elevate/api   (wipes existing data first)
  */
 import { PrismaClient, type EventType, type Prisma } from "@prisma/client";
-import { DEFAULT_CHECKLISTS, DEFAULT_CRITERIA_LIBRARY, DEFAULT_MODULES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
+import { ALTA_THEME, DEFAULT_CHECKLISTS, DEFAULT_CRITERIA_LIBRARY, DEFAULT_MODULES, PAGE_SECTION_TEMPLATES } from "@elevate/shared";
 import { certificateSerial, teamInviteCode } from "../src/lib/codes";
 import { generateCertificates } from "../src/lib/certificates";
 import { generateLinkedInDrafts } from "../src/lib/linkedin";
@@ -19,12 +19,8 @@ const BRANDS = [
     slug: "altaschool",
     name: "Alta School of Technology",
     domains: ["event.altaschool.tech", "altaschool.localhost"],
-    theme: {
-      colors: { primary: "#2563eb", primaryFg: "#ffffff", accent: "#f97316", bg: "#f8fafc", fg: "#0f172a", muted: "#64748b", card: "#ffffff", border: "#e2e8f0" },
-      font: "Inter",
-      radius: 12,
-    },
-    settings: { hashtags: ["AltaSchoolOfTechnology", "AltaHacks", "TechEducation"], supportEmail: "events@altaschool.tech" },
+    theme: ALTA_THEME,
+    settings: { hashtags: ["AltaSchoolOfTechnology", "AltaHacks", "TechEducation"], supportEmail: "events@altaschool.tech", website: "https://altaschool.tech" },
     campuses: [
       { name: "Bengaluru Campus", code: "BLR", city: "Bengaluru" },
       { name: "Pune Campus", code: "PUN", city: "Pune" },

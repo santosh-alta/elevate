@@ -38,7 +38,7 @@ export async function sendDueNotifications(log?: FastifyBaseLogger): Promise<num
         to: n.toEmail!,
         subject: n.subject,
         text: data.ctaUrl && !n.body.includes(data.ctaUrl) ? `${n.body}\n\n${data.ctaLabel ?? "Open"}: ${data.ctaUrl}` : n.body,
-        html: renderEmailHtml(n.tenant, n.subject, n.body, { label: data.ctaLabel, url: data.ctaUrl }),
+        html: await renderEmailHtml(n.tenant, n.subject, n.body, { label: data.ctaLabel, url: data.ctaUrl }),
       });
       await prisma.notification.update({
         where: { id: n.id },

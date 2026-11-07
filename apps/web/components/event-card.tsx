@@ -4,15 +4,24 @@ import { eventCampuses, eventCount, fmtRange, humanize, typeLabel } from "@/lib/
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge } from "./ui/badge";
 
-export function EventCover({ event, className = "h-40" }: { event: ElevateEvent; className?: string }) {
+/** Event cover image, or a brand-coloured placeholder (optionally with the brand icon as a watermark). */
+export function EventCover({ event, className = "h-40", iconUrl }: { event: ElevateEvent; className?: string; iconUrl?: string }) {
   if (event.coverImageUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={event.coverImageUrl} alt="" className={`${className} w-full object-cover`} />;
   }
   return (
-    <div className={`${className} relative w-full overflow-hidden bg-gradient-to-br from-primary to-accent`}>
-      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, white 0, transparent 40%), radial-gradient(circle at 80% 70%, white 0, transparent 35%)" }} />
-      <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-white/90">{typeLabel(event.type)}</span>
+    <div className={`${className} relative w-full overflow-hidden bg-hero-bg`}>
+      <div
+        className="absolute inset-0"
+        style={{ backgroundImage: "radial-gradient(70% 90% at 100% 0%, rgb(var(--gradient-from) / 0.55), transparent 65%), radial-gradient(60% 80% at 0% 100%, rgb(var(--gradient-to) / 0.4), transparent 60%)" }}
+      />
+      {iconUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={iconUrl} alt="" aria-hidden className="absolute -right-[6%] top-1/2 h-[120%] w-auto -translate-y-1/2 opacity-[0.14]" />
+      )}
+      <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" />
+      <span className="absolute bottom-3 left-4 text-xs font-semibold uppercase tracking-widest text-hero-fg">{typeLabel(event.type)}</span>
     </div>
   );
 }
@@ -28,7 +37,7 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
   return (
     <Link
       href={href ?? `/events/${event.slug}`}
-      className="group flex flex-col overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group flex flex-col overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <EventCover event={event} />
       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -37,7 +46,7 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
           <ModeBadge mode={event.mode} />
         </div>
         <div>
-          <h3 className="font-semibold leading-snug group-hover:text-primary">{event.title}</h3>
+          <h3 className="font-heading text-lg font-bold leading-snug tracking-tight group-hover:underline group-hover:decoration-accent group-hover:decoration-2 group-hover:underline-offset-4">{event.title}</h3>
           {event.tagline && <p className="mt-1 line-clamp-2 text-sm text-muted">{event.tagline}</p>}
         </div>
         <div className="mt-auto space-y-1 text-xs text-muted">

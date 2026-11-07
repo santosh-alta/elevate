@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
+import { setStatusBarStyle } from "expo-status-bar";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,7 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "./session";
-import { STATUS_COLORS, withAlpha } from "./theme";
+import { STATUS_COLORS, isDark, withAlpha } from "./theme";
 
 export type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -75,13 +76,21 @@ export function Screen({
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
+  // Screens that draw their own top edge sit on the light page; the others sit under the hero-coloured stack header.
+  const ownTop = edges.includes("top");
+  const barStyle = isDark(ownTop ? t.colors.bg : t.colors.heroBg) ? "light" : "dark";
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle(barStyle, true);
+    }, [barStyle]),
+  );
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={[padded && styles.padded, { paddingBottom: 32 }]}
       keyboardShouldPersistTaps="handled"
       refreshControl={
         onRefresh ? (
-          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={t.colors.primary} />
+          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={t.colors.accent} colors={[t.colors.accent]} />
         ) : undefined
       }
     >
@@ -157,7 +166,8 @@ export function Button({
 }: {
   title: string;
   onPress?: () => void;
-  variant?: "primary" | "secondary" | "ghost" | "danger" | "success";
+  /** primary = brand (e.g. navy), cta = call to action in the secondary brand colour (e.g. green with navy text) */
+  variant?: "primary" | "cta" | "secondary" | "ghost" | "danger" | "success";
   icon?: IconName;
   loading?: boolean;
   disabled?: boolean;
@@ -167,6 +177,7 @@ export function Button({
   const t = useTheme();
   const palette = {
     primary: { bg: t.colors.primary, fg: t.colors.primaryFg, border: t.colors.primary },
+    cta: { bg: t.colors.secondary, fg: t.colors.secondaryFg, border: t.colors.secondary },
     secondary: { bg: withAlpha(t.colors.primary, 0.1), fg: t.colors.primary, border: "transparent" },
     ghost: { bg: "transparent", fg: t.colors.primary, border: t.colors.border },
     danger: { bg: STATUS_COLORS.danger, fg: "#fff", border: STATUS_COLORS.danger },
@@ -196,7 +207,7 @@ export function Button({
       ) : (
         <>
           {icon ? <Ionicons name={icon} size={size === "sm" ? 16 : 18} color={palette.fg} /> : null}
-          <Text style={{ color: palette.fg, fontWeight: "600", fontSize: size === "sm" ? 14 : 16 }}>{title}</Text>
+          <Text style={{ color: palette.fg, fontWeight: variant === "cta" ? "700" : "600", fontSize: size === "sm" ? 14 : 16 }}>{title}</Text>
         </>
       )}
     </Pressable>
@@ -249,7 +260,7 @@ export function ProgressBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(1, value));
   return (
     <View style={{ height: 8, borderRadius: 4, backgroundColor: withAlpha(t.colors.primary, 0.12), overflow: "hidden" }}>
-      <View style={{ width: `${pct * 100}%`, height: "100%", backgroundColor: t.colors.primary, borderRadius: 4 }} />
+      <View style={{ width: `${pct * 100}%`, height: "100%", backgroundColor: t.colors.accent, borderRadius: 4 }} />
     </View>
   );
 }
@@ -260,7 +271,7 @@ export function Loading() {
   const t = useTheme();
   return (
     <View style={styles.center}>
-      <ActivityIndicator size="large" color={t.colors.primary} />
+      <ActivityIndicator size="large" color={t.colors.accent} />
     </View>
   );
 }

@@ -10,15 +10,34 @@ import { badRequest, notFound } from "../lib/errors";
 import { themeOf } from "../lib/brand";
 
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a hex colour like #4f46e5");
+/** An absolute http(s) URL, or a path on the brand's own site such as /brands/altaschool/logo.png (not protocol-relative). */
+const assetUrl = z
+  .string()
+  .trim()
+  .max(2048)
+  .regex(/^(https?:\/\/[^\s]+|\/(?!\/)[^\s]*)$/, "Use a full https:// link or a site path like /brands/<brand>/logo.png");
+
 const themeSchema = z.object({
   colors: z
-    .object({ primary: hex, primaryFg: hex, accent: hex, bg: hex, fg: hex, muted: hex, card: hex, border: hex })
+    .object({
+      primary: hex, primaryFg: hex, accent: hex, bg: hex, fg: hex, muted: hex, card: hex, border: hex,
+      secondary: hex, secondaryFg: hex, highlight: hex, heroBg: hex, heroFg: hex,
+    })
     .partial()
     .optional(),
-  logoUrl: z.string().url().nullable().optional(),
-  faviconUrl: z.string().url().nullable().optional(),
-  font: z.string().max(60).optional(),
+  logoUrl: assetUrl.nullable().optional(),
+  logoDarkUrl: assetUrl.nullable().optional(),
+  iconUrl: assetUrl.nullable().optional(),
+  faviconUrl: assetUrl.nullable().optional(),
+  appleTouchIconUrl: assetUrl.nullable().optional(),
+  ogImageUrl: assetUrl.nullable().optional(),
+  font: z.string().max(120).optional(),
+  headingFont: z.string().max(120).optional(),
+  /** Licensed font stylesheet (e.g. Adobe Fonts kit) — https only */
+  fontCssUrl: z.string().trim().regex(/^https:\/\/[^\s]+$/, "Use an https:// stylesheet link").max(2048).nullable().optional(),
   radius: z.number().int().min(0).max(32).optional(),
+  gradient: z.tuple([hex, hex]).nullable().optional(),
+  tagline: z.string().trim().max(160).nullable().optional(),
 });
 
 const hostnameSchema = z

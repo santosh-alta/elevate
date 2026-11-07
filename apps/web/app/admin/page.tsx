@@ -29,10 +29,10 @@ export default async function AdminDashboard() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted">Everything happening across your events.</p>
         </div>
-        <LinkButton href="/admin/events/new"><CalendarPlus className="h-4 w-4" />Create event</LinkButton>
+        <LinkButton href="/admin/events/new" variant="cta"><CalendarPlus className="h-4 w-4" />Create event</LinkButton>
       </div>
 
       {dash?.kpis ? (

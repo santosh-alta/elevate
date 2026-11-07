@@ -200,25 +200,97 @@ export interface BrandTheme {
   colors: {
     primary: string; primaryFg: string; accent: string;
     bg: string; fg: string; muted: string; card: string; border: string;
+    /** Second brand colour (e.g. Alta green), used for success states and call-to-action highlights */
+    secondary: string; secondaryFg: string;
+    /** Small highlights: badges, "new", ribbons (e.g. Alta yellow) */
+    highlight: string;
+    /** Hero banners, site header/footer, email header/footer */
+    heroBg: string; heroFg: string;
   };
   logoUrl?: string;
+  /** Logo version for dark backgrounds (hero, footer, emails). Falls back to logoUrl */
+  logoDarkUrl?: string;
+  /** Square brand mark (favicon / app icon source) */
+  iconUrl?: string;
   faviconUrl?: string;
-  font?: string;     // Google Font family name
-  radius?: number;   // px
+  appleTouchIconUrl?: string;
+  /** Default social share image (1200×630) for pages without a cover */
+  ogImageUrl?: string;
+  font?: string;         // body font, Google Font family name
+  headingFont?: string;  // headings font, Google Font family name (defaults to font)
+  /** Stylesheet for licensed fonts (e.g. an Adobe Fonts kit with Proxima Nova). Families named in font/headingFont are tried first */
+  fontCssUrl?: string;
+  radius?: number;       // px
+  /** Two-colour brand gradient for bars and accents */
+  gradient?: [string, string];
+  tagline?: string;
 }
 
 export const DEFAULT_THEME: BrandTheme = {
   colors: {
     primary: "#4f46e5", primaryFg: "#ffffff", accent: "#f59e0b",
     bg: "#f8fafc", fg: "#0f172a", muted: "#64748b", card: "#ffffff", border: "#e2e8f0",
+    secondary: "#0ea5e9", secondaryFg: "#ffffff", highlight: "#f59e0b",
+    heroBg: "#1e1b4b", heroFg: "#ffffff",
   },
   font: "Inter",
   radius: 12,
 };
 
-export function resolveTheme(theme: Partial<BrandTheme> | null | undefined): BrandTheme {
-  return { ...DEFAULT_THEME, ...theme, colors: { ...DEFAULT_THEME.colors, ...(theme?.colors ?? {}) } };
+type ThemeInput = Partial<Omit<BrandTheme, "colors">> & { colors?: Partial<BrandTheme["colors"]> };
+
+export function resolveTheme(theme: ThemeInput | null | undefined): BrandTheme {
+  const c = theme?.colors ?? {};
+  const primary = c.primary ?? DEFAULT_THEME.colors.primary;
+  const colors = {
+    ...DEFAULT_THEME.colors,
+    // Brands that set only the original 8 colours get sensible derived values.
+    secondary: c.accent ?? DEFAULT_THEME.colors.secondary,
+    highlight: c.accent ?? DEFAULT_THEME.colors.highlight,
+    heroBg: primary,
+    heroFg: c.primaryFg ?? DEFAULT_THEME.colors.heroFg,
+    ...c,
+  } as BrandTheme["colors"];
+  return {
+    ...DEFAULT_THEME,
+    ...theme,
+    colors,
+    headingFont: theme?.headingFont ?? theme?.font ?? DEFAULT_THEME.font,
+    logoDarkUrl: theme?.logoDarkUrl ?? theme?.logoUrl,
+    gradient: theme?.gradient ?? [colors.primary, colors.accent],
+  };
 }
+
+/** Alta School of Technology, from the Alta brand guidelines (ALTA/Alta brand guidelines.pdf, kept out of git). */
+export const ALTA_THEME: ThemeInput = {
+  colors: {
+    primary: "#191445",      // Alta navy: logo wordmark, headings, primary buttons
+    primaryFg: "#ffffff",
+    accent: "#22ACD1",       // Alta sky blue: shield, links, focus
+    secondary: "#08C191",    // Alta green: "Apply now / Register" call to action
+    secondaryFg: "#191445",  // navy on green keeps text readable (white on this green is too faint)
+    highlight: "#FDC025",    // Alta yellow: highlights and badges
+    heroBg: "#191445",
+    heroFg: "#ffffff",
+    bg: "#F6F8FB",
+    fg: "#191445",
+    muted: "#565656",        // body grey from the guidelines
+    card: "#ffffff",
+    border: "#E2E6EF",
+  },
+  logoUrl: "/brands/altaschool/logo.png",
+  logoDarkUrl: "/brands/altaschool/logo-white.png",
+  iconUrl: "/brands/altaschool/icon.png",
+  faviconUrl: "/brands/altaschool/favicon.png",
+  appleTouchIconUrl: "/brands/altaschool/apple-touch-icon.png",
+  ogImageUrl: "/brands/altaschool/og.png",
+  // Brand font is Proxima Nova (licensed). Figtree is the closest free match; add an Adobe Fonts kit in fontCssUrl to use the real one.
+  font: "Figtree",
+  headingFont: "Figtree",
+  radius: 10,
+  gradient: ["#22ACD1", "#08C191"],
+  tagline: "Creating Builders for an AI World",
+};
 
 // ───────── Request schemas ─────────
 

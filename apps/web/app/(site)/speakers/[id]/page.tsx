@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Globe, Linkedin } from "lucide-react";
 import { apiGet } from "@/lib/api";
-import { getOrigin } from "@/lib/tenant";
+import { resolveTheme } from "@elevate/shared";
+import { getOrigin, getTenant } from "@/lib/tenant";
+import { absoluteUrl } from "@/lib/theme";
 import { fmtDate, fmtDateTime, humanize, typeLabel } from "@/lib/format";
 import type { ElevateEvent, Guest } from "@/lib/types";
 import { Badge, Card, LinkButton } from "@/components/ui";
@@ -35,11 +37,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const s = await loadSpeaker(id);
   if (!s) return { title: "Speaker" };
+  const [origin, tenant] = await Promise.all([getOrigin(), getTenant()]);
+  const theme = resolveTheme(tenant?.theme);
+  const image = absoluteUrl(s.g.photoUrl ?? theme.ogImageUrl, origin);
   const description = [s.g.designation, s.g.organization].filter(Boolean).join(", ") || s.g.bio?.slice(0, 160);
   return {
     title: s.g.name,
     description: description || undefined,
-    openGraph: { title: s.g.name, description: description || undefined, images: s.g.photoUrl ? [{ url: s.g.photoUrl }] : undefined, url: `${await getOrigin()}/speakers/${id}` },
+    openGraph: { title: s.g.name, description: description || undefined, images: image ? [{ url: image }] : undefined, url: `${origin}/speakers/${id}` },
   };
 }
 
@@ -54,7 +59,7 @@ export default async function SpeakerPage({ params }: Props) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <Card className="overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-primary to-accent" />
+        <div className="relative h-24 bg-hero-bg"><div className="absolute inset-x-0 bottom-0 h-1.5 bg-brand-gradient" /></div>
         <div className="-mt-12 flex flex-col gap-6 px-6 pb-6 sm:flex-row sm:items-end">
           <div className="rounded-full border-4 border-card bg-card"><GuestAvatar guest={g} size="h-28 w-28" /></div>
           <div className="min-w-0 flex-1">

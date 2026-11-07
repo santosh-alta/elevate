@@ -3,17 +3,20 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { SessionProvider, useSession } from "../src/session";
+import { isDark } from "../src/theme";
 
 function RootStack() {
   const { theme } = useSession();
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark(theme.colors.bg) ? "light" : "dark"} />
       <Stack
         screenOptions={{
-          headerTintColor: theme.colors.primary,
-          headerStyle: { backgroundColor: theme.colors.card },
-          headerTitleStyle: { color: theme.colors.fg, fontWeight: "700" },
+          // Brand hero colour for headers (Alta navy with white text).
+          headerTintColor: theme.colors.heroFg,
+          headerStyle: { backgroundColor: theme.colors.heroBg },
+          headerTitleStyle: { color: theme.colors.heroFg, fontWeight: "700" },
+          headerShadowVisible: false,
           contentStyle: { backgroundColor: theme.colors.bg },
           headerBackTitle: "Back",
         }}

@@ -7,3 +7,7 @@ dist
 *.log
 .DS_Store
 apps/api/storage
+
+# Brand source files (guidelines PDFs etc.) stay local; the repo is public
+ALTA/*.pdf
+*/brand-guidelines*.pdf

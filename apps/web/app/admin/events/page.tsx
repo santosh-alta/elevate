@@ -19,7 +19,7 @@ export default async function AdminEvents({ searchParams }: { searchParams: Prom
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Events</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Events</h1>
         <LinkButton href="/admin/events/new"><CalendarPlus className="h-4 w-4" />Create event</LinkButton>
       </div>
       <form className="grid gap-3 sm:grid-cols-4">

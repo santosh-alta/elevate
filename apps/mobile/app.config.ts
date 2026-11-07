@@ -18,6 +18,18 @@ export interface BrandConfig {
   apiUrl: string;
   /** Public website for this brand (event pages, share links). */
   webUrl?: string;
+  /** Built-in theme (same shape as the tenant theme) used before /v1/tenant loads. */
+  theme?: { colors?: Record<string, string>; [k: string]: unknown };
+  /** App icon / splash files, relative to apps/mobile. Defaults to assets/brands/<slug>/{icon,adaptive-icon,splash-icon|splash}.png when present. */
+  assets?: { icon?: string; adaptiveIcon?: string; splash?: string };
+  /** Splash background; defaults to theme.colors.heroBg, then iconColor. */
+  splashColor?: string;
+}
+
+/** Brand asset path if the file exists (explicit JSON path first, then the assets/brands/<slug>/ convention). */
+function brandAsset(brand: BrandConfig, key: keyof NonNullable<BrandConfig["assets"]>, file: string): string | undefined {
+  const candidates = [brand.assets?.[key], `./assets/brands/${brand.slug}/${file}`].filter((p): p is string => !!p);
+  return candidates.find((p) => fs.existsSync(path.resolve(__dirname, p)));
 }
 
 function loadBrand(slug: string): BrandConfig {
@@ -33,6 +45,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   // EXPO_PUBLIC_API_URL overrides the brand's API url (e.g. your laptop's LAN IP while developing on a phone).
   const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? brand.apiUrl;
   const webUrl = process.env.EXPO_PUBLIC_WEB_URL ?? brand.webUrl;
+  const icon = brandAsset(brand, "icon", "icon.png");
+  const adaptiveIcon = brandAsset(brand, "adaptiveIcon", "adaptive-icon.png");
+  // Prefer a tightly cropped logo (splash-icon.png): Android 12+ shows the splash image as a centred icon.
+  const splashIcon = brandAsset(brand, "splash", "splash-icon.png");
+  const splash = splashIcon ?? brandAsset(brand, "splash", "splash.png");
+  const splashColor = brand.splashColor ?? brand.theme?.colors?.heroBg ?? brand.iconColor;
 
   return {
     ...config,
@@ -42,19 +60,27 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     version: "0.1.0",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
+    ...(icon && { icon }),
     ios: {
       bundleIdentifier: brand.bundleId,
       supportsTablet: true,
     },
     android: {
       package: brand.bundleId,
-      adaptiveIcon: { backgroundColor: brand.iconColor },
+      adaptiveIcon: { backgroundColor: brand.iconColor, ...(adaptiveIcon && { foregroundImage: adaptiveIcon }) },
     },
     web: { bundler: "metro", output: "single" },
     plugins: [
       "expo-router",
       "expo-secure-store",
       "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          backgroundColor: splashColor,
+          ...(splash && { image: splash, imageWidth: splashIcon ? 240 : 200, resizeMode: "contain" }),
+        },
+      ],
       [
         "expo-camera",
         {

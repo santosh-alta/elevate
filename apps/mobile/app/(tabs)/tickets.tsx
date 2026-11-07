@@ -67,7 +67,7 @@ export default function TicketsScreen() {
           icon="ticket-outline"
           title="No tickets yet"
           message="Register for an event and your QR ticket will appear here."
-          action={<Button title="Browse events" onPress={() => router.push("/(tabs)")} />}
+          action={<Button title="Browse events" variant="cta" onPress={() => router.push("/(tabs)")} />}
         />
       ) : (
         regs.map((r) => {
