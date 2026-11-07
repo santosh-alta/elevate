@@ -93,7 +93,14 @@ export default async function EventPage({ params, searchParams }: Params) {
   const pageUrl = `${origin}/events/${event.slug}`;
   const ended = new Date(event.endsAt).getTime() < Date.now();
   const canDownloadZip = galleryPage.items.length > 0 && (isStaff(me) || (!!registration && ATTENDED.includes(registration.status)));
-  const where = [event.venue, event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.name).join(" + "), event.mode !== "OFFLINE" ? "Online" : null]
+  // Venue first; add the campus only when the venue doesn't already name it (e.g. venue "ADYPU, Pune" + campus ADYPU).
+  const venueText = (event.venue ?? "").toLowerCase();
+  const namedInVenue = (c: { name: string; code?: string | null }) => {
+    const core = c.name.replace(/\s*\([^)]*\)\s*$/, "").toLowerCase();
+    return !!venueText && (venueText.includes(core) || (!!c.code && new RegExp(`\\b${c.code.toLowerCase()}\\b`).test(venueText)));
+  };
+  const campusText = event.scope === "CENTRAL" ? (event.venue ? null : "Central (HQ)") : campuses.filter((c) => !namedInVenue(c)).map((c) => c.name).join(" + ");
+  const where = [event.venue, campusText, event.mode !== "OFFLINE" ? "Online" : null]
     .filter(Boolean).join(" · ") || "To be announced";
   const registerHref = `/events/${event.slug}/register`;
   const isTeamEvent = !!event.modules?.teams;
