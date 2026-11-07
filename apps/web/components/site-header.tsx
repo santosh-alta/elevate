@@ -71,9 +71,31 @@ export async function SiteFooter() {
     <footer className="mt-20 bg-hero-bg text-hero-fg">
       <div className="h-1.5 bg-brand-gradient" aria-hidden />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
-        <div className="space-y-4">
+        <div className="space-y-5">
           <BrandLogo tenant={tenant} variant="dark" size={40} showName />
           {tagline && <p className="max-w-xs font-heading text-lg font-semibold leading-snug">{tagline}</p>}
+          <p className="max-w-sm text-sm text-hero-fg/80">
+            {(tenant.settings.footerAbout as string | undefined) ??
+              `Hackathons, masterclasses, workshops and guest lectures${tenant.campuses.length > 1 ? ` across our ${tenant.campuses.length} campuses` : ""}. Sign up, build, and earn verified certificates.`}
+          </p>
+          {tenant.campuses.length > 0 && (
+            <div className="space-y-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-hero-fg/80">Our campuses</p>
+              <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                {tenant.campuses.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/events?campusId=${c.id}`} className="group inline-flex items-start gap-2 text-hero-fg/90 hover:text-hero-fg">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-hero-accent" />
+                      <span>
+                        <span className="underline-offset-4 group-hover:underline">{c.code && c.name.includes(`(${c.code})`) ? c.code : c.name}</span>
+                        {c.city && <span className="block text-xs text-hero-fg/70">{c.city}</span>}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <nav aria-label="Footer" className="space-y-3 text-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-hero-fg/80">Explore</p>
@@ -104,8 +126,8 @@ export async function SiteFooter() {
       </div>
       <div className="border-t border-hero-fg/15">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-5 text-xs text-hero-fg/80 sm:flex-row sm:items-center sm:justify-between">
-          <span>© {new Date().getFullYear()} {tenant.name}</span>
-          <span>Powered by Elevate</span>
+          <span>© {new Date().getFullYear()} {tenant.name}. All rights reserved.</span>
+          <a href="#top" className="hover:text-hero-fg hover:underline">Back to top ↑</a>
         </div>
       </div>
     </footer>

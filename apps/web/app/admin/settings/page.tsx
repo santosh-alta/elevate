@@ -196,7 +196,7 @@ async function Domains() {
             </tbody>
           </Table>
         </Card>
-      )) : <EmptyState title="No custom domains" description="Until you add one, your site is served on the default Elevate subdomain." />}
+      )) : <EmptyState title="No custom domains" description="Until you add one, your site is served on its temporary address." />}
     </div>
   );
 }
