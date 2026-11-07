@@ -3,7 +3,7 @@ import { ArrowRight, Award, CalendarDays, Users } from "lucide-react";
 import { EVENT_FAMILIES, resolveTheme } from "@elevate/shared";
 import { apiList } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
-import { eventCount, eventFamily } from "@/lib/format";
+import { eventFamily, participantCount } from "@/lib/format";
 import { EventIcon } from "@/components/event-icon";
 import type { ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
@@ -18,7 +18,7 @@ export default async function HomePage() {
   ]);
   const live = upcoming.filter((e) => e.status === "LIVE");
   const next = upcoming.filter((e) => e.status !== "LIVE");
-  const totalParticipants = past.reduce((s, e) => s + (eventCount(e, "registrations") ?? 0), 0);
+  const totalParticipants = past.reduce((s, e) => s + participantCount(e), 0);
   const theme = resolveTheme(tenant.theme);
   const headlineText = theme.tagline ?? "Learn, build and grow at our events.";
   const settingsTagline = tenant.settings.tagline as string | undefined;

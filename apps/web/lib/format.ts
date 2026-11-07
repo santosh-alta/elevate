@@ -39,6 +39,16 @@ export function eventCount(e: ElevateEvent, key: string): number | undefined {
   return e._count?.[key] ?? e.counts?.[key];
 }
 
+/**
+ * People who took part: registrations on this site, or, for events run before the site existed,
+ * the figure recorded on the event (config.participants).
+ */
+export function participantCount(e: ElevateEvent): number {
+  const regs = eventCount(e, "registrations") ?? 0;
+  const recorded = Number(e.config?.participants ?? 0);
+  return regs || (Number.isFinite(recorded) ? recorded : 0);
+}
+
 export function toLocalInput(d?: string | null): string {
   if (!d) return "";
   const date = new Date(d);
