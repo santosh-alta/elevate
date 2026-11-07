@@ -46,6 +46,15 @@ export default async function MePage() {
           <p className="text-sm text-muted">Welcome back</p>
           <h1 className="text-3xl font-bold">{me.user.name}</h1>
           <p className="text-sm text-muted">{me.user.email}{me.membership?.campus ? ` · ${me.membership.campus.name}` : ""}</p>
+          <details className="mt-2 text-sm" open={me.user.name === me.user.email.split("@")[0]}>
+            <summary className="cursor-pointer text-primary hover:underline">
+              {me.user.name === me.user.email.split("@")[0] ? "Add your full name for certificates" : "Edit name"}
+            </summary>
+            <ApiForm method="PATCH" path="/me" resetOnSuccess={false} successMessage="Saved" className="mt-2 flex max-w-md gap-2">
+              <Input name="name" required minLength={2} defaultValue={me.user.name === me.user.email.split("@")[0] ? "" : me.user.name} placeholder="Full name, as on certificates" />
+              <Button type="submit" size="sm">Save</Button>
+            </ApiForm>
+          </details>
         </div>
         <form action="/api/auth/logout" method="post"><Button variant="outline" size="sm">Sign out</Button></form>
       </div>
