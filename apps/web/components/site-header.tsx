@@ -71,30 +71,27 @@ export async function SiteFooter() {
     <footer className="mt-20 bg-hero-bg text-hero-fg">
       <div className="h-1.5 bg-brand-gradient" aria-hidden />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
-        <div className="space-y-5">
+        <div className="space-y-4">
           <BrandLogo tenant={tenant} variant="dark" size={40} showName />
           {tagline && <p className="max-w-xs font-heading text-lg font-semibold leading-snug">{tagline}</p>}
-          <p className="max-w-sm text-sm text-hero-fg/80">
+          <p className="max-w-xs text-sm text-hero-fg/80">
             {(tenant.settings.footerAbout as string | undefined) ??
-              `Hackathons, masterclasses, workshops and guest lectures${tenant.campuses.length > 1 ? ` across our ${tenant.campuses.length} campuses` : ""}. Sign up, build, and earn verified certificates.`}
+              `Hackathons, masterclasses and workshops${tenant.campuses.length > 1 ? ` across ${tenant.campuses.length} campuses` : ""}.`}
           </p>
           {tenant.campuses.length > 0 && (
-            <div className="space-y-3 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-hero-fg/80">Our campuses</p>
-              <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                {tenant.campuses.map((c) => (
-                  <li key={c.id}>
-                    <Link href={`/events?campusId=${c.id}`} className="group inline-flex items-start gap-2 text-hero-fg/90 hover:text-hero-fg">
-                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-hero-accent" />
-                      <span>
-                        <span className="underline-offset-4 group-hover:underline">{c.code && c.name.includes(`(${c.code})`) ? c.code : c.name}</span>
-                        {c.city && <span className="block text-xs text-hero-fg/70">{c.city}</span>}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ul aria-label="Campuses" className="flex max-w-sm flex-wrap gap-2">
+              {tenant.campuses.map((c) => (
+                <li key={c.id}>
+                  <Link
+                    href={`/events?campusId=${c.id}`}
+                    title={c.name}
+                    className="inline-flex rounded-full border border-hero-fg/20 px-3 py-1 text-xs text-hero-fg/85 transition hover:border-hero-accent hover:text-hero-fg"
+                  >
+                    {c.city ?? c.code ?? c.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
         <nav aria-label="Footer" className="space-y-3 text-sm">
