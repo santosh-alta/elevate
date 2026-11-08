@@ -17,7 +17,7 @@ const days = (n: number) => new Date(Date.now() + n * DAY);
 const BRANDS = [
   {
     slug: "altaschool",
-    name: "Alta School of Technology",
+    name: "ALTA School of Technology",
     domains: ["event.altaschool.tech", "altaschool.localhost"],
     theme: ALTA_THEME,
     settings: ALTA_SETTINGS,

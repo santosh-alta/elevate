@@ -14,7 +14,7 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 import { ALTA_SETTINGS, ALTA_THEME } from "@elevate/shared";
 
 const BRANDS: Record<string, { name: string; theme: unknown; settings: unknown }> = {
-  altaschool: { name: "Alta School of Technology", theme: ALTA_THEME, settings: ALTA_SETTINGS },
+  altaschool: { name: "ALTA School of Technology", theme: ALTA_THEME, settings: ALTA_SETTINGS },
 };
 
 function args() {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type CSSProperties, type ReactNode } from "react";
+import { NavProgress, ScrollReveal } from "@/components/client/motion";
 import { resolveTheme } from "@elevate/shared";
 import { getHost, getOrigin, getTenant } from "@/lib/tenant";
 import { absoluteUrl, googleFontHrefs, themeCss } from "@/lib/theme";
@@ -37,7 +38,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const theme = resolveTheme(tenant?.theme);
   const fontHrefs = googleFontHrefs(theme);
   return (
-    <html lang="en">
+    <html lang="en" style={theme.iconUrl ? ({ "--brand-mark": `url("${theme.iconUrl}")` } as CSSProperties) : undefined}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: themeCss(tenant?.theme) }} />
         {theme.fontCssUrl && <link rel="stylesheet" href={theme.fontCssUrl} />}
@@ -50,6 +51,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         )}
       </head>
       <body id="top" className="min-h-screen font-sans antialiased">
+        <Suspense fallback={null}><NavProgress /></Suspense>
+        <ScrollReveal />
         {tenant ? children : <BrandNotFound host={await getHost()} />}
       </body>
     </html>

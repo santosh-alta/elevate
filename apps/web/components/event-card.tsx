@@ -70,6 +70,7 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
   return (
     <Link
       href={href ?? `/events/${event.slug}`}
+      data-reveal
       className="group flex flex-col overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <EventCover event={event} className="aspect-[16/9] h-auto" />

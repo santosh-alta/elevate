@@ -16,9 +16,9 @@ export async function SiteHeader() {
   const theme = resolveTheme(tenant.theme);
   const unread = me ? (await apiList<AppNotification>("/me/notifications?unread=1")).filter((n) => !n.readAt).length : 0;
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+    <header className="site-header sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex min-w-0 items-center gap-3 rounded-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`${tenant.name} Events home`}>
+        <Link href="/" className="logo-hover flex min-w-0 items-center gap-3 rounded-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`${tenant.name} Events home`}>
           {theme.logoUrl ? (
             <>
               <BrandLogo tenant={tenant} size={34} />

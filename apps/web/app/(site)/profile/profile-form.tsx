@@ -46,7 +46,7 @@ export function ProfileForm({ user, next, first }: { user: User; next: string; f
         </Field>
       </div>
       <Field label="College or organisation *">
-        <Input name="college" required defaultValue={user.college ?? ""} placeholder="e.g. Alta School of Technology" />
+        <Input name="college" required defaultValue={user.college ?? ""} placeholder="e.g. ALTA School of Technology" />
       </Field>
       <div className="grid gap-5 sm:grid-cols-3">
         <Field label="Course / degree"><Input name="degree" defaultValue={user.degree ?? ""} placeholder="B.Tech CSE" /></Field>
