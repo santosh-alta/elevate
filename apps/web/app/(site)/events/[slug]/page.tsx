@@ -4,13 +4,12 @@ import Link from "next/link";
 import {
   ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Star, Ticket, Trophy, Users, Video,
 } from "lucide-react";
-import { EVENT_FAMILIES, SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
-import { EventIcon } from "@/components/event-icon";
+import { SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
 import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
-import { eventCampuses, eventCount, eventFamily, eventLabel, familyLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount, turnoutLabel } from "@/lib/format";
+import { eventCampuses, eventCount, eventLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount, turnoutLabel } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
 import type { ElevateEvent, Guest, Media, Registration, Sponsor, Team, Winner } from "@/lib/types";
 import { EventCover, ModeBadge } from "@/components/event-card";
@@ -149,12 +148,7 @@ export default async function EventPage({ params, searchParams }: Params) {
             <div className="flex flex-wrap gap-2">
               <StatusBadge status={event.status} />
               <Badge tone="highlight">{eventLabel(event)}</Badge>
-              <Link href={`/events?family=${eventFamily(event)}`} className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-hero-fg/10 px-2.5 py-0.5 text-xs font-medium text-hero-fg ring-1 ring-inset ring-hero-fg/30 hover:bg-hero-fg/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                <EventIcon name={EVENT_FAMILIES.find((f) => f.key === eventFamily(event))?.icon} className="h-3 w-3" />{familyLabel(eventFamily(event))}
-              </Link>
-              <ModeBadge mode={event.mode} />
-              <Badge>{event.scope === "CENTRAL" ? "Central (HQ) event" : campuses.length > 1 ? "Joint campus event" : "Campus event"}</Badge>
-              {campuses.map((c) => <Badge key={c.id} tone="gray"><MapPin className="h-3 w-3" />{c.name}</Badge>)}
+              {event.mode !== "OFFLINE" && <ModeBadge mode={event.mode} />}
             </div>
             <h1 className="mt-5 font-heading text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">{event.title}</h1>
             {event.tagline && <p className="mt-3 max-w-xl text-lg text-hero-fg/85">{event.tagline}</p>}
