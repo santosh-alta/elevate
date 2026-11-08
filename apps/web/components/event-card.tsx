@@ -3,57 +3,55 @@ import { CalendarDays, MapPin, Users, Video } from "lucide-react";
 import { eventCampuses, eventLabel, fmtRange, humanize, turnoutLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { Badge, StatusBadge } from "./ui/badge";
-
-/** Short poster date in India time, e.g. "11–12 Apr 2026" or "30 Apr – 2 May 2026". */
-function posterDate(startsAt: string, endsAt: string): string {
-  const tz = "Asia/Kolkata";
-  const a = new Date(startsAt), b = new Date(endsAt);
-  const part = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-IN", { timeZone: tz, ...o });
-  const sameDay = part(a, { dateStyle: "short" }) === part(b, { dateStyle: "short" });
-  if (sameDay) return part(a, { day: "numeric", month: "short", year: "numeric" });
-  if (part(a, { month: "short", year: "numeric" }) === part(b, { month: "short", year: "numeric" })) {
-    return `${part(a, { day: "numeric" })}–${part(b, { day: "numeric", month: "short", year: "numeric" })}`;
-  }
-  return `${part(a, { day: "numeric", month: "short" })} – ${part(b, { day: "numeric", month: "short", year: "numeric" })}`;
-}
+import { posterIcons } from "./poster-icons";
 
 /**
- * Event cover image; without one, a generated brand poster: event type, title, who organised it and when,
- * on the brand gradient (with the brand mark as a watermark when given). Text scales with the poster's width.
+ * Event cover image; without one, a generated brand poster: the event type and topic graphics (icons picked from
+ * the title and tags) on the brand gradient. The title, date and place are shown next to the poster, not on it.
  */
 export function EventCover({ event, className = "h-40", iconUrl, showLabel = true }: { event: ElevateEvent; className?: string; iconUrl?: string; showLabel?: boolean }) {
   if (event.coverImageUrl) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={event.coverImageUrl} alt="" className={`${className} w-full object-cover`} />;
   }
-  const campuses = eventCampuses(event);
-  const where = event.scope === "CENTRAL"
-    ? "Central (HQ)"
-    : campuses.map((c) => (c.city ? `${c.code || c.name} · ${c.city}` : c.code || c.name)).join(" + ") || "Campus event";
+  const [Main, First, Second] = posterIcons(event);
   return (
-    <div className={`${className} relative w-full overflow-hidden bg-hero-bg text-hero-fg [container-type:inline-size]`}>
+    <div className={`${className} relative w-full overflow-hidden bg-hero-bg text-hero-fg [container-type:size]`} role="img" aria-label={`${eventLabel(event)}: ${event.title}`}>
       <div
         className="absolute inset-0"
         style={{ backgroundImage: "radial-gradient(70% 90% at 100% 0%, rgb(var(--gradient-from) / 0.6), transparent 65%), radial-gradient(60% 80% at 0% 100%, rgb(var(--gradient-to) / 0.45), transparent 60%)" }}
       />
+      {/* faint grid, like the brand posters */}
+      <div
+        aria-hidden
+        className="absolute inset-0 opacity-[0.07]"
+        style={{ backgroundImage: "linear-gradient(rgb(var(--hero-fg)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--hero-fg)) 1px, transparent 1px)", backgroundSize: "8cqw 8cqw" }}
+      />
       {iconUrl && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={iconUrl} alt="" aria-hidden className="absolute -right-[6%] top-1/2 h-[120%] w-auto -translate-y-1/2 opacity-[0.14]" />
+        <img src={iconUrl} alt="" aria-hidden className="absolute -left-[8%] top-1/2 h-[120%] w-auto -translate-y-1/2 opacity-[0.08]" />
       )}
-      {showLabel && (
-        <div className="absolute inset-0 flex flex-col justify-between p-[6cqw]">
-          <span className="w-fit rounded-full bg-hero-fg/10 px-[2.5cqw] py-[0.8cqw] text-[clamp(9px,2.6cqw,14px)] font-semibold uppercase tracking-[0.18em] ring-1 ring-inset ring-hero-fg/25">
-            {eventLabel(event)}
+      <div aria-hidden className="absolute inset-0">
+        {Main && (
+          <span className="absolute left-[58%] top-[56%] flex aspect-square w-[min(34cqw,62cqh)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-hero-fg/[0.07] shadow-[0_0_80px_rgb(var(--hero-accent)/0.25)] ring-1 ring-inset ring-hero-fg/15">
+            <Main className="h-1/2 w-1/2 text-hero-accent" strokeWidth={1.5} />
           </span>
-          <div className="space-y-[2cqw]">
-            <p className="line-clamp-3 max-w-[85%] font-heading text-[clamp(16px,7.5cqw,44px)] font-bold leading-[1.05] tracking-tight">{event.title}</p>
-            <p className="flex flex-wrap items-center gap-x-[2.5cqw] gap-y-1 text-[clamp(10px,2.8cqw,16px)] font-medium text-hero-fg/85">
-              <span className="text-hero-accent">{where}</span>
-              <span aria-hidden>•</span>
-              <span>{posterDate(event.startsAt, event.endsAt)}</span>
-            </p>
-          </div>
-        </div>
+        )}
+        {First && (
+          <span className="absolute left-[82%] top-[30%] flex aspect-square w-[min(15cqw,27cqh)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-hero-fg/[0.08] ring-1 ring-inset ring-hero-fg/15">
+            <First className="h-1/2 w-1/2 text-hero-fg/90" strokeWidth={1.75} />
+          </span>
+        )}
+        {Second && (
+          <span className="absolute left-[34%] top-[78%] flex aspect-square w-[min(12cqw,22cqh)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-hero-fg/[0.06] ring-1 ring-inset ring-hero-fg/10">
+            <Second className="h-1/2 w-1/2 text-hero-fg/75" strokeWidth={1.75} />
+          </span>
+        )}
+      </div>
+      {showLabel && (
+        <span className="absolute left-[5cqw] top-[7cqh] w-fit rounded-full bg-hero-fg/10 px-[2.5cqw] py-[0.8cqw] text-[clamp(9px,2.6cqw,14px)] font-semibold uppercase tracking-[0.18em] ring-1 ring-inset ring-hero-fg/25">
+          {eventLabel(event)}
+        </span>
       )}
       <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" />
     </div>
