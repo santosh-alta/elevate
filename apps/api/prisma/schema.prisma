@@ -901,6 +901,10 @@ model SocialPost {
   postedAt    DateTime?
   /// Filled later: { impressions, likes, comments, shares }
   metrics     Json?
+  /// Shown as an embedded preview on the public event page ("From the community")
+  featured    Boolean          @default(false)
+  /// Who posted it, e.g. a participant's name (official posts leave this empty)
+  authorName  String?
   createdAt   DateTime         @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)

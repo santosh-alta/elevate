@@ -8,6 +8,7 @@ import { cn } from "@/components/ui/cn";
 import { ApiButton } from "@/components/client/api-button";
 import { ApiForm } from "@/components/client/api-form";
 import { ApiSelect } from "@/components/client/api-select";
+import { HighlightsManager } from "@/components/admin/highlights-manager";
 import { MediaUploadPanel } from "@/components/admin/media-upload-panel";
 
 const SOCIAL_STATUSES = ["PLANNED", "DRAFTED", "POSTED"].map((s) => ({ value: s, label: humanize(s) }));
@@ -25,6 +26,15 @@ export async function MediaTab({ event }: { event: ElevateEvent }) {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader
+          title="Posts on the event page"
+          description="LinkedIn, Instagram and YouTube posts, from the team or from participants and guests, shown as live previews under “From the community”."
+        />
+        <CardBody>
+          <HighlightsManager eventId={event.id} items={social.filter((s) => s.featured && s.url).map((s) => ({ id: s.id, platform: s.platform, url: s.url, authorName: s.authorName }))} />
+        </CardBody>
+      </Card>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader title="Upload photos & files" description="Photos appear in the event page gallery. Highlights show first." />

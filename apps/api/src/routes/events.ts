@@ -353,6 +353,14 @@ export function eventRoutes(app: FastifyInstance) {
         }
       : null;
 
+    // "From the community": featured LinkedIn / Instagram / YouTube posts, newest first.
+    const highlights = await prisma.socialPost.findMany({
+      where: { eventId: event.id, featured: true, url: { not: null } },
+      orderBy: { createdAt: "desc" },
+      take: 24,
+      select: { id: true, platform: true, url: true, authorName: true },
+    });
+
     const gallery = await prisma.mediaAsset.findMany({
       where: { eventId: event.id, kind: "PHOTO" },
       orderBy: [{ isHighlight: "desc" }, { createdAt: "desc" }],
@@ -364,6 +372,7 @@ export function eventRoutes(app: FastifyInstance) {
       ...event,
       ...eventMeta(event),
       gallery,
+      highlights,
       previewToken: manager ? event.previewToken : undefined,
       outcome: manager ? event.outcome : undefined,
       campuses: event.campuses.map((c) => ({ campus: c.campus })),

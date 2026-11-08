@@ -663,3 +663,34 @@ export const SUGGESTED_TAGS = [
   "AI", "Web development", "Data science", "Cybersecurity", "Cloud", "Product", "Design", "Startups",
   "Placement", "Internship", "Industry", "Alumni", "First-year", "Women in tech", "Open source", "Online", "Free",
 ] as const;
+
+// ───────── Social post embeds ─────────
+
+export type EmbedPlatform = "LINKEDIN" | "INSTAGRAM" | "YOUTUBE";
+export interface SocialEmbed { platform: EmbedPlatform; embedUrl: string; url: string; height: number | null }
+
+/**
+ * Turns a public LinkedIn, Instagram or YouTube post link into an embeddable iframe URL.
+ * Returns null for anything else. `height` is null for 16:9 video (use an aspect ratio instead).
+ */
+export function socialEmbed(raw: string): SocialEmbed | null {
+  let u: URL;
+  try { u = new URL(raw.trim()); } catch { return null; }
+  const host = u.hostname.replace(/^(www\.|m\.)/, "");
+  const url = u.toString();
+  if (host === "linkedin.com") {
+    const urn = u.pathname.match(/urn:li:(activity|share|ugcPost):(\d+)/i) ?? decodeURIComponent(u.pathname).match(/urn:li:(activity|share|ugcPost):(\d+)/i);
+    if (urn) return { platform: "LINKEDIN", url, height: 620, embedUrl: `https://www.linkedin.com/embed/feed/update/urn:li:${urn[1]}:${urn[2]}` };
+    const act = u.pathname.match(/(?:activity|ugcPost|share)-(\d{15,})/i);
+    if (act) return { platform: "LINKEDIN", url, height: 620, embedUrl: `https://www.linkedin.com/embed/feed/update/urn:li:activity:${act[1]}` };
+    return null;
+  }
+  if (host === "instagram.com") {
+    const m = u.pathname.match(/\/(p|reel|reels|tv)\/([\w-]+)/);
+    if (m) return { platform: "INSTAGRAM", url, height: 640, embedUrl: `https://www.instagram.com/${m[1] === "reels" ? "reel" : m[1]}/${m[2]}/embed` };
+    return null;
+  }
+  const yt = youTubeId(raw);
+  if (yt && /(^|\.)youtube\.com$|^youtu\.be$/.test(host)) return { platform: "YOUTUBE", url, height: null, embedUrl: `https://www.youtube-nocookie.com/embed/${yt}` };
+  return null;
+}

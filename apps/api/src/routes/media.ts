@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { MediaKind } from "@prisma/client";
-import { MEDIA_KINDS, SOCIAL_PLATFORMS } from "@elevate/shared";
+import { MEDIA_KINDS, SOCIAL_PLATFORMS, socialEmbed } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { assertManageable, canCheckIn, canManageEvent, findEvent, requireEventManager, requireStaff, requireUser } from "../lib/permissions";
+import { assertManageable, canCheckIn, canManageEvent, findEvent, isStaff, requireEventManager, requireStaff, requireUser } from "../lib/permissions";
 import { forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { aiCaption, captionFacts, templateCaption } from "../lib/social";
@@ -201,6 +201,27 @@ export function mediaRoutes(app: FastifyInstance) {
     return reply.status(201).send(post);
   });
 
+  /**
+   * "From the community": a LinkedIn, Instagram or YouTube post (official or by a participant) shown as an
+   * embedded preview on the public event page. Event managers and the Social media team can add them.
+   */
+  app.post<{ Params: { id: string } }>("/events/:id/highlights", async (req, reply) => {
+    const event = await findEvent(req, req.params.id);
+    const socialTeam = req.auth?.membership?.teams?.includes("SOCIAL_MEDIA");
+    if (!(await canManageEvent(req, event)) && !(socialTeam && isStaff(req))) throw forbidden("Only the event's managers or the Social media team can add posts");
+    const body = z.object({ url: z.string().url(), authorName: z.string().trim().max(120).optional() }).parse(req.body);
+    const embed = socialEmbed(body.url);
+    if (!embed) throw badRequest("Paste a public LinkedIn post, Instagram post or reel, or YouTube video link");
+    const dup = await prisma.socialPost.findFirst({ where: { eventId: event.id, url: embed.url } });
+    const post = dup
+      ? await prisma.socialPost.update({ where: { id: dup.id }, data: { featured: true, ...(body.authorName !== undefined && { authorName: body.authorName || null }) } })
+      : await prisma.socialPost.create({
+          data: { eventId: event.id, platform: embed.platform, url: embed.url, status: "POSTED", postedAt: new Date(), featured: true, authorName: body.authorName || null, ownerId: req.auth!.user.id },
+        });
+    await logActivity(event.id, req.auth!.user.id, "social.featured", { platform: post.platform, url: post.url });
+    return reply.status(dup ? 200 : 201).send(post);
+  });
+
   /** Drafts a caption per platform (AI when configured, else template). Posted rows are never touched. */
   app.post<{ Params: { id: string } }>("/events/:id/social/suggest", async (req) => {
     const event = await requireEventManager(req, req.params.id);
@@ -244,6 +265,8 @@ export function mediaRoutes(app: FastifyInstance) {
         url: z.string().url().nullable().optional(),
         ownerId: z.string().nullable().optional(),
         metrics: metricsSchema.optional(),
+        featured: z.boolean().optional(),
+        authorName: z.string().trim().max(120).nullable().optional(),
       })
       .parse(req.body);
     const updated = await prisma.socialPost.update({

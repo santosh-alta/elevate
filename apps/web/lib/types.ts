@@ -84,6 +84,7 @@ export interface ElevateEvent {
   submittedAt?: string | null; reviewedAt?: string | null; paidAllowed?: boolean; createdById?: string | null;
   ownerId?: string | null; owner?: { id: string; name: string } | null;
   checklist?: { total: number; done: number; overdue: number; proofMissing: number }; sponsors?: Sponsor[]; gallery?: Media[];
+  highlights?: { id: string; platform: string; url: string | null; authorName?: string | null }[];
   registrationForm?: { id: string; label: string; type?: string; required?: boolean; options?: string[] }[];
   canManage?: boolean;
   // v1.2
@@ -200,7 +201,7 @@ export interface Media {
   id: string; kind: string; title?: string | null; url: string; createdAt?: string; caption?: string | null;
   mimeType?: string | null; sizeBytes?: number | null; isHighlight?: boolean; approvedForSocial?: boolean;
 }
-export interface SocialPost { id: string; platform: string; status: string; caption?: string | null; url?: string | null; postedAt?: string | null; generatedBy?: string | null }
+export interface SocialPost { id: string; platform: string; status: string; caption?: string | null; url?: string | null; postedAt?: string | null; generatedBy?: string | null; featured?: boolean; authorName?: string | null }
 
 export interface Certificate {
   id: string; serial: string; type: string; recipientName: string; detail?: string | null; issuedAt: string;

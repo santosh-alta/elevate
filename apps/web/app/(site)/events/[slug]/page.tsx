@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Star, Ticket, Trophy, Users, Video,
+  ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Sparkles, Star, Ticket, Trophy, Users, Video,
 } from "lucide-react";
 import { SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
 import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe } from "@/lib/auth";
+import { SocialEmbeds } from "@/components/social-embeds";
 import { getOrigin, getTenant } from "@/lib/tenant";
 import { eventCampuses, eventCount, eventLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount, turnoutLabel, campusHref } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
@@ -56,7 +57,8 @@ export default async function EventPage({ params, searchParams }: Params) {
   const { preview } = await searchParams;
   const event = await apiGet<ElevateEvent>(eventPath(slug, preview));
   if (!event) notFound();
-  const theme = resolveTheme((await getTenant())?.theme);
+  const site = await getTenant();
+  const theme = resolveTheme(site?.theme);
 
   const me = await getMe();
   const [myRegs, myTeams, galleryRaw, media, sponsorsList, legacyBoard, origin] = await Promise.all([
@@ -120,6 +122,7 @@ export default async function EventPage({ params, searchParams }: Params) {
     ...(rubric.length ? [{ id: "judging", label: "Judging" }] : []),
     ...(guests.length ? [{ id: "speakers", label: "Speakers" }] : []),
     ...(galleryPage.items.length || album ? [{ id: "gallery", label: "Gallery" }] : []),
+    ...(event.highlights?.length ? [{ id: "community", label: "From the community" }] : []),
     ...(sponsorsList.length ? [{ id: "sponsors", label: "Sponsors" }] : []),
     ...(faqs.length ? [{ id: "faqs", label: "FAQs" }] : []),
   ];
@@ -309,6 +312,13 @@ export default async function EventPage({ params, searchParams }: Params) {
             )}
 
             {guests.length > 0 && <SpeakersSection guests={guests} />}
+
+            {!!event.highlights?.length && (
+              <Section id="community" title="From the community" icon={<Sparkles className="h-5 w-5 text-primary" />}>
+                <p className="-mt-2 mb-5 text-muted">What participants, guests and the {site?.name ?? "event"} team shared about this event.</p>
+                <SocialEmbeds items={event.highlights} />
+              </Section>
+            )}
 
             {(galleryPage.items.length > 0 || album) && (
               <Section
