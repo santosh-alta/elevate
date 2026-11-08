@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Award, CalendarDays, Users } from "lucide-react";
 import { EVENT_FAMILIES, resolveTheme } from "@elevate/shared";
-import { apiList } from "@/lib/api";
+import { apiListPublic } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
 import { eventFamily, participantCount } from "@/lib/format";
 import { EventIcon } from "@/components/event-icon";
@@ -11,10 +11,10 @@ import { EmptyState, LinkButton } from "@/components/ui";
 import { HeroVideo } from "@/components/hero-video";
 
 export default async function HomePage() {
-  const tenant = await requireTenant();
-  const [upcoming, past] = await Promise.all([
-    apiList<ElevateEvent>("/events?upcoming=1"),
-    apiList<ElevateEvent>("/events?status=COMPLETED"),
+  const [tenant, upcoming, past] = await Promise.all([
+    requireTenant(),
+    apiListPublic<ElevateEvent>("/events?upcoming=1"),
+    apiListPublic<ElevateEvent>("/events?status=COMPLETED"),
   ]);
   const live = upcoming.filter((e) => e.status === "LIVE");
   const next = upcoming.filter((e) => e.status !== "LIVE");

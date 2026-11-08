@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { EVENT_FAMILIES, EVENT_MODES } from "@elevate/shared";
-import { apiList } from "@/lib/api";
+import { apiListPublic } from "@/lib/api";
 import { getTags } from "@/lib/catalog";
 import { requireTenant } from "@/lib/tenant";
 import { eventFamily, familyLabel, humanize, isFamily, typeLabel } from "@/lib/format";
@@ -33,12 +33,12 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   const when = sp.when === "all" || sp.when === "past" ? sp.when : "upcoming";
   if (when === "upcoming") qs.set("upcoming", "1");
   if (when === "past") qs.set("past", "1");
-  let [list, tags] = await Promise.all([apiList<ElevateEvent>(`/events?${qs}`), getTags()]);
+  let [list, tags] = await Promise.all([apiListPublic<ElevateEvent>(`/events?${qs}`), getTags()]);
   // Nothing coming up: show past events rather than an empty page.
   let showingPast = false;
   if (when === "upcoming" && !list.length) {
     qs.delete("upcoming"); qs.set("past", "1");
-    list = await apiList<ElevateEvent>(`/events?${qs}`);
+    list = await apiListPublic<ElevateEvent>(`/events?${qs}`);
     showingPast = list.length > 0;
   }
 

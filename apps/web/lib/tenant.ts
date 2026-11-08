@@ -26,7 +26,8 @@ export const getTenant = cache(async (): Promise<Tenant | null> => {
   try {
     const res = await fetch(`${API_BASE}/tenant`, {
       headers: await tenantHeaders(),
-      cache: "no-store",
+      // Brand look and campuses change rarely: keep them for a minute instead of asking on every click.
+      next: { revalidate: 60 },
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;

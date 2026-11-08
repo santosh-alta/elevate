@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
-import { apiList } from "@/lib/api";
+import { apiListPublic } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
 import { campusHref, campusTitle } from "@/lib/format";
 import type { CampusSummary } from "@/lib/types";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Campuses" };
 
 /** Every campus, with its photo and what is coming up there. */
 export default async function CampusesPage() {
-  const [tenant, campuses] = await Promise.all([requireTenant(), apiList<CampusSummary>("/campuses")]);
+  const [tenant, campuses] = await Promise.all([requireTenant(), apiListPublic<CampusSummary>("/campuses", 60)]);
   const short = tenant.name.split(" ")[0];
   return (
     <>

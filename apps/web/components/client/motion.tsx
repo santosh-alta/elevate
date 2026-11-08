@@ -19,14 +19,15 @@ export function ScrollReveal() {
       if (!parent) continue;
       const i = siblingsIndex.get(parent) ?? 0;
       siblingsIndex.set(parent, i + 1);
-      if (i > 0) el.style.setProperty("--reveal-delay", `${Math.min(i, 5) * 70}ms`);
+      if (i > 0) el.style.setProperty("--reveal-delay", `${Math.min(i, 3) * 40}ms`);
     }
-    // Anything already on screen is shown straight away, so nothing flickers.
-    for (const el of els) if (el.getBoundingClientRect().top < window.innerHeight * 0.95) el.classList.add("is-visible");
+    // Anything on screen or just below it is shown straight away, so nothing waits or flickers.
+    for (const el of els) if (el.getBoundingClientRect().top < window.innerHeight * 1.25) el.classList.add("is-visible");
     document.documentElement.classList.add("js-reveal");
     const io = new IntersectionObserver(
       (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("is-visible"); io.unobserve(e.target); } }),
-      { rootMargin: "0px 0px -8% 0px", threshold: 0.05 },
+      // Start revealing ~300px before an item scrolls into view, so it is already there when you reach it.
+      { rootMargin: "0px 0px 300px 0px", threshold: 0 },
     );
     els.filter((el) => !el.classList.contains("is-visible")).forEach((el) => io.observe(el));
     return () => io.disconnect();

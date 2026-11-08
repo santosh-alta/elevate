@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { EVENT_FAMILIES } from "@elevate/shared";
-import { apiGet } from "@/lib/api";
+import { apiPublic } from "@/lib/api";
 import { requireTenant } from "@/lib/tenant";
 import { eventFamily, eventLabel, fmtDate, isFamily, typeLabel } from "@/lib/format";
 import type { ElevateEvent, Winner } from "@/lib/types";
@@ -40,7 +40,7 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
   if (family) qs.set("family", family);
   if (sp.type) qs.set("type", sp.type);
   if (sp.year) qs.set("year", sp.year);
-  const entries = normalize(await apiGet<unknown>(`/winners${qs.size ? `?${qs}` : ""}`))
+  const entries = normalize(await apiPublic<unknown>(`/winners${qs.size ? `?${qs}` : ""}`))
     .filter((e) => !family || eventFamily(e.event) === family)
     .sort((a, b) => +new Date(b.event.startsAt) - +new Date(a.event.startsAt));
   const thisYear = new Date().getFullYear();
