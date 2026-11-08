@@ -1,7 +1,10 @@
-import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { TOKEN_COOKIE } from "@/lib/config";
+import { getOrigin } from "@/lib/tenant";
 
-export async function POST(req: Request) {
-  (await cookies()).delete(TOKEN_COOKIE);
-  return Response.redirect(new URL("/", req.url), 303);
+/** Signs out: clears the session cookie and returns to the home page. */
+export async function POST() {
+  const res = NextResponse.redirect(`${await getOrigin()}/`, 303);
+  res.cookies.set(TOKEN_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
+  return res;
 }

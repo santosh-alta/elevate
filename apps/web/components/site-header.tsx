@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Bell, Globe, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
 import { resolveTheme } from "@elevate/shared";
 import { requireTenant } from "@/lib/tenant";
-import { getMe, isStaff } from "@/lib/auth";
+import { canUseAdmin, getMe } from "@/lib/auth";
+import { ROLE_LABELS } from "@elevate/shared";
+import { AccountMenu } from "./client/account-menu";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
 import { BrandLogo } from "./brand-logo";
@@ -39,8 +41,14 @@ export async function SiteHeader() {
                 <Bell className="h-4 w-4" />
                 {unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unread > 9 ? "9+" : unread}</span>}
               </Link>
-              <Link href="/me" className={buttonClass("ghost", "sm")}>My space</Link>
-              {isStaff(me) && <Link href="/admin" className={buttonClass("primary", "sm")}>Admin</Link>}
+              {canUseAdmin(me) && <Link href="/admin" className={buttonClass("primary", "sm", "hidden sm:inline-flex")}>Admin</Link>}
+              <AccountMenu
+                name={me.user.name}
+                email={me.user.email}
+                avatarUrl={me.user.avatarUrl}
+                roleLabel={me.user.isPlatformAdmin ? "Super admin" : me.membership && me.membership.role !== "STUDENT" ? ROLE_LABELS[me.membership.role] : null}
+                showAdmin={canUseAdmin(me)}
+              />
             </>
           ) : (
             <Link href="/login" className={buttonClass("primary", "sm", "px-4")}>Sign in</Link>

@@ -7,6 +7,8 @@ import { ROLE_LABELS } from "@elevate/shared";
 import { requireTenant } from "@/lib/tenant";
 import { BrandLogo } from "@/components/brand-logo";
 import { AdminNav } from "./admin-nav";
+import { AccountMenu } from "@/components/client/account-menu";
+import { Avatar } from "@/components/avatar";
 import { LinkButton } from "@/components/ui";
 
 export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin" } };
@@ -38,12 +40,33 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <p className="hidden px-5 pb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-hero-fg/80 lg:block">Event operations</p>
         <AdminNav staff={isStaff(me)} reviewer={isReviewer(me)} admin={isBrandAdmin(me)} />
         <div className="hidden border-t border-hero-fg/15 px-5 py-4 text-xs text-hero-fg/80 lg:mt-auto lg:block">
-          <p className="font-medium text-hero-fg">{me!.user.name}</p>
-          <p>{me!.user.isPlatformAdmin ? "Super admin" : me!.membership ? ROLE_LABELS[me!.membership.role] : ""}</p>
-          <Link href="/" className="mt-2 inline-block font-medium text-hero-fg underline decoration-accent decoration-2 underline-offset-4">View public site ↗</Link>
+          <div className="flex items-center gap-2.5">
+            <Avatar name={me!.user.name} url={me!.user.avatarUrl} size={34} className="ring-hero-fg/30" />
+            <div className="min-w-0">
+              <p className="truncate font-medium text-hero-fg">{me!.user.name}</p>
+              <p>{me!.user.isPlatformAdmin ? "Super admin" : me!.membership ? ROLE_LABELS[me!.membership.role] : ""}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+            <Link href="/" className="font-medium text-hero-fg underline decoration-accent decoration-2 underline-offset-4">Public site ↗</Link>
+            <Link href="/profile?next=/admin" className="font-medium text-hero-fg hover:underline">Profile</Link>
+            <form action="/api/auth/logout" method="post"><button type="submit" className="font-medium text-hero-fg hover:underline">Sign out</button></form>
+          </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">{children}</main>
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">
+        <div className="mb-4 flex items-center justify-end gap-3 print:hidden">
+          <Link href="/" className="text-sm text-muted hover:text-fg">View public site ↗</Link>
+          <AccountMenu
+            name={me!.user.name}
+            email={me!.user.email}
+            avatarUrl={me!.user.avatarUrl}
+            roleLabel={me!.user.isPlatformAdmin ? "Super admin" : me!.membership ? ROLE_LABELS[me!.membership.role] : null}
+            showAdmin={false}
+          />
+        </div>
+        {children}
+      </main>
     </div>
   );
 }

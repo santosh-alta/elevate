@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { requireTenant } from "@/lib/tenant";
 import { Card } from "@/components/ui";
 import { ProfileForm } from "./profile-form";
+import { PhotoEditor } from "./photo-editor";
 
 export const metadata: Metadata = { title: "Your profile" };
 
@@ -20,6 +21,10 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         <p className="mt-1 text-sm text-muted">
           {first ? "Tell us a little about yourself. It takes a minute and you only do it once." : "Keep your details up to date. Your name appears on certificates."}
         </p>
+        <div className="mt-6 rounded-brand border border-border p-4">
+          <p className="mb-3 text-sm font-medium">Profile photo</p>
+          <PhotoEditor name={me.user.name} avatarUrl={me.user.avatarUrl} />
+        </div>
         <ProfileForm user={me.user} next={safeNext} first={first} />
       </Card>
     </div>

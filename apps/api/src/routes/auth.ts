@@ -243,7 +243,7 @@ export function authRoutes(app: FastifyInstance) {
           .transform((v) => (v === "" ? null : /^\d{10}$/.test(v) ? `+91${v}` : v.startsWith("+") ? v : `+${v}`))
           .nullable()
           .optional(),
-        avatarUrl: z.string().url().optional(),
+        avatarUrl: z.string().url().max(1000).nullable().optional(),
         college: text(160),
         degree: text(120),
         city: text(80),

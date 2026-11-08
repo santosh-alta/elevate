@@ -10,6 +10,7 @@ import { fmtDate, fmtDateTime, fmtRange, humanize } from "@/lib/format";
 import type { AppNotification, Certificate, LinkedInPost, Payment, Registration, Team } from "@/lib/types";
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, Select, StatusBadge, Textarea } from "@/components/ui";
 import { ApiForm } from "@/components/client/api-form";
+import { Avatar } from "@/components/avatar";
 import { ApiButton } from "@/components/client/api-button";
 import { LinkedInDraft } from "./linkedin-draft";
 
@@ -42,11 +43,14 @@ export default async function MePage() {
   return (
     <div className="mx-auto max-w-5xl space-y-10 px-4 py-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-4">
+          <Avatar name={me.user.name} url={me.user.avatarUrl} size={64} />
+          <div>
           <p className="text-sm text-muted">Welcome back</p>
           <h1 className="text-3xl font-bold">{me.user.name}</h1>
           <p className="text-sm text-muted">{me.user.email}{me.membership?.campus ? ` · ${me.membership.campus.name}` : ""}</p>
           <Link href="/profile?next=/me" className="mt-1 inline-block text-sm text-primary hover:underline">Edit profile</Link>
+          </div>
         </div>
         <form action="/api/auth/logout" method="post"><Button variant="outline" size="sm">Sign out</Button></form>
       </div>
