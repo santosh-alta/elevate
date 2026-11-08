@@ -30,13 +30,10 @@ export function AccountMenu({ name, email, avatarUrl, roleLabel, showAdmin }: {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={`Account menu for ${name}`}
-        className="relative ml-1 rounded-full transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        className={`flex h-9 items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${open ? "border-primary/30 bg-primary/5" : "border-border hover:bg-primary/5"}`}
       >
-        <Avatar name={name} url={avatarUrl} size={36} />
-        {/* small menu badge on the photo's corner */}
-        <span aria-hidden className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-card shadow ring-1 ring-border">
-          <ChevronDown className={`h-3 w-3 text-fg transition-transform ${open ? "rotate-180" : ""}`} strokeWidth={2.5} />
-        </span>
+        <Avatar name={name} url={avatarUrl} size={28} className="ring-0" />
+        <ChevronDown aria-hidden className={`h-3.5 w-3.5 text-muted transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div role="menu" className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-brand border border-border bg-card p-1.5 shadow-lg">

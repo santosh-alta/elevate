@@ -32,14 +32,22 @@ export async function SiteHeader() {
             </>
           )}
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
+        <nav className="flex items-center gap-1.5 text-sm">
           <Link href="/events" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Events</Link>
           <Link href="/winners" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Winners</Link>
           {me ? (
             <>
-              <Link href="/me#notifications" className={buttonClass("ghost", "sm", "relative px-2")} aria-label={unread ? `${unread} unread notifications` : "Notifications"}>
-                <Bell className="h-4 w-4" />
-                {unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unread > 9 ? "9+" : unread}</span>}
+              <Link
+                href="/me#notifications"
+                aria-label={unread ? `${unread} unread notifications` : "Notifications"}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full text-fg/80 transition hover:bg-primary/5 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <Bell className="h-[18px] w-[18px]" />
+                {unread > 0 && (
+                  <span className="absolute right-1 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                )}
               </Link>
               <AccountMenu
                 name={me.user.name}
