@@ -25,6 +25,7 @@ import { paymentRoutes } from "./routes/payments";
 import { hackathonRoutes } from "./routes/hackathon";
 import { devRoutes } from "./routes/dev";
 import { eventTypeRoutes } from "./routes/eventTypes";
+import { campusRoutes } from "./routes/campuses";
 import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
 export async function buildApp() {
@@ -107,6 +108,7 @@ export async function buildApp() {
       paymentRoutes(v1);
       hackathonRoutes(v1);
       eventTypeRoutes(v1);
+      campusRoutes(v1);
       devRoutes(v1); // non-production only
     },
     { prefix: "/v1" },

@@ -56,6 +56,10 @@ model Campus {
   code      String
   city      String?
   address   String?
+  /// Main campus photo for the campus page and cards
+  photoUrl  String?
+  /// Public campus profile: { university, state, about, approvals: string[], programme, websiteUrl, gallery: string[] }
+  details   Json?
   createdAt DateTime @default(now())
 
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)

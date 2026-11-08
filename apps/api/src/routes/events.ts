@@ -175,6 +175,8 @@ export function eventRoutes(app: FastifyInstance) {
         tag: z.union([z.string(), z.array(z.string())]).optional(),
         parentId: z.string().optional(),
         approval: z.enum(APPROVAL_STATUSES).optional(),
+        /** With campusId: only that campus's own events (without central ones) */
+        campusOnly: z.coerce.boolean().optional(),
         mine: z.coerce.boolean().optional(),
         limit: z.coerce.number().int().min(1).max(200).default(50),
         offset: z.coerce.number().int().min(0).default(0),
@@ -185,7 +187,7 @@ export function eventRoutes(app: FastifyInstance) {
     const familyTypes = q.family ? EVENT_FAMILIES.find((f) => f.key === q.family)!.types : null;
     const tags = await storedTagSpellings(tenant.id, parseTagQuery(q.tag));
     const and: Prisma.EventWhereInput[] = [];
-    if (q.campusId) and.push({ OR: [{ scope: "CENTRAL" }, { campuses: { some: { campusId: q.campusId } } }] });
+    if (q.campusId) and.push(q.campusOnly ? { campuses: { some: { campusId: q.campusId } } } : { OR: [{ scope: "CENTRAL" }, { campuses: { some: { campusId: q.campusId } } }] });
     if (q.q) and.push({ OR: [{ title: { contains: q.q, mode: "insensitive" } }, { tagline: { contains: q.q, mode: "insensitive" } }] });
     if (familyTypes) and.push({ type: { in: familyTypes } });
     const where: Prisma.EventWhereInput = {

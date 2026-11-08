@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/theme";
 import { apiGet, apiList } from "@/lib/api";
 import { getMe } from "@/lib/auth";
 import { getOrigin, getTenant } from "@/lib/tenant";
-import { eventCampuses, eventCount, eventLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount, turnoutLabel } from "@/lib/format";
+import { eventCampuses, eventCount, eventLabel, fmtDateTime, fmtRange, googleCalendarUrl, humanize, isImage, participantCount, turnoutLabel, campusHref } from "@/lib/format";
 import { toGalleryPage } from "@/lib/gallery";
 import type { ElevateEvent, Guest, Media, Registration, Sponsor, Team, Winner } from "@/lib/types";
 import { EventCover, ModeBadge } from "@/components/event-card";
@@ -185,7 +185,11 @@ export default async function EventPage({ params, searchParams }: Params) {
               icon={event.mode === "ONLINE" ? <Video className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
               label="Where"
               value={where}
-              link={event.venueMapUrl ? { href: event.venueMapUrl, label: "Open map" } : undefined}
+              link={event.venueMapUrl
+                ? { href: event.venueMapUrl, label: "Open map" }
+                : event.scope === "CAMPUS" && campuses.length === 1
+                  ? { href: campusHref(campuses[0]), label: "About this campus" }
+                  : undefined}
             />
             <Info
               icon={<Users className="h-4 w-4" />}
@@ -468,7 +472,9 @@ function Info({ icon, label, value, link }: { icon: React.ReactNode; label: stri
       <div>
         <p className="text-xs text-muted">{label}</p>
         <p className="font-medium">{value}</p>
-        {link && <a href={link.href} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">{link.label} ↗</a>}
+        {link && (/^https?:/.test(link.href)
+          ? <a href={link.href} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">{link.label} ↗</a>
+          : <Link href={link.href} className="text-xs font-medium text-primary hover:underline">{link.label} →</Link>)}
       </div>
     </div>
   );

@@ -26,7 +26,7 @@ export function authRoutes(app: FastifyInstance) {
     const campuses = await prisma.campus.findMany({
       where: { tenantId: tenant.id },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, code: true, city: true },
+      select: { id: true, name: true, code: true, city: true, photoUrl: true },
     });
     // Public settings only.
     const s = (tenant.settings ?? {}) as Record<string, unknown>;

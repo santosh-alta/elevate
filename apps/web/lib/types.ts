@@ -2,7 +2,17 @@
 // contract does not pin them down, so the UI degrades gracefully.
 import type { BrandTheme, EventFamily, EventModules, EventStatus, EventType, Role } from "@elevate/shared";
 
-export interface Campus { id: string; name: string; code: string; city?: string | null; address?: string | null }
+export interface CampusDetails {
+  university?: string; state?: string; region?: string; about?: string; approvals?: string[]; programme?: string; websiteUrl?: string;
+  gallery?: { url: string; caption?: string }[];
+}
+export interface Campus { id: string; name: string; code: string; city?: string | null; address?: string | null; photoUrl?: string | null; details?: CampusDetails | null }
+export interface CampusSummary extends Campus { slug: string; upcoming: number; past: number }
+export interface CampusProfile extends Campus {
+  slug: string;
+  stats: { eventsHeld: number; participants: number; hackathons: number };
+  eventPhotos: { id: string; url: string; caption?: string | null; eventSlug: string; eventTitle: string }[];
+}
 
 export interface Tenant {
   id: string;

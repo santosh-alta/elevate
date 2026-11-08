@@ -153,3 +153,12 @@ export function eventFee(e: Pick<ElevateEvent, "fee" | "feeAmount" | "currency" 
 export const AWARD_LABELS: Record<string, string> = {
   WINNER: "Winner", RUNNER_UP: "1st runner-up", SECOND_RUNNER_UP: "2nd runner-up", SPECIAL_MENTION: "Special mention", FINALIST: "Finalist",
 };
+
+/** "ALTA Pune": brand short name + region or city, as the campus is known to students. */
+export function campusTitle(c: { name: string; city?: string | null; details?: { region?: string } | null }, brandShort = "ALTA"): string {
+  const place = c.details?.region ?? c.city;
+  return place ? `${brandShort} ${place}` : c.name;
+}
+
+/** URL of a campus page. */
+export const campusHref = (c: { code: string }) => `/campuses/${c.code.toLowerCase()}`;

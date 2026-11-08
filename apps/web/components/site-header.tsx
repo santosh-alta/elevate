@@ -5,6 +5,7 @@ import { requireTenant } from "@/lib/tenant";
 import { canUseAdmin, getMe } from "@/lib/auth";
 import { ROLE_LABELS } from "@elevate/shared";
 import { AccountMenu } from "./client/account-menu";
+import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
 import { BrandLogo } from "./brand-logo";
@@ -34,6 +35,7 @@ export async function SiteHeader() {
         </Link>
         <nav className="flex items-center gap-1.5 text-sm">
           <Link href="/events" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Events</Link>
+          {tenant.campuses.length > 1 && <Link href="/campuses" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Campuses</Link>}
           <Link href="/winners" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Winners</Link>
           {me ? (
             <>
@@ -98,7 +100,7 @@ export async function SiteFooter() {
               {tenant.campuses.map((c) => (
                 <li key={c.id}>
                   <Link
-                    href={`/events?campusId=${c.id}`}
+                    href={campusHref(c)}
                     title={c.name}
                     className="inline-flex rounded-full border border-hero-fg/20 px-3 py-1 text-xs text-hero-fg/85 transition hover:border-hero-accent hover:text-hero-fg"
                   >
