@@ -8,6 +8,14 @@ services:
     plan: starter # needed for the uploads disk and the pre-deploy migration step
     branch: main
     autoDeploy: true
+    # Only rebuild the API when server code changes (website-only pushes don't restart it)
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/shared/**
+        - package.json
+        - package-lock.json
+        - render.yaml
     buildCommand: npm ci --include=dev && npm run prisma:generate -w @elevate/api
     preDeployCommand: cd apps/api && npx prisma migrate deploy
     startCommand: npm start -w @elevate/api
