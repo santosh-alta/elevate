@@ -1,0 +1,25 @@
+# Keeps the events site responsive: visits the public pages every 10 minutes during the day (IST),
+# so the website and database are already awake when students arrive. Free on public repos.
+name: Keep site warm
+
+on:
+  schedule:
+    # Every 10 minutes, 02:00–17:59 UTC = about 7:30 am – 11:30 pm IST
+    - cron: "*/10 2-17 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Visit public pages and API
+        run: |
+          for url in \
+            https://event.altaschool.tech/ \
+            https://event.altaschool.tech/events \
+            https://event.altaschool.tech/campuses \
+            https://events-api-f4od.onrender.com/health; do
+            code=$(curl -s -o /dev/null -m 60 -w "%{http_code} %{time_total}s" "$url" || true)
+            echo "$url -> $code"
+          done
