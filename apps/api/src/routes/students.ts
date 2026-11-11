@@ -104,7 +104,7 @@ export function studentRoutes(app: FastifyInstance) {
   app.get("/notification-settings", async (req) => {
     requireStaff(req);
     const s = (requireTenant(req).settings ?? {}) as { notifications?: { announceByDefault?: boolean } };
-    return { reminderHours: reminderHoursOf(s), announceByDefault: s.notifications?.announceByDefault !== false };
+    return { reminderHours: reminderHoursOf(s), announceByDefault: s.notifications?.announceByDefault === true };
   });
 
   app.put("/notification-settings", async (req) => {

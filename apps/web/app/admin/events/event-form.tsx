@@ -67,7 +67,7 @@ export function EventForm({
   const [campusSel, setCampusSel] = useState<string[]>(initialCampuses);
   const [aud, setAud] = useState({
     batches: event?.audienceBatches ?? [], programs: event?.audiencePrograms ?? [],
-    notify: event?.notifyOnAnnounce ?? true, reminders: event?.remindersEnabled ?? true,
+    notify: event?.notifyOnAnnounce ?? false, reminders: event?.remindersEnabled ?? true,
   });
   // New events: "email students" starts from the brand's default (Settings → Students & notifications).
   useEffect(() => {

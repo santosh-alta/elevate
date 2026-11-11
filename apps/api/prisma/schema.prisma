@@ -91,6 +91,11 @@ model User {
   graduationYear  Int?
   city            String?
   portfolioUrl    String?
+  leetcodeUrl     String?
+  gfgUrl          String?
+  codechefUrl     String?
+  hackerrankUrl   String?
+  codeforcesUrl   String?
   /// Set when the person has filled in the one-time profile page after first sign-in
   profileCompletedAt DateTime?
   isPlatformAdmin Boolean  @default(false)
@@ -167,6 +172,9 @@ model OtpCode {
   id        String    @id @default(cuid())
   userId    String
   codeHash  String
+  /// "email_change" when confirming a new email address (then `email` is the new address)
+  purpose   String?
+  email     String?
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())
@@ -275,7 +283,7 @@ model Event {
   /// Audience: programs (e.g. BTECH); empty = all programs
   audiencePrograms     String[]    @default([])
   /// Email the audience "new event, register now" when the event is announced
-  notifyOnAnnounce     Boolean     @default(true)
+  notifyOnAnnounce     Boolean     @default(false)
   /// Send reminders before the event to registered people
   remindersEnabled     Boolean     @default(true)
   /// When the "new event" email went out (so it's sent once)

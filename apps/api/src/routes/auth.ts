@@ -104,6 +104,7 @@ export function authRoutes(app: FastifyInstance) {
 
   /** Signs a user in and returns their membership in this brand. */
   async function signIn(user: User, tenant: Tenant | null) {
+    if (tenant) user = await fillFromStudentList(user, tenant);
     const token = app.jwt.sign({ sub: user.id });
     const membership = tenant
       ? await prisma.membership.findUnique({ where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } } })
@@ -223,6 +224,42 @@ export function authRoutes(app: FastifyInstance) {
     return signIn(user, tenant);
   });
 
+  /** Change email, step 1: send a code to the new address (it must not belong to another account). */
+  app.post("/me/email/start", async (req) => {
+    const tenant = requireTenant(req);
+    const { user } = requireUser(req);
+    const email = z.object({ email: z.string().trim().email().max(200) }).parse(req.body).email.toLowerCase();
+    if (email === user.email) throw badRequest("That's already your email");
+    if (await prisma.user.findUnique({ where: { email } })) throw badRequest("Another account already uses this email");
+    const recent = await prisma.otpCode.count({ where: { userId: user.id, purpose: "email_change", usedAt: null, expiresAt: { gt: new Date() } } });
+    if (recent >= MAX_ACTIVE_CODES) throw badRequest("Too many codes requested. Please wait a few minutes.");
+    const code = otpCode();
+    await prisma.otpCode.create({
+      data: { userId: user.id, purpose: "email_change", email, codeHash: sha256(`${user.id}:${email}:${code}`), expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+    });
+    const dev = process.env.NODE_ENV !== "production";
+    if (dev) req.log.info({ email, code }, "email change code (dev only)");
+    const subject = `${code} is your code to confirm this email`;
+    const text = `Use ${code} to make this your email address on ${tenant.name} Events.\n\nIt expires in 10 minutes. If you didn't ask for this, you can ignore this email.`;
+    const sent = await sendEmail({ from: fromAddress(tenant), to: email, subject, text, html: await renderEmailHtml(tenant, subject, text) }).catch(() => null);
+    if (!dev && sent?.status !== "SENT") throw badRequest("We couldn't send the code. Please check the address and try again.");
+    return { ok: true, ...(dev ? { devCode: code } : {}) };
+  });
+
+  /** Change email, step 2: confirm the code; the new address becomes the sign-in email. */
+  app.post("/me/email/verify", async (req) => {
+    const { user } = requireUser(req);
+    const body = z.object({ email: z.string().trim().email(), code: z.string().regex(/^\d{6}$/) }).parse(req.body);
+    const email = body.email.toLowerCase();
+    const otp = await prisma.otpCode.findFirst({
+      where: { userId: user.id, purpose: "email_change", email, codeHash: sha256(`${user.id}:${email}:${body.code}`), usedAt: null, expiresAt: { gt: new Date() } },
+    });
+    if (!otp) throw badRequest("Invalid or expired code");
+    if (await prisma.user.findUnique({ where: { email } })) throw badRequest("Another account already uses this email");
+    await prisma.otpCode.update({ where: { id: otp.id }, data: { usedAt: new Date() } });
+    return prisma.user.update({ where: { id: user.id }, data: { email } });
+  });
+
   app.get("/me", async (req) => {
     const { user, membership } = requireUser(req);
     const campus = membership?.campusId ? await prisma.campus.findUnique({ where: { id: membership.campusId } }) : null;
@@ -252,6 +289,12 @@ export function authRoutes(app: FastifyInstance) {
         linkedinUrl: text(200).transform((v) => profileUrl(v, "https://www.linkedin.com/in/", /linkedin\.com\//i)),
         githubUrl: text(200).transform((v) => profileUrl(v, "https://github.com/", /github\.com\//i)),
         portfolioUrl: text(200).transform((v) => (v && !/^https?:\/\//i.test(v) ? `https://${v}` : v)),
+        // Coding profiles: a link or just the username
+        leetcodeUrl: text(200).transform((v) => profileUrl(v, "https://leetcode.com/u/", /leetcode\.com\//i)),
+        gfgUrl: text(200).transform((v) => profileUrl(v, "https://www.geeksforgeeks.org/user/", /geeksforgeeks\.org\//i)),
+        codechefUrl: text(200).transform((v) => profileUrl(v, "https://www.codechef.com/users/", /codechef\.com\//i)),
+        hackerrankUrl: text(200).transform((v) => profileUrl(v, "https://www.hackerrank.com/profile/", /hackerrank\.com\//i)),
+        codeforcesUrl: text(200).transform((v) => profileUrl(v, "https://codeforces.com/profile/", /codeforces\.com\//i)),
         /** Sent by the one-time profile page: marks the profile as done. */
         completeProfile: z.boolean().optional(),
       })
@@ -268,4 +311,40 @@ export function authRoutes(app: FastifyInstance) {
       data: { ...data, ...(completeProfile && !user.profileCompletedAt && { profileCompletedAt: new Date() }) },
     });
   });
+}
+
+/**
+ * Students already in the institute's student list don't have to type their details: on sign-in, empty
+ * profile fields (name, mobile, college, program, graduation year) and their campus and batch are filled
+ * from the list. They can change everything later on their profile page.
+ */
+async function fillFromStudentList(user: User, tenant: Tenant): Promise<User> {
+  const s = await prisma.student.findFirst({
+    where: { tenantId: tenant.id, email: user.email.toLowerCase(), active: true },
+    include: { campus: { select: { name: true } } },
+    orderBy: { batch: "desc" },
+  });
+  if (!s) return user;
+  const placeholder = !user.name || user.name === user.email.split("@")[0];
+  const data = {
+    ...(placeholder && s.name && { name: s.name }),
+    ...(!user.phone && s.phone && { phone: /^\d{10}$/.test(s.phone) ? `+91${s.phone}` : s.phone }),
+    ...(!user.college && (s.campus?.name || s.campusName) && { college: s.campus?.name ?? s.campusName }),
+    ...(!user.degree && s.program && { degree: s.program }),
+    ...(!user.graduationYear && s.passingYear && { graduationYear: s.passingYear }),
+  };
+  const next = { ...user, ...data };
+  const complete = !next.profileCompletedAt && next.name && next.name !== next.email.split("@")[0] && next.phone && next.college;
+  if (Object.keys(data).length || complete) {
+    user = await prisma.user.update({ where: { id: user.id }, data: { ...data, ...(complete && { profileCompletedAt: new Date() }) } });
+  }
+  if (!s.userId) await prisma.student.update({ where: { id: s.id }, data: { userId: user.id } });
+  const m = await prisma.membership.findUnique({ where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } } });
+  if (m && (!m.campusId || !m.batch)) {
+    await prisma.membership.update({
+      where: { id: m.id },
+      data: { ...(!m.campusId && s.campusId && { campusId: s.campusId }), ...(!m.batch && s.batch && { batch: String(s.batch) }) },
+    });
+  }
+  return user;
 }
