@@ -13,6 +13,7 @@ import { ApiForm } from "@/components/client/api-form";
 import { CopyButton } from "@/components/client/misc";
 import { ThemeEditor } from "./theme-editor";
 import { CertificateDesignEditor, type DesignMap } from "@/components/admin/certificate-design-editor";
+import { TicketDesignEditor, type TicketDesign } from "@/components/admin/ticket-design-editor";
 import { EventTypesManager } from "./event-types-manager";
 import { getEventTypes, getTags } from "@/lib/catalog";
 import { EventIcon } from "@/components/event-icon";
@@ -51,6 +52,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <CardHeader title="Certificate design" description="The look for every event's certificates. An event can still use its own design (event → Certificates)." />
             <CardBody>
               <CertificateDesignEditor initial={(await apiGet<DesignMap>("/certificate-designs")) ?? {}} canEdit={isBrandAdmin(me)} />
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader title="Ticket design" description="The look of every event's tickets. An event can still use its own design (event → Registrations)." />
+            <CardBody>
+              <TicketDesignEditor initial={(await apiGet<{ design: TicketDesign | null }>("/ticket-design"))?.design ?? null} canEdit={isBrandAdmin(me)} />
             </CardBody>
           </Card>
         </div>

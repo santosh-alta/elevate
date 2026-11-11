@@ -1,15 +1,19 @@
 import { Download, QrCode } from "lucide-react";
-import { apiList } from "@/lib/api";
+import { apiGet, apiList } from "@/lib/api";
+import { TicketDesignEditor, type TicketDesign } from "@/components/admin/ticket-design-editor";
 import { fmtDateTime } from "@/lib/format";
 import type { ElevateEvent, Registration } from "@/lib/types";
-import { Button, Card, CardHeader, EmptyState, Input, LinkButton, Stat, Table, Td, Th } from "@/components/ui";
+import { Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, Stat, Table, Td, Th } from "@/components/ui";
 import { ApiForm } from "@/components/client/api-form";
 import { ApiSelect } from "@/components/client/api-select";
 
 const REG_STATUSES = ["PENDING_PAYMENT", "REGISTERED", "APPROVED", "WAITLISTED", "REJECTED", "CANCELLED", "CHECKED_IN", "NO_SHOW"].map((s) => ({ value: s, label: s.replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase()) }));
 
 export async function RegistrationsTab({ event }: { event: ElevateEvent }) {
-  const regs = await apiList<Registration>(`/events/${event.id}/registrations`);
+  const [regs, ticket] = await Promise.all([
+    apiList<Registration>(`/events/${event.id}/registrations`),
+    apiGet<{ event: TicketDesign | null; brand: TicketDesign | null }>(`/events/${event.id}/ticket-design`),
+  ]);
   const count = (s: string) => regs.filter((r) => r.status === s).length;
   const active = regs.filter((r) => !["CANCELLED", "REJECTED"].includes(r.status)).length;
   const checkedIn = count("CHECKED_IN");
@@ -54,6 +58,10 @@ export async function RegistrationsTab({ event }: { event: ElevateEvent }) {
           </ApiForm>
         </Card>
       </div>
+      <Card>
+        <CardHeader title="Ticket design" description="The standard ticket, or this event's own artwork. We print the name, team, QR code and ticket number on it." />
+        <CardBody><TicketDesignEditor eventId={event.id} initial={ticket?.event ?? null} inherited={ticket?.brand ?? null} /></CardBody>
+      </Card>
     </div>
   );
 }

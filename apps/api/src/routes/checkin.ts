@@ -3,7 +3,9 @@ import type { Event } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { canCheckIn, canManageEvent, findEvent, requireUser } from "../lib/permissions";
+import { canCheckIn, canManageEvent, findEvent, requireBrandAdmin, requireEventManager, requireStaff, requireUser } from "../lib/permissions";
+import { brandTicketDesign, eventTicketDesign, ticketDesignSchema, ticketTemplatePdf } from "../lib/ticketDesign";
+import type { Prisma } from "@prisma/client";
 import { badRequest, forbidden, notFound } from "../lib/errors";
 import { logActivity } from "../lib/activity";
 import { renderTicketPdf, shortTicket } from "../lib/ticket";
@@ -114,6 +116,62 @@ export function checkinRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string; userId: string } }>("/events/:id/checkin/team-of/:userId", async (req) => {
     const event = await requireDesk(req, req.params.id);
     return (await teamInfo(event.id, req.params.userId)) ?? { id: null };
+  });
+
+  // ── Ticket designs: the standard ticket, or your own artwork with the details printed on it ──
+
+  app.get("/ticket-design/guide.pdf", async (req, reply) => {
+    const pdf = await ticketTemplatePdf(requireTenant(req).name);
+    return reply.type("application/pdf").header("Content-Disposition", 'attachment; filename="ticket-design-template.pdf"').send(Buffer.from(pdf));
+  });
+
+  app.get("/ticket-design", async (req) => {
+    requireStaff(req);
+    return { design: brandTicketDesign(requireTenant(req).settings) };
+  });
+
+  app.put("/ticket-design", async (req) => {
+    requireBrandAdmin(req);
+    const tenant = requireTenant(req);
+    const { design } = z.object({ design: ticketDesignSchema.nullable() }).parse(req.body);
+    const fresh = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id }, select: { settings: true } });
+    const settings = { ...((fresh.settings ?? {}) as Record<string, unknown>) };
+    if (design) settings.ticketDesign = design; else delete settings.ticketDesign;
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings: settings as Prisma.InputJsonValue } });
+    return { design };
+  });
+
+  app.get<{ Params: { id: string } }>("/events/:id/ticket-design", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    return { event: eventTicketDesign(event.config), brand: brandTicketDesign(requireTenant(req).settings) };
+  });
+
+  app.put<{ Params: { id: string } }>("/events/:id/ticket-design", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    const { design } = z.object({ design: ticketDesignSchema.nullable() }).parse(req.body);
+    const config = { ...((event.config ?? {}) as Record<string, unknown>) };
+    if (design) config.ticketDesign = design; else delete config.ticketDesign;
+    await prisma.event.update({ where: { id: event.id }, data: { config: config as Prisma.InputJsonValue } });
+    return { design };
+  });
+
+  /** A sample ticket (made-up attendee) with the saved design. Nothing is stored. */
+  app.get("/ticket-design/preview.pdf", async (req, reply) => {
+    requireStaff(req);
+    const tenant = requireTenant(req);
+    const { eventId } = z.object({ eventId: z.string().optional() }).parse(req.query);
+    const full = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id } });
+    const base = eventId ? await requireEventManager(req, eventId) : null;
+    const event = base
+      ? await prisma.event.findUniqueOrThrow({ where: { id: base.id }, include: { campuses: { select: { campus: { select: { name: true } } } } } })
+      : ({ id: "sample", tenantId: tenant.id, title: "Sample Event 2026", type: "HACKATHON", mode: "OFFLINE", venue: "Main Auditorium", startsAt: new Date(Date.now() + 7 * 86_400_000), endsAt: new Date(Date.now() + 7 * 86_400_000 + 6 * 3_600_000), config: {}, campuses: [] } as never);
+    const reg = {
+      id: "preview", eventId: "sample", userId: "sample", status: "APPROVED", ticketCode: "samplepreview0000tz6v3h8n", answers: {},
+      checkedInAt: null, checkedInById: null, addedById: null, paymentId: null, createdAt: new Date(),
+      event: { ...(event as object), tenant: full }, user: { name: "Aarav Sharma", email: "aarav@example.com" },
+    };
+    const pdf = await renderTicketPdf(reg as never, "Byte Brigade");
+    return reply.type("application/pdf").header("Content-Disposition", 'inline; filename="ticket-preview.pdf"').header("Cache-Control", "no-store").send(Buffer.from(pdf));
   });
 
   /** The person's ticket as a PDF (theirs, or for the event's staff). */
