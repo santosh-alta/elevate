@@ -41,7 +41,12 @@ async function AdminShell({ children }: { children: ReactNode }) {
   }
   return (
     <div className="min-h-screen lg:flex">
-      <aside className="relative bg-hero-bg text-hero-fg lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col print:hidden">
+      <aside className="relative isolate overflow-hidden bg-hero-bg text-hero-fg lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col print:hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -left-20 -top-20 h-64 w-64 animate-aurora rounded-full opacity-35 blur-3xl" style={{ background: "rgb(var(--gradient-from))" }} />
+          <div className="absolute -bottom-24 -right-16 h-56 w-56 animate-aurora-slow rounded-full opacity-25 blur-3xl" style={{ background: "rgb(var(--gradient-to))" }} />
+          <div className="bg-grid absolute inset-0 opacity-70" />
+        </div>
         <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient lg:inset-y-0 lg:left-auto lg:right-0 lg:h-auto lg:w-1" aria-hidden />
         <Link href="/admin" className="flex h-16 items-center gap-3 px-5 lg:h-20" aria-label={`${tenant.name} admin dashboard`}>
           <BrandLogo tenant={tenant} variant="dark" size={30} />
@@ -64,8 +69,8 @@ async function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">
-        <div className="mb-4 flex items-center justify-end gap-3 print:hidden">
+      <main className="min-w-0 flex-1 px-4 pb-10 sm:px-8">
+        <div className="sticky top-0 z-20 -mx-4 mb-6 flex items-center justify-end gap-3 border-b border-border/70 bg-bg/75 px-4 py-3 backdrop-blur-xl sm:-mx-8 sm:px-8 print:hidden">
           <Link href="/" className="text-sm text-muted hover:text-fg">View public site ↗</Link>
           <AccountMenu
             name={me!.user.name}

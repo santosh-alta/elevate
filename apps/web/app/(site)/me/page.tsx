@@ -11,6 +11,8 @@ import type { AppNotification, Certificate, LinkedInPost, Payment, Registration,
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, LinkButton, Select, StatusBadge, Textarea } from "@/components/ui";
 import { ApiForm } from "@/components/client/api-form";
 import { Avatar } from "@/components/avatar";
+import { CountUp } from "@/components/client/count-up";
+import { ROLE_LABELS } from "@elevate/shared";
 import { ApiButton } from "@/components/client/api-button";
 import { LinkedInDraft } from "./linkedin-draft";
 
@@ -40,21 +42,49 @@ export default async function MePage() {
   const upcoming = active.filter((r) => r.event && !["COMPLETED", "ARCHIVED", "CANCELLED"].includes(r.event.status));
   const past = active.filter((r) => r.event && ["COMPLETED", "ARCHIVED"].includes(r.event.status));
 
+  const role = me.user.isPlatformAdmin ? "Super admin" : me.membership && me.membership.role !== "STUDENT" ? ROLE_LABELS[me.membership.role] : null;
   return (
-    <div className="mx-auto max-w-5xl space-y-10 px-4 py-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Avatar name={me.user.name} url={me.user.avatarUrl} size={64} />
-          <div>
-          <p className="text-sm text-muted">Welcome back</p>
-          <h1 className="text-3xl font-bold">{me.user.name}</h1>
-          <p className="text-sm text-muted">{me.user.email}{me.membership?.campus ? ` · ${me.membership.campus.name}` : ""}</p>
-          <Link href="/profile?next=/me" className="mt-1 inline-block text-sm text-primary hover:underline">Edit profile</Link>
+    <>
+    <section className="relative isolate overflow-hidden bg-hero-bg text-hero-fg">
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -right-24 -top-28 h-80 w-80 animate-aurora rounded-full opacity-40 blur-3xl" style={{ background: "rgb(var(--gradient-from))" }} />
+        <div className="absolute -bottom-32 left-10 h-72 w-72 animate-aurora-slow rounded-full opacity-25 blur-3xl" style={{ background: "rgb(var(--gradient-to))" }} />
+        <div className="bg-grid absolute inset-0" />
+      </div>
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex animate-fade-up items-center gap-5">
+            <span className="rounded-full bg-brand-gradient p-[3px] shadow-lift">
+              <span className="block rounded-full bg-hero-bg p-[3px]"><Avatar name={me.user.name} url={me.user.avatarUrl} size={84} className="ring-0" /></span>
+            </span>
+            <div>
+              <p className="text-sm text-hero-fg/75">Welcome back 👋</p>
+              <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">{me.user.name}</h1>
+              <p className="mt-1 text-sm text-hero-fg/75">{me.user.email}{me.membership?.campus ? ` · ${me.membership.campus.name}` : ""}</p>
+              {role && <span className="glass mt-2 inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-hero-accent">{role}</span>}
+            </div>
+          </div>
+          <div className="flex animate-fade-up gap-2 [animation-delay:80ms]">
+            <LinkButton href="/profile?next=/me" variant="ghost" size="sm" className="glass text-hero-fg hover:bg-hero-fg/15">Edit profile</LinkButton>
+            <form action="/api/auth/logout" method="post"><Button variant="ghost" size="sm" className="glass text-hero-fg hover:bg-hero-fg/15">Sign out</Button></form>
           </div>
         </div>
-        <form action="/api/auth/logout" method="post"><Button variant="outline" size="sm">Sign out</Button></form>
+        <dl className="mt-8 grid max-w-xl animate-fade-up grid-cols-3 gap-3 [animation-delay:140ms]">
+          {[
+            { label: "Upcoming tickets", value: upcoming.length },
+            { label: "Events attended", value: past.length },
+            { label: "Certificates", value: certs.length },
+          ].map((x) => (
+            <div key={x.label} className="glass rounded-brand px-4 py-3">
+              <dt className="text-xs text-hero-fg/75">{x.label}</dt>
+              <dd className="font-heading text-3xl font-bold"><CountUp value={x.value} /></dd>
+            </div>
+          ))}
+        </dl>
       </div>
-
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" />
+    </section>
+    <div className="mx-auto max-w-5xl space-y-14 px-4 py-12">
       {notifications.length > 0 && (
         <section id="notifications" className="scroll-mt-24">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -90,10 +120,15 @@ export default async function MePage() {
         {upcoming.length ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {upcoming.map((r) => (
-              <Card key={r.id} className="flex gap-4 p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/proxy/registrations/${r.ticketCode}/qr.png`} alt="QR ticket" className="h-28 w-28 shrink-0 rounded-lg border border-border bg-white p-1" />
-                <div className="min-w-0 space-y-1">
+              <Card key={r.id} data-reveal className="card-glow relative flex overflow-hidden p-0 transition duration-300 hover:-translate-y-0.5 hover:shadow-lift">
+                <div className="relative flex shrink-0 items-center justify-center border-r-2 border-dashed border-border bg-bg/60 p-4">
+                  <span aria-hidden className="absolute -right-2.5 -top-2.5 h-5 w-5 rounded-full bg-bg ring-1 ring-border" />
+                  <span aria-hidden className="absolute -bottom-2.5 -right-2.5 h-5 w-5 rounded-full bg-bg ring-1 ring-border" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/proxy/registrations/${r.ticketCode}/qr.png`} alt="QR ticket" className="h-28 w-28 rounded-lg bg-white p-1 shadow-soft" />
+                </div>
+                <div className="min-w-0 space-y-1.5 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">Ticket</p>
                   <Link href={`/events/${r.event!.slug}`} className="font-semibold hover:text-primary">{r.event!.title}</Link>
                   <p className="text-xs text-muted">{fmtRange(r.event!.startsAt, r.event!.endsAt)}</p>
                   <StatusBadge status={r.status} />
@@ -233,9 +268,17 @@ export default async function MePage() {
         </section>
       )}
     </div>
+    </>
   );
 }
 
 function SectionTitle({ title, icon }: { title: string; icon?: React.ReactNode }) {
-  return <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold">{icon && <span className="text-primary">{icon}</span>}{title}</h2>;
+  return (
+    <div className="mb-5">
+      <h2 className="flex items-center gap-3 font-heading text-2xl font-bold tracking-tight">
+        {icon && <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-hero-bg text-hero-accent [&_svg]:h-[18px] [&_svg]:w-[18px]">{icon}</span>}{title}
+      </h2>
+      <div className="mt-3 h-1 w-10 rounded-full bg-brand-gradient" aria-hidden />
+    </div>
+  );
 }

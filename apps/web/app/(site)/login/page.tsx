@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BadgeCheck, Ticket, Zap } from "lucide-react";
 import { redirect } from "next/navigation";
 import { getMe } from "@/lib/auth";
 import { apiGet } from "@/lib/api";
@@ -18,7 +19,7 @@ const ERRORS: Record<string, string> = {
 };
 
 const BUTTON =
-  "flex h-11 w-full items-center justify-center gap-3 rounded-brand border text-sm font-medium shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  "flex h-12 w-full items-center justify-center gap-3 rounded-brand border text-sm font-semibold shadow-soft transition-all duration-200 hover:-translate-y-px hover:shadow-lift active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string; message?: string }> }) {
   const { next, error, message } = await searchParams;
@@ -27,13 +28,42 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const [tenant, providers] = await Promise.all([requireTenant(), apiGet<{ google: string | null; github: string | null }>("/auth/providers")]);
   const href = (p: string) => `/api/auth/${p}/start?next=${encodeURIComponent(safeNext)}`;
   return (
-    <div className="flex min-h-[70vh] items-center justify-center px-4 py-16">
-      <Card className="relative w-full max-w-sm overflow-hidden p-8 pt-9 shadow-lg">
+    <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-stretch gap-6 px-4 py-10 lg:grid-cols-[1.05fr_1fr] lg:py-12">
+      {/* Brand panel */}
+      <section className="relative isolate hidden flex-col justify-between overflow-hidden rounded-brand bg-hero-bg p-8 text-hero-fg shadow-lift sm:p-10 lg:flex">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -right-20 -top-24 h-80 w-80 animate-aurora rounded-full opacity-45 blur-3xl" style={{ background: "rgb(var(--gradient-from))" }} />
+          <div className="absolute -bottom-28 -left-16 h-72 w-72 animate-aurora-slow rounded-full opacity-35 blur-3xl" style={{ background: "rgb(var(--gradient-to))" }} />
+          <div className="bg-grid absolute inset-0" />
+        </div>
+        <BrandLogo tenant={tenant} variant="dark" size={40} showName />
+        <div className="my-10 lg:my-0">
+          <h2 className="animate-fade-up font-heading text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+            Your campus.<br />Your <span className="text-gradient-brand">events.</span>
+          </h2>
+          <ul className="mt-8 hidden space-y-4 sm:block">
+            {[
+              { icon: Zap, title: "Register in a tap", text: "Hackathons, masterclasses and guest talks across every campus." },
+              { icon: Ticket, title: "QR tickets", text: "Walk in with the ticket on your phone." },
+              { icon: BadgeCheck, title: "Verified certificates", text: "Download them and add them to LinkedIn in one click." },
+            ].map(({ icon: Icon, title, text }, i) => (
+              <li key={title} className="flex animate-fade-up gap-3" style={{ animationDelay: `${120 + i * 80}ms` }}>
+                <span className="glass flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-hero-accent"><Icon className="h-5 w-5" /></span>
+                <span><span className="block font-semibold">{title}</span><span className="text-sm text-hero-fg/75">{text}</span></span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="text-xs text-hero-fg/60">© {new Date().getFullYear()} {tenant.name}</p>
+      </section>
+
+      {/* Sign-in card */}
+      <div className="flex items-center justify-center">
+      <Card className="relative w-full max-w-md animate-fade-up overflow-hidden p-8 pt-9 shadow-lift sm:p-10">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-brand-gradient" aria-hidden />
-        <div className="mb-6 flex flex-col items-center text-center">
-          <BrandLogo tenant={tenant} size={44} />
-          <h1 className="mt-5 font-heading text-2xl font-bold tracking-tight">Sign in to {tenant.name} Events</h1>
-          <p className="mt-1 text-sm text-muted">No password needed.</p>
+        <div className="mb-7">
+          <h1 className="font-heading text-3xl font-bold tracking-tight">Welcome 👋</h1>
+          <p className="mt-1.5 text-sm text-muted">Sign in to {tenant.name} Events. No password needed.</p>
         </div>
         {error && ERRORS[error] && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{message || ERRORS[error]}</p>}
         {(providers?.google || providers?.github) && (
@@ -62,6 +92,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         )}
         <LoginForm next={safeNext} />
       </Card>
+      </div>
     </div>
   );
 }

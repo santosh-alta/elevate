@@ -31,12 +31,14 @@ export function AdminNav(who: Who) {
             aria-current={active ? "page" : undefined}
             href={href}
             className={cn(
-              "relative flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-              active ? "bg-hero-fg/10 text-hero-fg" : "text-hero-fg/80 hover:bg-hero-fg/5 hover:text-hero-fg",
+              "group relative flex items-center gap-3 whitespace-nowrap rounded-xl px-2.5 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              active ? "glass text-hero-fg shadow-soft" : "text-hero-fg/80 hover:bg-hero-fg/[0.06] hover:text-hero-fg",
             )}
           >
             {active && <span className="absolute inset-y-1.5 left-0 w-1 rounded-full bg-brand-gradient lg:-left-0" aria-hidden />}
-            <Icon className={cn("h-4 w-4", active && "text-hero-accent")} />{label}
+            <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition", active ? "bg-hero-accent/15 text-hero-accent" : "bg-hero-fg/[0.06] group-hover:bg-hero-fg/10")}>
+              <Icon className="h-4 w-4" />
+            </span>{label}
           </Link>
         );
       })}
