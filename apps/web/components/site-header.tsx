@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Bell, Globe, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
+import { Globe, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
 import { resolveTheme } from "@elevate/shared";
 import { requireTenant } from "@/lib/tenant";
 import { canUseAdmin, getMe } from "@/lib/auth";
 import { ROLE_LABELS } from "@elevate/shared";
 import { AccountMenu } from "./client/account-menu";
+import { NotificationBell } from "./client/notification-bell";
 import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
@@ -39,18 +40,7 @@ export async function SiteHeader() {
           <Link href="/winners" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Winners</Link>
           {me ? (
             <>
-              <Link
-                href="/me#notifications"
-                aria-label={unread ? `${unread} unread notifications` : "Notifications"}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full text-fg/80 transition hover:bg-primary/5 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <Bell className="h-[18px] w-[18px]" />
-                {unread > 0 && (
-                  <span className="absolute right-1 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
-                    {unread > 9 ? "9+" : unread}
-                  </span>
-                )}
-              </Link>
+              <NotificationBell initialUnread={unread} />
               <AccountMenu
                 name={me.user.name}
                 email={me.user.email}

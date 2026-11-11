@@ -48,6 +48,23 @@ export function notificationRoutes(app: FastifyInstance) {
     return { updated: result.count };
   });
 
+  /** Clear one of my notifications from the list. */
+  app.delete<{ Params: { id: string } }>("/me/notifications/:id", async (req) => {
+    const { user } = requireUser(req);
+    const result = await prisma.notification.deleteMany({ where: { id: req.params.id, userId: user.id, channel: "IN_APP" } });
+    if (!result.count) throw notFound("Notification");
+    return { ok: true };
+  });
+
+  /** Clear all my notifications that have been read. */
+  app.delete("/me/notifications", async (req) => {
+    const { user } = requireUser(req);
+    const result = await prisma.notification.deleteMany({
+      where: { userId: user.id, channel: "IN_APP", readAt: { not: null }, ...(req.tenant && { tenantId: req.tenant.id }) },
+    });
+    return { deleted: result.count };
+  });
+
   /** Outbox for one event: what was sent to whom, and what failed. */
   app.get<{ Params: { id: string } }>("/events/:id/notifications", async (req) => {
     const event = await requireEventManager(req, req.params.id);

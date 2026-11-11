@@ -108,7 +108,8 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
       status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] },
       dueAt: { lt: now },
       assigneeId: { not: null },
-      event: { status: { notIn: ["COMPLETED", "ARCHIVED", "CANCELLED"] } },
+      // Drafts have tentative dates, so their checklist isn't overdue yet.
+      event: { status: { notIn: ["DRAFT", "COMPLETED", "ARCHIVED", "CANCELLED"] } },
     },
     include: { event: { select: { id: true, title: true, tenantId: true } } },
     orderBy: { dueAt: "asc" },
@@ -127,7 +128,7 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
       tenantId, userId, channels: ["EMAIL", "IN_APP"], template: "task.overdue",
       subject: `${tasks.length} overdue event task${tasks.length === 1 ? "" : "s"}`,
       body: `These checklist items are past their due date:\n\n${lines.join("\n")}${tasks.length > 20 ? `\n…and ${tasks.length - 20} more` : ""}`,
-      ctaLabel: "Open admin", ctaUrl: `${links.base}/admin`, dedupKey: `task.overdue:${tenantId}:${userId}:${day}`,
+      ctaLabel: "Open my tasks", ctaUrl: `${links.base}/admin/tasks`, dedupKey: `task.overdue:${tenantId}:${userId}:${day}`,
     });
   }
 }
