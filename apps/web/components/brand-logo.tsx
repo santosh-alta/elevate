@@ -20,6 +20,17 @@ export function BrandLogo({
   const theme = resolveTheme(tenant.theme);
   const h = typeof size === "number" ? size : SIZES[size];
   const src = mark ? theme.iconUrl : variant === "dark" ? theme.logoDarkUrl ?? theme.logoUrl : theme.logoUrl;
+  // On light surfaces the logo follows the day/night theme: the dark-background version shows at night.
+  if (src && !mark && variant === "light" && theme.logoDarkUrl && theme.logoDarkUrl !== theme.logoUrl) {
+    return (
+      <>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={tenant.name} style={{ height: h }} className={cn("logo-day w-auto max-w-none shrink-0 object-contain", className)} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={theme.logoDarkUrl} alt="" aria-hidden style={{ height: h }} className={cn("logo-night w-auto max-w-none shrink-0 object-contain", className)} />
+      </>
+    );
+  }
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={tenant.name} style={{ height: h }} className={cn("w-auto max-w-none shrink-0 object-contain", className)} />;

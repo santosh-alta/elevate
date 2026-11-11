@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ChatWidget } from "@/components/client/chat-widget";
+import { ThemeToggle } from "@/components/client/theme-toggle";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { resolveTheme } from "@elevate/shared";
@@ -73,6 +74,7 @@ async function AdminShell({ children }: { children: ReactNode }) {
       <main className="min-w-0 flex-1 px-4 pb-10 sm:px-8">
         <div className="sticky top-0 z-20 -mx-4 mb-6 flex items-center justify-end gap-3 border-b border-border/70 bg-bg/75 px-4 py-3 backdrop-blur-xl sm:-mx-8 sm:px-8 print:hidden">
           <Link href="/" className="text-sm text-muted hover:text-fg">View public site ↗</Link>
+          <ThemeToggle />
           <AccountMenu
             name={me!.user.name}
             email={me!.user.email}

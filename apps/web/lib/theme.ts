@@ -86,6 +86,31 @@ export function brandColors(partial: ThemeInput) {
   };
 }
 
+function mix(a: string, b: string, t: number): string {
+  const [x, y] = [rgbTuple(a), rgbTuple(b)];
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * Night theme from the brand's own colours: a deep background tinted with the hero colour, slightly lighter
+ * cards, light text, and a primary colour bright enough to read on dark (a dark brand primary such as navy
+ * is swapped for the brand's accent, or lightened).
+ */
+export function darkColors(partial: ThemeInput) {
+  const { colors: c } = brandColors(partial);
+  const bg = mix(c.heroBg, "#000000", 0.6);
+  const card = mix(bg, "#ffffff", 0.06);
+  const fg = mix("#ffffff", c.heroBg, 0.08);
+  const primary = contrast(c.primary, bg) >= 4.5 ? c.primary
+    : [c.accent, c.secondary, c.heroAccent].find((x) => contrast(x, bg) >= 4.5) ?? mix(c.primary, "#ffffff", 0.6);
+  return {
+    "--bg": bg, "--card": card, "--fg": fg, "--muted": mix(fg, bg, 0.38), "--border": mix(bg, "#ffffff", 0.14),
+    "--primary": primary, "--primary-fg": readableOn(primary, "#ffffff", bg),
+    "--accent": contrast(c.accent, bg) >= 3 ? c.accent : mix(c.accent, "#ffffff", 0.5),
+    "--hero-bg": mix(c.heroBg, "#000000", 0.25),
+  } as Record<string, string>;
+}
+
 export function themeCss(partial: ThemeInput): string {
   const { theme: t, colors: c, gradient } = brandColors(partial);
   const vars: [string, string][] = [
@@ -99,7 +124,8 @@ export function themeCss(partial: ThemeInput): string {
   lines.push(`--radius: ${t.radius ?? 12}px;`);
   lines.push(`--font-brand: ${stack(t.font, "Inter")};`);
   lines.push(`--font-heading: ${stack(t.headingFont ?? t.font, "Inter")};`);
-  return `:root{${lines.join("")}}`;
+  const dark = Object.entries(darkColors(partial)).map(([k, v]) => `${k}: ${hexToRgb(v)};`).join("");
+  return `:root{${lines.join("")}}@media screen{:root[data-theme="dark"]{${dark}color-scheme:dark;}}`;
 }
 
 /** One stylesheet per family, so an unknown family can't break the others. */

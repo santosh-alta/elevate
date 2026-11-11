@@ -58,8 +58,8 @@ export function WinnersPodium({ winners }: { winners: Winner[] }) {
               <div key={w.teamId} className={cn("flex flex-col items-center justify-end rounded-brand p-4 text-center ring-2", st.ring, st.h, w.award === "WINNER" && "order-first sm:order-none")}>
                 {st.icon}
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted">{AWARD_LABELS[w.award ?? ""] ?? w.award}</p>
-                <p className="text-lg font-bold leading-tight text-slate-900">{w.teamName}</p>
-                {w.projectTitle && <p className="text-xs text-slate-600">{w.projectTitle}</p>}
+                <p className="text-lg font-bold leading-tight text-fg">{w.teamName}</p>
+                {w.projectTitle && <p className="text-xs text-muted">{w.projectTitle}</p>}
                 <Avatars members={w.members} />
               </div>
             );

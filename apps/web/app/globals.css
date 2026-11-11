@@ -146,3 +146,35 @@ html[data-scrolled="true"] .site-header { box-shadow: 0 6px 24px -12px rgb(15 23
 
 /* Horizontal marquee that pauses on hover */
 .marquee:hover .animate-marquee { animation-play-state: paused; }
+
+/* ── Night theme ──────────────────────────────────────────────────────────────
+   Brand colours switch through the CSS variables (see lib/theme.ts → darkColors).
+   These remap the few fixed status colours (alerts, badges, success/error text) so they stay readable on dark. */
+.logo-night { display: none; }
+@media screen {
+[data-theme="dark"] .logo-day { display: none; }
+[data-theme="dark"] .logo-night { display: block; }
+[data-theme="dark"] .bg-red-50, [data-theme="dark"] .bg-red-100 { background-color: rgb(239 68 68 / 0.14); }
+[data-theme="dark"] .bg-amber-50, [data-theme="dark"] .bg-amber-100 { background-color: rgb(245 158 11 / 0.14); }
+[data-theme="dark"] .bg-emerald-50, [data-theme="dark"] .bg-emerald-100 { background-color: rgb(16 185 129 / 0.14); }
+[data-theme="dark"] .bg-sky-100 { background-color: rgb(14 165 233 / 0.16); }
+[data-theme="dark"] .bg-slate-50, [data-theme="dark"] .bg-slate-100 { background-color: rgb(255 255 255 / 0.06); }
+[data-theme="dark"] .text-red-500, [data-theme="dark"] .text-red-600, [data-theme="dark"] .text-red-700,
+[data-theme="dark"] .text-red-800, [data-theme="dark"] .text-red-900 { color: rgb(252 129 129); }
+[data-theme="dark"] .text-emerald-600, [data-theme="dark"] .text-emerald-700, [data-theme="dark"] .text-emerald-800,
+[data-theme="dark"] .text-emerald-900, [data-theme="dark"] .text-green-600, [data-theme="dark"] .text-green-700,
+[data-theme="dark"] .text-green-900 { color: rgb(74 222 166); }
+[data-theme="dark"] .text-amber-600, [data-theme="dark"] .text-amber-700, [data-theme="dark"] .text-amber-800,
+[data-theme="dark"] .text-amber-900 { color: rgb(252 200 80); }
+[data-theme="dark"] .text-sky-600, [data-theme="dark"] .text-sky-800, [data-theme="dark"] .text-blue-700 { color: rgb(96 200 250); }
+[data-theme="dark"] .text-violet-700 { color: rgb(180 160 252); }
+[data-theme="dark"] .text-slate-500, [data-theme="dark"] .text-slate-600, [data-theme="dark"] .text-slate-400 { color: rgb(var(--muted)); }
+[data-theme="dark"] .border-red-200, [data-theme="dark"] .border-red-500 { border-color: rgb(239 68 68 / 0.4); }
+[data-theme="dark"] .border-amber-200, [data-theme="dark"] .border-amber-300 { border-color: rgb(245 158 11 / 0.4); }
+[data-theme="dark"] .border-emerald-200, [data-theme="dark"] .ring-emerald-200 { border-color: rgb(16 185 129 / 0.4); --tw-ring-color: rgb(16 185 129 / 0.4); }
+[data-theme="dark"] .border-slate-200 { border-color: rgb(var(--border)); }
+[data-theme="dark"] .glass-light { background: rgb(var(--card) / 0.72); border-color: rgb(255 255 255 / 0.08); }
+}
+/* Smooth switch between day and night */
+html.theme-switching, html.theme-switching * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease !important; }
+[data-theme="dark"] .bg-orange-50 { background-color: rgb(249 115 22 / 0.14); }

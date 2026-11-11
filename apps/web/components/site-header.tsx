@@ -8,6 +8,7 @@ import { AccountMenu } from "./client/account-menu";
 import { NotificationBell } from "./client/notification-bell";
 import { HeaderUser } from "./client/header-user";
 import { SiteNav } from "./client/site-nav";
+import { ThemeToggle } from "./client/theme-toggle";
 import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
@@ -42,6 +43,7 @@ export async function SiteHeader({ tenant: given, clientUser = false }: { tenant
         </Link>
         <nav className="flex items-center gap-1.5 text-sm">
           <SiteNav showCampuses={tenant.campuses.length > 1} />
+          <ThemeToggle />
           {clientUser ? <HeaderUser /> : me ? (
             <>
               <NotificationBell initialUnread={unread} />
