@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ChatWidget } from "@/components/client/chat-widget";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { resolveTheme } from "@elevate/shared";
@@ -82,6 +83,7 @@ async function AdminShell({ children }: { children: ReactNode }) {
         </div>
         {children}
       </main>
+      <ChatWidget />
     </div>
   );
 }

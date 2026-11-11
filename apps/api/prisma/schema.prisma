@@ -1125,11 +1125,13 @@ model AiUsage {
   userId    String
   /// YYYY-MM-DD in India time
   day       String
+  /// "write" (editor help) or "chat" (assistant); each has its own daily limit
+  kind      String   @default("write")
   tenantId  String
   count     Int      @default(0)
   tokens    Int      @default(0)
   updatedAt DateTime @updatedAt
 
-  @@id([userId, day])
+  @@id([userId, day, kind])
   @@index([tenantId, day])
 }

@@ -82,3 +82,13 @@ services:
         value: "5"
       - key: AI_ADMIN_DAILY_LIMIT
         value: "30"
+      # Backup AI when Gemini is over its free limit or down (console.groq.com → API keys; free tier)
+      - key: GROQ_API_KEY
+        sync: false
+      # Optional: assistant messages per person per day: students (20), organisers/staff (50), HQ admins (200)
+      - key: AI_CHAT_DAILY_LIMIT
+        value: "20"
+      - key: AI_CHAT_STAFF_DAILY_LIMIT
+        value: "50"
+      - key: AI_CHAT_ADMIN_DAILY_LIMIT
+        value: "200"

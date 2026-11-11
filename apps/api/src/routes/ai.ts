@@ -6,6 +6,7 @@ import { requireTenant } from "../plugins/tenant";
 import { hasRole, requireEventCreator, requireEventManager } from "../lib/permissions";
 import { HttpError, badRequest } from "../lib/errors";
 import { aiEnabled, generate, stripFences } from "../lib/ai";
+import { usageOf, withAllowance } from "../lib/aiUsage";
 import { sanitizeHtml } from "../lib/html";
 
 /**
@@ -16,32 +17,11 @@ import { sanitizeHtml } from "../lib/html";
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 5;
 const ADMIN_DAILY_LIMIT = Number(process.env.AI_ADMIN_DAILY_LIMIT) || 30;
 
-function today(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: process.env.DISPLAY_TZ || "Asia/Kolkata" }).format(new Date());
-}
-
 function limitFor(req: FastifyRequest): number {
   return hasRole(req, ["BRAND_ADMIN"]) ? ADMIN_DAILY_LIMIT : DAILY_LIMIT;
 }
 
-async function usage(req: FastifyRequest) {
-  const userId = req.auth!.user.id;
-  const row = await prisma.aiUsage.findUnique({ where: { userId_day: { userId, day: today() } } });
-  const limit = limitFor(req);
-  const used = row?.count ?? 0;
-  return { enabled: aiEnabled(), used, limit, remaining: Math.max(0, limit - used) };
-}
-
-/** Takes one use atomically (no race between two tabs). Returns false when today's allowance is used up. */
-async function reserve(userId: string, tenantId: string, limit: number): Promise<boolean> {
-  const rows = await prisma.$queryRaw<{ count: number }[]>`
-    INSERT INTO "AiUsage" ("userId", "day", "tenantId", "count", "updatedAt")
-    VALUES (${userId}, ${today()}, ${tenantId}, 1, now())
-    ON CONFLICT ("userId", "day") DO UPDATE SET "count" = "AiUsage"."count" + 1, "updatedAt" = now()
-    WHERE "AiUsage"."count" < ${limit}
-    RETURNING "count"`;
-  return rows.length > 0;
-}
+const usage = (req: FastifyRequest) => usageOf(req.auth!.user.id, "write", limitFor(req));
 
 const str = (max: number) => z.string().trim().max(max).optional();
 
@@ -137,7 +117,7 @@ export function aiRoutes(app: FastifyInstance) {
     const auth = requireEventCreator(req);
     const tenant = requireTenant(req);
     const body = bodySchema.parse(req.body);
-    if (!aiEnabled()) throw new HttpError(503, "ai_disabled", "AI writing help isn't switched on yet");
+    if (!aiEnabled()) throw new HttpError(503, "ai_disabled", "AI help isn't switched on yet");
 
     // Build the prompt first, so bad input doesn't use up an allowance.
     let prompt: string;
@@ -188,19 +168,11 @@ export function aiRoutes(app: FastifyInstance) {
     }
 
     const limit = limitFor(req);
-    if (!(await reserve(auth.user.id, tenant.id, limit))) {
-      throw new HttpError(429, "ai_limit", `You've used all ${limit} AI uses for today. They reset at midnight.`);
-    }
-
-    let result;
-    try {
-      result = await generate({ system: system(tenant.name), prompt, json, maxTokens });
-    } catch (e) {
-      // Don't charge for failures.
-      await prisma.aiUsage.update({ where: { userId_day: { userId: auth.user.id, day: today() } }, data: { count: { decrement: 1 } } }).catch(() => {});
-      throw e;
-    }
-    await prisma.aiUsage.update({ where: { userId_day: { userId: auth.user.id, day: today() } }, data: { tokens: { increment: result.tokens } } }).catch(() => {});
+    const result = await withAllowance(
+      { id: auth.user.id, tenantId: tenant.id }, "write", limit,
+      () => generate({ system: system(tenant.name), prompt, json, maxTokens }),
+      `You've used all ${limit} AI writing uses for today. They reset at midnight.`,
+    );
     req.log.info({ kind: body.kind, model: result.model, tokens: result.tokens }, "ai write");
 
     const out = stripFences(result.text);

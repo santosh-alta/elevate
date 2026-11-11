@@ -1,26 +1,31 @@
 import { HttpError } from "./errors";
 
 /**
- * Text generation with Google Gemini (free tier). Server-side only: the key never reaches the browser.
- * Only event content is sent (titles, descriptions, dates). Never send students' personal details:
- * on the free tier Google may use prompts to improve its products.
+ * Text generation. Server-side only: keys never reach the browser.
+ * Order: Gemini (primary) → Groq (backup when Gemini is over its free limit, busy or down) → Gemini Flash-Lite.
+ * Only send event content and counts, never students' personal details: free tiers may use prompts to improve models.
  *
- *   GEMINI_API_KEY         required to switch AI help on
- *   GEMINI_MODEL           default gemini-flash-latest (good writing, ~8s with thinking off)
- *   GEMINI_FALLBACK_MODEL  default gemini-flash-lite-latest (used when the main model is busy or over its free limit)
+ *   GEMINI_API_KEY         Google AI Studio key (primary)
+ *   GEMINI_MODEL           default gemini-flash-latest
+ *   GEMINI_FALLBACK_MODEL  default gemini-flash-lite-latest (last resort)
+ *   GROQ_API_KEY           Groq key (backup)
+ *   GROQ_MODEL             default openai/gpt-oss-120b
  */
-const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI = "https://generativelanguage.googleapis.com/v1beta/models";
+const GROQ = "https://api.groq.com/openai/v1/chat/completions";
 
 export function aiEnabled(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+  return !!(process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY);
 }
 
-function models(): string[] {
-  return [
-    process.env.GEMINI_MODEL || "gemini-flash-latest",
-    process.env.GEMINI_FALLBACK_MODEL || "gemini-flash-lite-latest",
-  ].filter((m, i, all) => all.indexOf(m) === i);
-}
+export type ChatMessage = { role: "user" | "assistant"; text: string };
+export type AiResult = { text: string; tokens: number; model: string };
+type Opts = { system: string; prompt?: string; messages?: ChatMessage[]; json?: boolean; maxTokens?: number; temperature?: number;
+  /** Per-provider wait before moving on to the next one (default 40s) */
+  timeoutMs?: number };
+
+/** One attempt: the answer, or null to move on to the next provider (with the reason logged). */
+type Attempt = (o: Opts, msgs: ChatMessage[]) => Promise<AiResult | string>;
 
 type GeminiResponse = {
   candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
@@ -28,57 +33,84 @@ type GeminiResponse = {
   error?: { message?: string };
 };
 
-export type AiResult = { text: string; tokens: number; model: string };
-
-async function call(model: string, body: unknown): Promise<{ status: number; data: GeminiResponse }> {
-  const res = await fetch(`${BASE}/${model}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(40_000),
-  });
-  const data = (await res.json().catch(() => ({}))) as GeminiResponse;
-  return { status: res.status, data };
+function gemini(model: string): Attempt {
+  return async (o, msgs) => {
+    const body = {
+      systemInstruction: { parts: [{ text: o.system }] },
+      contents: msgs.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.text }] })),
+    };
+    const config = { temperature: o.temperature ?? 0.8, maxOutputTokens: o.maxTokens ?? 2048, ...(o.json ? { responseMimeType: "application/json" } : {}) };
+    // Thinking makes answers ~2x slower and isn't needed here. Some models reject the setting, so retry without it.
+    for (const noThinking of [true, false]) {
+      const res = await fetch(`${GEMINI}/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
+        body: JSON.stringify({ ...body, generationConfig: { ...config, ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) } }),
+        signal: AbortSignal.timeout(o.timeoutMs ?? 40_000),
+      });
+      const data = (await res.json().catch(() => ({}))) as GeminiResponse;
+      if (res.status === 400 && noThinking) continue;
+      if (res.status !== 200) return `${model}: HTTP ${res.status} ${data.error?.message ?? ""}`;
+      const text = (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("").trim();
+      if (!text) return `${model}: empty answer (${data.candidates?.[0]?.finishReason ?? "no candidates"})`;
+      return { text, tokens: data.usageMetadata?.totalTokenCount ?? 0, model };
+    }
+    return `${model}: rejected`;
+  };
 }
 
-/** One prompt in, text out. Tries the main model (thinking off for speed), then the fallback model. */
-export async function generate(opts: { system: string; prompt: string; json?: boolean; maxTokens?: number; temperature?: number }): Promise<AiResult> {
-  if (!aiEnabled()) throw new HttpError(503, "ai_disabled", "AI writing help isn't switched on yet");
-  const generationConfig = {
-    temperature: opts.temperature ?? 0.8,
-    maxOutputTokens: opts.maxTokens ?? 2048,
-    ...(opts.json ? { responseMimeType: "application/json" } : {}),
+type GroqResponse = { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number }; error?: { message?: string } };
+
+function groq(model: string): Attempt {
+  return async (o, msgs) => {
+    const res = await fetch(GROQ, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: o.system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))],
+        temperature: o.temperature ?? 0.8,
+        // gpt-oss reasons before answering; those tokens count too, so leave room.
+        max_completion_tokens: (o.maxTokens ?? 2048) + 1024,
+        reasoning_effort: "low",
+        ...(o.json ? { response_format: { type: "json_object" } } : {}),
+      }),
+      signal: AbortSignal.timeout(o.timeoutMs ?? 40_000),
+    });
+    const data = (await res.json().catch(() => ({}))) as GroqResponse;
+    if (res.status !== 200) return `groq ${model}: HTTP ${res.status} ${data.error?.message ?? ""}`;
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text) return `groq ${model}: empty answer`;
+    return { text, tokens: data.usage?.total_tokens ?? 0, model: `groq:${model}` };
   };
-  const base = {
-    systemInstruction: { parts: [{ text: opts.system }] },
-    contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
-  };
-  let lastError = "";
-  for (const model of models()) {
-    // Thinking makes answers ~2x slower and isn't needed for copywriting. Some models reject the setting, so retry without it.
-    for (const noThinking of [true, false]) {
-      let r: { status: number; data: GeminiResponse };
-      try {
-        r = await call(model, { ...base, generationConfig: { ...generationConfig, ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) } });
-      } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
-        break; // timeout / network: try the next model
+}
+
+function providers(): Attempt[] {
+  const list: Attempt[] = [];
+  if (process.env.GEMINI_API_KEY) list.push(gemini(process.env.GEMINI_MODEL || "gemini-flash-latest"));
+  if (process.env.GROQ_API_KEY) list.push(groq(process.env.GROQ_MODEL || "openai/gpt-oss-120b"));
+  if (process.env.GEMINI_API_KEY) list.push(gemini(process.env.GEMINI_FALLBACK_MODEL || "gemini-flash-lite-latest"));
+  return list;
+}
+
+/** A single prompt (`prompt`) or a conversation (`messages`) in, text out. Falls through the providers in order. */
+export async function generate(opts: Opts): Promise<AiResult> {
+  if (!aiEnabled()) throw new HttpError(503, "ai_disabled", "AI help isn't switched on yet");
+  const msgs: ChatMessage[] = opts.messages ?? [{ role: "user", text: opts.prompt ?? "" }];
+  const errors: string[] = [];
+  for (const attempt of providers()) {
+    try {
+      const r = await attempt(opts, msgs);
+      if (typeof r !== "string") {
+        if (errors.length) console.warn(`[ai] used backup after: ${errors.join(" | ")}`);
+        return r;
       }
-      if (r.status === 400 && noThinking) continue;
-      if (r.status !== 200) {
-        lastError = `${model}: HTTP ${r.status} ${r.data.error?.message ?? ""}`;
-        break;
-      }
-      const parts = r.data.candidates?.[0]?.content?.parts ?? [];
-      const text = parts.filter((p) => !p.thought).map((p) => p.text ?? "").join("").trim();
-      if (!text) {
-        lastError = `${model}: empty answer (${r.data.candidates?.[0]?.finishReason ?? "no candidates"})`;
-        break;
-      }
-      return { text, tokens: r.data.usageMetadata?.totalTokenCount ?? 0, model };
+      errors.push(r);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e)); // timeout / network
     }
   }
-  console.warn(`[ai] all models failed: ${lastError}`);
+  console.warn(`[ai] all providers failed: ${errors.join(" | ")}`);
   throw new HttpError(503, "ai_busy", "The AI is busy right now. Please try again in a minute.");
 }
 

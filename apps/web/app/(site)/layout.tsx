@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { ScrollEffects } from "@/components/client/motion";
+import { ChatWidget } from "@/components/client/chat-widget";
 import { BrandRoot } from "@/components/brand-root";
 import { BrandNotFound } from "@/components/brand-not-found";
 import { brandMetadata, brandViewport } from "@/lib/brand-meta";
@@ -25,6 +26,7 @@ export default async function SiteLayout({ children }: { children: ReactNode }) 
       <main>{children}</main>
       <SiteFooter tenant={tenant} />
       <ScrollEffects />
+      <ChatWidget />
     </BrandRoot>
   );
 }

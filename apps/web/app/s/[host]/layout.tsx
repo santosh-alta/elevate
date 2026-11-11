@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { ScrollEffects } from "@/components/client/motion";
+import { ChatWidget } from "@/components/client/chat-widget";
 import { BrandRoot } from "@/components/brand-root";
 import { brandMetadata, brandViewport, originFor } from "@/lib/brand-meta";
 import { tenantForHost } from "@/lib/tenant";
@@ -39,6 +40,7 @@ export default async function PrebuiltLayout({ children, params }: Props) {
       <main>{children}</main>
       <SiteFooter tenant={tenant} />
       <ScrollEffects />
+      <ChatWidget />
     </BrandRoot>
   );
 }
