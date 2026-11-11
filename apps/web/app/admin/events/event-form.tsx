@@ -69,7 +69,7 @@ export function EventForm({
     batches: event?.audienceBatches ?? [], programs: event?.audiencePrograms ?? [],
     notify: event?.notifyOnAnnounce ?? false, reminders: event?.remindersEnabled ?? true,
   });
-  // New events: "email students" starts from the brand's default (Settings → Students & notifications).
+  // New events: "email students" starts from the brand's default (Settings → Notifications).
   useEffect(() => {
     if (event) return;
     callApi<{ announceByDefault: boolean }>("GET", "/notification-settings").then((s) => setAud((a) => ({ ...a, notify: s.announceByDefault }))).catch(() => {});

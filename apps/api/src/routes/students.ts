@@ -105,8 +105,7 @@ export function studentRoutes(app: FastifyInstance) {
   /** Brand-wide notification settings: reminder times, and whether new events email students by default. */
   app.get("/notification-settings", async (req) => {
     requireStaff(req);
-    const s = (requireTenant(req).settings ?? {}) as { notifications?: { announceByDefault?: boolean } };
-    return { reminderHours: reminderHoursOf(s), announceByDefault: s.notifications?.announceByDefault === true, report: reportSettingsOf(s) };
+    return notificationSettingsOf(requireTenant(req).settings);
   });
 
   app.put("/notification-settings", async (req) => {
@@ -118,12 +117,34 @@ export function studentRoutes(app: FastifyInstance) {
       report: z.object({
         to: z.array(z.string().trim().email()).max(10), cc: z.array(z.string().trim().email()).max(20), afterDays: z.number().int().min(1).max(30),
       }).optional(),
+      feedbackAfterHours: z.number().min(0.5).max(72).optional(),
+      registerNudgeHours: z.array(z.number().positive().max(24 * 14)).max(4).optional(),
+      taskDigest: z.boolean().optional(),
     }).parse(req.body);
     const fresh = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id }, select: { settings: true } });
     const settings = { ...((fresh.settings ?? {}) as Record<string, unknown>) };
-    settings.notifications = { ...((settings.notifications ?? {}) as object), reminderHours: [...new Set(body.reminderHours)].sort((a, b) => b - a), announceByDefault: body.announceByDefault };
+    settings.notifications = {
+      ...((settings.notifications ?? {}) as object),
+      reminderHours: [...new Set(body.reminderHours)].sort((a, b) => b - a), announceByDefault: body.announceByDefault,
+      ...(body.feedbackAfterHours !== undefined && { feedbackAfterHours: body.feedbackAfterHours }),
+      ...(body.registerNudgeHours !== undefined && { registerNudgeHours: [...new Set(body.registerNudgeHours)].sort((a, b) => b - a) }),
+      ...(body.taskDigest !== undefined && { taskDigest: body.taskDigest }),
+    };
     if (body.report) settings.eventReport = { to: body.report.to.map((e) => e.toLowerCase()), cc: body.report.cc.map((e) => e.toLowerCase()), afterDays: body.report.afterDays };
     await prisma.tenant.update({ where: { id: tenant.id }, data: { settings: settings as Prisma.InputJsonValue } });
-    return { reminderHours: reminderHoursOf(settings), announceByDefault: body.announceByDefault, report: reportSettingsOf(settings) };
+    return notificationSettingsOf(settings);
   });
+}
+
+/** Every email setting of a brand, with defaults. */
+export function notificationSettingsOf(settings: unknown) {
+  const n = ((settings ?? {}) as { notifications?: { announceByDefault?: boolean; feedbackAfterHours?: number; registerNudgeHours?: number[]; taskDigest?: boolean } }).notifications ?? {};
+  return {
+    reminderHours: reminderHoursOf(settings),
+    announceByDefault: n.announceByDefault === true,
+    report: reportSettingsOf(settings),
+    feedbackAfterHours: typeof n.feedbackAfterHours === "number" ? n.feedbackAfterHours : 2,
+    registerNudgeHours: Array.isArray(n.registerNudgeHours) ? n.registerNudgeHours : [],
+    taskDigest: n.taskDigest !== false,
+  };
 }

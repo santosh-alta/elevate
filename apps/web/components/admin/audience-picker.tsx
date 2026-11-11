@@ -89,7 +89,7 @@ export function AudiencePicker({
           <input type="checkbox" checked={reminders} onChange={(e) => onChange({ reminders: e.target.checked })} className="mt-0.5 accent-[rgb(var(--primary))]" />
           <span>
             <span className="flex items-center gap-1.5 font-medium"><BellRing className="h-4 w-4" />Send reminders to registered students</span>
-            <span className="block text-xs text-muted">At the times set in Settings → Students &amp; notifications (default 24 hours and 1 hour before).</span>
+            <span className="block text-xs text-muted">At the times set in Settings → Notifications (default 24 hours and 1 hour before).</span>
           </span>
         </label>
       </div>

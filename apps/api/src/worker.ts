@@ -1,5 +1,5 @@
 import { buildIcs } from "./routes/eventPage";
-import { announceDueEvents } from "./lib/audience";
+import { announceDueEvents, nudgeUnregistered } from "./lib/audience";
 import { requestFeedbackDue, sendReportsDue } from "./lib/afterEvent";
 import { syncStudentsIfDue } from "./lib/studentSync";
 import type { FastifyBaseLogger } from "fastify";
@@ -133,6 +133,8 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
 
   // "New event, register now" emails to each newly announced event's audience.
   await announceDueEvents(now);
+  // "Registration closing soon" to the audience who haven't registered (brand setting; off by default).
+  await nudgeUnregistered(now);
   // After the event: feedback request (~2 h after the end), then the outcome report to leadership.
   await requestFeedbackDue(now);
   await sendReportsDue(now);
@@ -169,8 +171,11 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
     groups.set(key, [...(groups.get(key) ?? []), t]);
   }
   const day = now.toISOString().slice(0, 10);
+  const digestOff = new Set((await prisma.tenant.findMany({ select: { id: true, settings: true } }))
+    .filter((t) => ((t.settings ?? {}) as { notifications?: { taskDigest?: boolean } }).notifications?.taskDigest === false).map((t) => t.id));
   for (const [key, tasks] of groups) {
     const [tenantId, userId] = key.split("|");
+    if (digestOff.has(tenantId)) continue;
     const lines = tasks.slice(0, 20).map((t) => `• ${t.title} — ${t.event.title} (due ${fmtDate(t.dueAt!)})`);
     const links = await eventLinks({ id: tasks[0].event.id, tenantId, slug: "" });
     await enqueue({

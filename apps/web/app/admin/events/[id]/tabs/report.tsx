@@ -25,7 +25,7 @@ export async function ReportTab({ event, tenant }: { event: ElevateEvent; tenant
       <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
         <span className="mr-auto text-sm text-muted">One branded PDF with everything about this event, ready to share with the founders.</span>
         <LinkButton href={`/api/proxy/events/${event.id}/report.pdf`} external size="sm"><Download className="h-4 w-4" />Download report (PDF)</LinkButton>
-        <ApiButton path={`/events/${event.id}/report/send`} variant="outline" size="sm" confirm="Email this report to the report recipients (Settings → Students & notifications) now?" successMessage="Report emailed.">Email report now</ApiButton>
+        <ApiButton path={`/events/${event.id}/report/send`} variant="outline" size="sm" confirm="Email this report to the report recipients (Settings → Notifications) now?" successMessage="Report emailed.">Email report now</ApiButton>
         <PrintButton />
       </div>
       <Card className="p-8 print:border-0 print:shadow-none">

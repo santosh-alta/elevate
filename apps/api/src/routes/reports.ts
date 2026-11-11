@@ -83,7 +83,7 @@ export function reportRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>("/events/:id/report/send", async (req) => {
     const event = await requireEventManager(req, req.params.id);
     const cfg = reportSettingsOf(requireTenant(req).settings);
-    if (!cfg.to.length) throw badRequest("Add report recipients in Settings → Students & notifications first");
+    if (!cfg.to.length) throw badRequest("Add report recipients in Settings → Notifications first");
     const sent = await sendEventReport(event.id, cfg);
     await prisma.event.update({ where: { id: event.id }, data: { reportSentAt: new Date() } });
     return sent;

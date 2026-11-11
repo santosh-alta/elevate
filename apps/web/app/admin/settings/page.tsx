@@ -16,6 +16,7 @@ import { CertificateDesignEditor, type DesignMap } from "@/components/admin/cert
 import { TicketDesignEditor, type TicketDesign } from "@/components/admin/ticket-design-editor";
 import { EventTypesManager } from "./event-types-manager";
 import { StudentsSettings } from "./students-settings";
+import { NotificationSettings } from "./notification-settings";
 import { getEventTypes, getTags } from "@/lib/catalog";
 import { EventIcon } from "@/components/event-icon";
 import { SUGGESTED_TAGS } from "@elevate/shared";
@@ -27,7 +28,8 @@ const TABS = [
   { key: "contact", label: "Contact & certificates" },
   { key: "types", label: "Event types" },
   { key: "campuses", label: "Campuses" },
-  { key: "students", label: "Students & notifications" },
+  { key: "students", label: "Students" },
+  { key: "notifications", label: "Notifications" },
   { key: "members", label: "Team & roles" },
   { key: "domains", label: "Custom domains" },
 ];
@@ -67,6 +69,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {active === "types" && <EventTypes canEdit={isBrandAdmin(me)} />}
       {active === "campuses" && <Campuses />}
       {active === "students" && <StudentsSettings campuses={tenant.campuses} canEdit={isBrandAdmin(me)} />}
+      {active === "notifications" && <NotificationSettings canEdit={isBrandAdmin(me)} />}
       {active === "members" && <Members campuses={tenant.campuses} />}
       {active === "domains" && <Domains />}
     </div>

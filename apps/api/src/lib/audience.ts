@@ -95,3 +95,47 @@ export async function announceDueEvents(now = new Date()): Promise<number> {
   }
   return sent;
 }
+
+/**
+ * "Registration closes soon" to people in an event's audience who haven't registered, at the brand's chosen times
+ * before registration closes (or the event starts). Only for events whose announcement email was sent.
+ */
+export async function nudgeUnregistered(now = new Date()): Promise<number> {
+  const tenants = await prisma.tenant.findMany({ select: { id: true, settings: true } });
+  let sent = 0;
+  for (const t of tenants) {
+    const hours = (((t.settings ?? {}) as { notifications?: { registerNudgeHours?: number[] } }).notifications?.registerNudgeHours ?? [])
+      .map(Number).filter((h) => h > 0).sort((a, b) => a - b);
+    if (!hours.length) continue;
+    const events = await prisma.event.findMany({
+      where: {
+        tenantId: t.id, notifyOnAnnounce: true, announcedNotifiedAt: { not: null }, approvalStatus: "APPROVED",
+        status: { in: ["ANNOUNCED", "REGISTRATION_OPEN"] }, startsAt: { gt: now },
+      },
+      include: { campuses: { select: { campusId: true } } },
+    });
+    for (const e of events) {
+      const deadline = (e.registrationClosesAt && e.registrationClosesAt < e.startsAt ? e.registrationClosesAt : e.startsAt).getTime();
+      const lead = deadline - now.getTime();
+      if (lead <= 0) continue;
+      const due = hours.find((h) => lead <= h * 3_600_000);
+      if (due == null) continue;
+      const registered = new Set((await prisma.registration.findMany({
+        where: { eventId: e.id, status: { notIn: ["CANCELLED", "REJECTED"] } }, select: { user: { select: { email: true } } },
+      })).map((r) => r.user.email.toLowerCase()));
+      const people = (await audience(filterFor(e))).filter((p) => !registered.has(p.email));
+      const links = await eventLinks(e);
+      const when = due >= 24 ? `in ${Math.round(due / 24)} day${due >= 48 ? "s" : ""}` : `in ${due} hour${due > 1 ? "s" : ""}`;
+      for (const p of people) {
+        const r = await enqueue({
+          tenantId: e.tenantId, eventId: e.id, userId: p.userId, toEmail: p.email, channels: ["EMAIL"], template: "event.register_nudge",
+          subject: `Registration closes ${when}: ${e.title}`,
+          body: `Hi ${p.name.split(" ")[0] || "there"},\n\nRegistration for ${e.title} closes ${when}. It happens on ${fmtDate(e.startsAt)}.\n\nIf you'd like to join, register now.`,
+          ctaLabel: "Register now", ctaUrl: links.page, dedupKey: `event.nudge.${due}:${e.id}:${p.email}`,
+        });
+        sent += r.length;
+      }
+    }
+  }
+  return sent;
+}

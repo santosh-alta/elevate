@@ -12,7 +12,7 @@ import { logActivity } from "./activity";
  *  1. feedback request to participants, about 2 hours after it ends (once)
  *  2. outcome report to leadership a few days later (default 7, so feedback and social posts are in):
  *     AI summary, key numbers, what participants said, social media links, and the PDF report attached.
- * Recipients and the delay are brand settings (Settings → Students & notifications).
+ * Recipients and the delay are brand settings (Settings → Notifications).
  */
 const HOUR = 3_600_000;
 const SKIP = ["DRAFT", "PLANNING", "CANCELLED", "ARCHIVED"] as const;
@@ -26,14 +26,20 @@ export function reportSettingsOf(settings: unknown): ReportSettings {
 }
 
 export async function requestFeedbackDue(now = new Date()): Promise<void> {
-  const events = await prisma.event.findMany({
+  // Brand setting: hours after the end (default 2).
+  const delay = new Map((await prisma.tenant.findMany({ select: { id: true, settings: true } })).map((t) => {
+    const h = Number(((t.settings ?? {}) as { notifications?: { feedbackAfterHours?: number } }).notifications?.feedbackAfterHours);
+    return [t.id, Number.isFinite(h) && h > 0 ? h : 2];
+  }));
+  const candidates = await prisma.event.findMany({
     where: {
       feedbackRequestedAt: null, status: { notIn: [...SKIP] },
-      endsAt: { lte: new Date(now.getTime() - 2 * HOUR), gte: new Date(now.getTime() - 7 * 24 * HOUR) },
+      endsAt: { lte: new Date(now.getTime() - 0.5 * HOUR), gte: new Date(now.getTime() - 7 * 24 * HOUR) },
     },
-    select: { id: true },
-    take: 10,
+    select: { id: true, tenantId: true, endsAt: true },
+    take: 50,
   });
+  const events = candidates.filter((e) => e.endsAt.getTime() <= now.getTime() - (delay.get(e.tenantId) ?? 2) * HOUR).slice(0, 10);
   for (const e of events) {
     const claimed = await prisma.event.updateMany({ where: { id: e.id, feedbackRequestedAt: null }, data: { feedbackRequestedAt: now } });
     if (!claimed.count) continue;
