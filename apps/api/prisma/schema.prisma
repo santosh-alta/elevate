@@ -25,6 +25,7 @@ model Tenant {
 
   domains         TenantDomain[]
   campuses        Campus[]
+  siteFeedback    SiteFeedback[]
   memberships     Membership[]
   events          Event[]
   certTemplates   CertificateTemplate[]
@@ -1096,4 +1097,25 @@ model EventCategory {
   events Event[]
 
   @@unique([tenantId, name])
+}
+
+/// Feedback about the site itself (e.g. from students testing it before launch)
+model SiteFeedback {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  name      String?
+  email     String?
+  campus    String?
+  /// 1–5
+  rating    Int?
+  liked     String?
+  confusing String?
+  missing   String?
+  broken    String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }
