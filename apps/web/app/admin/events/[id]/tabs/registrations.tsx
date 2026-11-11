@@ -51,6 +51,8 @@ export async function RegistrationsTab({ event }: { event: ElevateEvent }) {
           <p className="flex items-center gap-2 font-medium"><QrCode className="h-4 w-4 text-primary" />Manual check-in</p>
           <p className="mb-3 mt-1 text-xs text-muted">Open the check-in desk on any phone: scan tickets with the camera, search by name, or check in a whole team.</p>
           <a href={`/checkin/${event.slug}`} target="_blank" rel="noreferrer" className="mb-3 flex w-full items-center justify-center gap-2 rounded-brand bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">Open check-in desk ↗</a>
+          <a href={`/present/${event.slug}`} target="_blank" rel="noreferrer" className="mb-1 flex w-full items-center justify-center gap-2 rounded-brand border border-primary px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5">Self check-in screen (projector) ↗</a>
+          <p className="mb-3 text-xs text-muted">Show a QR that changes every 30 seconds; students scan it with their phone camera to check themselves in.</p>
           <p className="mb-2 text-xs text-muted">Or type a ticket code:</p>
           <ApiForm path="/checkin" className="space-y-2" onSuccessMessage="checkin">
             <Input name="ticketCode" required placeholder="Ticket code" className="font-mono" />
