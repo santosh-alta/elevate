@@ -104,7 +104,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-primary" aria-hidden />{brand} event: register here</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-dashed border-amber-500 bg-amber-50" aria-hidden />External: run by another organiser, register on their site <ArrowUpRight className="h-3 w-3" /></span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-dashed border-amber-500 bg-amber-500/10" aria-hidden />External: run by another organiser, register on their site <ArrowUpRight className="h-3 w-3" /></span>
           <span className="inline-flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-amber-500" />Major: big prizes or thousands taking part</span>
         </div>
 
@@ -127,7 +127,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             {dayKey(x.e.startsAt) === k && <span className="mr-1 font-normal opacity-80">{time(x.e.startsAt)}</span>}{x.e.title}
                           </Link>
                         ) : (
-                          <a href={x.e.url} target="_blank" rel="noopener noreferrer nofollow" title={`External · ${x.e.sourceLabel} · ${x.note}: ${x.e.title}`} className="flex items-center gap-1 truncate rounded-md border border-dashed border-amber-500/70 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-100 dark:bg-amber-400/10 dark:text-amber-200">
+                          <a href={x.e.url} target="_blank" rel="noopener noreferrer nofollow" title={`External · ${x.e.sourceLabel} · ${x.note}: ${x.e.title}`} className="flex items-center gap-1 truncate rounded-md border border-dashed border-amber-500/80 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-fg hover:bg-amber-500/20">
                             {x.e.major && <Trophy className="h-3 w-3 shrink-0 text-amber-500" />}
                             <span className="shrink-0 opacity-75">{x.note}:</span><span className="truncate">{x.e.title}</span>
                           </a>
@@ -152,12 +152,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           )}
           <ol className="mt-4 space-y-6">
             {agenda.map(([k, list]) => (
-              <li key={k} className="grid gap-3 sm:grid-cols-[110px_1fr]">
+              <li key={k} className="grid min-w-0 gap-3 sm:grid-cols-[110px_minmax(0,1fr)]">
                 <div className="sm:pt-3">
                   <p className={cn("font-heading text-lg font-bold", k === todayKey && "text-primary")}>{new Date(`${k}T12:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" })}</p>
                   <p className="text-xs uppercase tracking-wide text-muted">{k === todayKey ? "Today" : new Date(`${k}T12:00:00Z`).toLocaleDateString("en-IN", { weekday: "long", timeZone: "UTC" })}</p>
                 </div>
-                <ul className="space-y-2.5">
+                <ul className="min-w-0 space-y-2.5">
                   {list.map((x) => <li key={`${x.kind}-${x.e.id}`}>{x.kind === "own" ? <OwnRow e={x.e} brand={brand} day={k} /> : <ExtRow e={x.e} note={x.note} />}</li>)}
                 </ul>
               </li>
@@ -177,7 +177,7 @@ function OwnRow({ e, brand, day }: { e: OwnEvent; brand: string; day: string }) 
   const place = e.mode === "ONLINE" ? "Online" : e.venue ?? e.campuses?.map((c) => c.campus.city ?? c.campus.name).join(", ");
   const multi = dayKey(e.startsAt) !== dayKey(e.endsAt);
   return (
-    <Link href={`/events/${e.slug}`} className="card-glow group flex items-center gap-4 rounded-brand border border-border bg-card p-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lift">
+    <Link href={`/events/${e.slug}`} className="card-glow group flex min-w-0 items-center gap-3 rounded-brand border border-border bg-card p-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lift">
       <span className="h-12 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
@@ -196,14 +196,14 @@ function OwnRow({ e, brand, day }: { e: OwnEvent; brand: string; day: string }) 
 
 function ExtRow({ e, note }: { e: External; note: string }) {
   return (
-    <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="group flex items-center gap-4 rounded-brand border border-dashed border-amber-500/60 bg-card p-4 transition hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-soft">
+    <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="group flex min-w-0 items-center gap-3 rounded-brand border border-dashed border-amber-500/60 bg-card p-4 transition hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-soft">
       {e.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={e.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-xl border border-border bg-white object-contain p-1" />
       ) : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Trophy className="h-5 w-5" /></span>}
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
-          <span className="rounded-full border border-amber-500/60 bg-amber-50 px-2 py-0.5 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200">External · {e.sourceLabel}</span>
+          <span className="rounded-full border border-amber-500/70 bg-amber-500/10 px-2 py-0.5 text-fg">External · {e.sourceLabel}</span>
           {e.major && <span className="inline-flex items-center gap-1 text-amber-600"><Trophy className="h-3 w-3" />Major</span>}
           <span className="text-muted">{note}</span>
         </p>
@@ -216,7 +216,7 @@ function ExtRow({ e, note }: { e: External; note: string }) {
           {e.organizer && <span className="truncate">by {e.organizer}</span>}
         </p>
       </div>
-      <span className="hidden items-center gap-1 text-sm font-semibold text-amber-700 sm:flex">Open<ArrowUpRight className="h-4 w-4" /></span>
+      <span className="hidden items-center gap-1 text-sm font-semibold text-fg/80 sm:flex">Open<ArrowUpRight className="h-4 w-4" /></span>
     </a>
   );
 }
