@@ -8,10 +8,21 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { TableKit } from "@tiptap/extension-table";
 import {
   Bold, Code, Columns3, Heading2, Heading3, ImagePlus, Italic, Link2, Link2Off, List, ListOrdered, Minus, Quote,
-  Redo2, Rows3, SquareCode, Strikethrough, Table2, Trash2, Underline as UnderlineIcon, Undo2,
+  Loader2, Redo2, Rows3, Sparkles, SquareCode, Strikethrough, Table2, Trash2, Underline as UnderlineIcon, Undo2,
 } from "lucide-react";
+import { DOMSerializer } from "@tiptap/pm/model";
 import { cn } from "../ui/cn";
 import { MAX_UPLOAD_BYTES, uploadFile } from "./upload";
+import { AiButton, aiWrite, useAiUsage, usageLabel, type AiEventInput, type AiRequest } from "./ai-assist";
+
+/** Turns on the ✨ AI panel: write the whole text from the event's details, or rewrite the selection / everything. */
+export type EditorAi = {
+  kind: "description" | "section";
+  eventId?: string;
+  sectionTitle?: string;
+  /** Unsaved values from the surrounding form */
+  getEvent?: () => AiEventInput;
+};
 
 function isEmptyHtml(html: string) {
   return !html || /^(<p>\s*<\/p>)*$/.test(html.trim());
@@ -22,11 +33,12 @@ function isEmptyHtml(html: string) {
  * and also reports changes through `onChange`. Images upload through /uploads (via the proxy) or come from a URL.
  */
 export function RichTextEditor({
-  name, defaultValue, onChange, placeholder = "Write something…", eventId, className, minHeight = "12rem", compact,
+  name, defaultValue, onChange, placeholder = "Write something…", eventId, className, minHeight = "12rem", compact, ai,
 }: {
   name?: string; defaultValue?: string | null; onChange?: (html: string) => void; placeholder?: string;
-  eventId?: string; className?: string; minHeight?: string; compact?: boolean;
+  eventId?: string; className?: string; minHeight?: string; compact?: boolean; ai?: EditorAi;
 }) {
+  const [aiOpen, setAiOpen] = useState(false);
   const [html, setHtml] = useState(defaultValue ?? "");
   const [uploading, setUploading] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -71,7 +83,13 @@ export function RichTextEditor({
 
   return (
     <div className={cn("overflow-hidden rounded-brand border border-border bg-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20", className)}>
-      {editor ? <Toolbar editor={editor} compact={compact} uploading={uploading} onPickImage={() => fileRef.current?.click()} /> : <div className="h-10 border-b border-border bg-bg" />}
+      {editor ? (
+        <Toolbar
+          editor={editor} compact={compact} uploading={uploading} onPickImage={() => fileRef.current?.click()}
+          aiButton={ai && <AiButton label="AI" onClick={() => setAiOpen((o) => !o)} className={cn("ml-auto", aiOpen && "ring-2 ring-primary/30")} title="Write or rewrite with AI" />}
+        />
+      ) : <div className="h-10 border-b border-border bg-bg" />}
+      {editor && ai && aiOpen && <AiPanel editor={editor} ai={ai} onClose={() => setAiOpen(false)} />}
       <EditorContent editor={editor} />
       {!editor && <div className="px-4 py-3 text-sm text-muted" style={{ minHeight }}>Loading editor…</div>}
       {name && <input type="hidden" name={name} value={isEmptyHtml(html) ? "" : html} data-keep-empty />}
@@ -102,7 +120,7 @@ function Btn({ onClick, active, disabled, label, children }: { onClick: () => vo
 
 const Sep = () => <span className="mx-1 h-5 w-px bg-border" aria-hidden />;
 
-function Toolbar({ editor, compact, uploading, onPickImage }: { editor: Editor; compact?: boolean; uploading: number | null; onPickImage: () => void }) {
+function Toolbar({ editor, compact, uploading, onPickImage, aiButton }: { editor: Editor; compact?: boolean; uploading: number | null; onPickImage: () => void; aiButton?: ReactNode }) {
   const c = () => editor.chain().focus();
   const inTable = editor.isActive("table");
   const ic = "h-4 w-4";
@@ -145,6 +163,7 @@ function Toolbar({ editor, compact, uploading, onPickImage }: { editor: Editor; 
       <Sep />
       <Btn label="Undo" disabled={!editor.can().undo()} onClick={() => c().undo().run()}><Undo2 className={ic} /></Btn>
       <Btn label="Redo" disabled={!editor.can().redo()} onClick={() => c().redo().run()}><Redo2 className={ic} /></Btn>
+      {aiButton}
       {inTable && (
         <div className="flex w-full flex-wrap items-center gap-1 border-t border-border pt-1 text-[11px]">
           <span className="px-1 text-muted">Table:</span>
@@ -165,5 +184,109 @@ function TBtn({ onClick, children }: { onClick: () => void; children: ReactNode 
     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={onClick} className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card px-2 hover:bg-bg">
       {children}
     </button>
+  );
+}
+
+const REWRITES: { style: NonNullable<AiRequest["style"]>; label: string }[] = [
+  { style: "engaging", label: "More engaging" },
+  { style: "professional", label: "More professional" },
+  { style: "shorter", label: "Shorter" },
+  { style: "longer", label: "Longer" },
+  { style: "simpler", label: "Simpler" },
+  { style: "grammar", label: "Fix grammar" },
+];
+
+function selectionHtml(editor: Editor): string {
+  const frag = DOMSerializer.fromSchema(editor.schema).serializeFragment(editor.state.selection.content().content);
+  const div = document.createElement("div");
+  div.appendChild(frag);
+  return div.innerHTML;
+}
+
+/** Inline panel under the toolbar (not a popup, so the editor's rounded frame never clips it). */
+function AiPanel({ editor, ai, onClose }: { editor: Editor; ai: EditorAi; onClose: () => void }) {
+  const usage = useAiUsage();
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const hasText = !editor.isEmpty;
+  const { from, to, empty } = editor.state.selection;
+  const out = !!usage && usage.remaining <= 0;
+  const what = ai.kind === "section" ? `the ${ai.sectionTitle?.trim() || "section"}` : "the description";
+
+  async function run(key: string, req: AiRequest, apply: (html: string) => void) {
+    setBusy(key); setMsg(null);
+    try {
+      const r = await aiWrite(req);
+      if (r.html) apply(r.html);
+      setMsg({ ok: true, text: "Done. Read it through and edit anything that's off. Undo brings back your text." });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Something went wrong" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function write() {
+    if (hasText && !window.confirm(`Replace the current text with a new AI draft of ${what}?`)) return;
+    void run("write", {
+      kind: ai.kind, eventId: ai.eventId, sectionTitle: ai.sectionTitle, event: ai.getEvent?.(), notes: notes.trim() || undefined,
+    }, (html) => editor.chain().focus().setContent(html, { emitUpdate: true }).run());
+  }
+
+  function rewrite(style: NonNullable<AiRequest["style"]>) {
+    const partial = !empty;
+    const text = partial ? selectionHtml(editor) : editor.getHTML();
+    void run(style, { kind: "rewrite", style, html: true, text }, (html) => {
+      if (partial) editor.chain().focus().insertContentAt({ from, to }, html).run();
+      else editor.chain().focus().setContent(html, { emitUpdate: true }).run();
+    });
+  }
+
+  return (
+    <div className="space-y-3 border-b border-border bg-gradient-to-br from-primary/[0.06] to-accent/[0.06] px-3 py-3 text-sm">
+      <div className="flex items-start gap-2">
+        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="font-semibold">Write {what} with AI</p>
+          <textarea
+            value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1500}
+            placeholder="Optional notes: speaker, topics, prizes, what students will take away…"
+            className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button" onClick={write} disabled={!!busy || out}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:opacity-90 disabled:opacity-50"
+            >
+              {busy === "write" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {busy === "write" ? "Writing… (10–20 seconds)" : hasText ? "Write a new draft" : "Write it for me"}
+            </button>
+            <span className="text-xs text-muted">Uses the title, type, dates and campus from this event.</span>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-md px-2 py-0.5 text-xs text-muted hover:bg-fg/5" aria-label="Close AI panel">Close</button>
+      </div>
+
+      {hasText && (
+        <div className="flex flex-wrap items-center gap-1.5 pl-6">
+          <span className="mr-1 text-xs text-muted">Rewrite {empty ? "everything" : "the selected text"}:</span>
+          {REWRITES.map((r) => (
+            <button
+              key={r.style} type="button" disabled={!!busy || out}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => rewrite(r.style)}
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium transition hover:border-primary/50 hover:text-primary disabled:opacity-50"
+            >
+              {busy === r.style && <Loader2 className="h-3 w-3 animate-spin" />}{r.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pl-6 text-xs">
+        {msg ? <span className={msg.ok ? "text-emerald-700" : "text-red-600"}>{msg.text}</span> : <span className="text-muted">Tip: select a paragraph first to rewrite just that part.</span>}
+        <span className={cn("font-medium", out ? "text-red-600" : "text-muted")}>{usageLabel(usage)}</span>
+      </div>
+    </div>
   );
 }

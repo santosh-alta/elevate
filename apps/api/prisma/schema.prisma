@@ -1119,3 +1119,17 @@ model SiteFeedback {
 
   @@index([tenantId, createdAt])
 }
+
+/// AI writing help used per person per day (India date), for the daily limit
+model AiUsage {
+  userId    String
+  /// YYYY-MM-DD in India time
+  day       String
+  tenantId  String
+  count     Int      @default(0)
+  tokens    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, day])
+  @@index([tenantId, day])
+}

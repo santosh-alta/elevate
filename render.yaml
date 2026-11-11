@@ -74,3 +74,11 @@ services:
       # Optional: AI-written LinkedIn drafts
       - key: ANTHROPIC_API_KEY
         sync: false
+      # AI writing help in the event editor (Google AI Studio → API key; free tier)
+      - key: GEMINI_API_KEY
+        sync: false
+      # Optional: AI uses per person per day (default 5) and for brand admins (default 30)
+      - key: AI_DAILY_LIMIT
+        value: "5"
+      - key: AI_ADMIN_DAILY_LIMIT
+        value: "30"

@@ -56,7 +56,7 @@ export async function EventPageTab({ event }: { event: ElevateEvent }) {
           <CardHeader title="About this event" description="The main description on the public page. Headings, lists, links, images and tables are supported." />
           <CardBody>
             <ApiForm method="PATCH" path={`/events/${event.id}`} resetOnSuccess={false} successMessage="Description saved." className="space-y-3">
-              <RichTextEditor name="description" defaultValue={event.description} eventId={event.id} placeholder="What is this event about? Who should come and why?" minHeight="14rem" />
+              <RichTextEditor name="description" defaultValue={event.description} eventId={event.id} placeholder="What is this event about? Who should come and why?" minHeight="14rem" ai={{ kind: "description", eventId: event.id }} />
               <Button type="submit">Save description</Button>
             </ApiForm>
           </CardBody>

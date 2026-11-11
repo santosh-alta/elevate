@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { callApi } from "@/components/client/api";
+import { AiButton, aiWrite } from "@/components/client/ai-assist";
 import { Button, Input, Textarea, buttonClass } from "@/components/ui";
 import type { Faq } from "@/lib/types";
 
@@ -19,6 +20,22 @@ export function FaqEditor({ eventId, faqs }: { eventId: string; faqs: Faq[] }) {
   const [items, setItems] = useState<Faq[]>(faqs.length ? faqs : []);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+
+  async function writeWithAi() {
+    setAiBusy(true); setMsg(null);
+    try {
+      const r = await aiWrite({ kind: "faqs", eventId });
+      const kept = items.filter((f) => f.q.trim() && f.a.trim());
+      const fresh = (r.faqs ?? []).filter((f) => !kept.some((k) => k.q.toLowerCase() === f.q.toLowerCase()));
+      setItems([...kept, ...fresh]);
+      setMsg({ ok: true, text: `Added ${fresh.length} questions. Fill in any [placeholders], then save.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "AI could not write FAQs" });
+    } finally {
+      setAiBusy(false);
+    }
+  }
   const set = (i: number, patch: Partial<Faq>) => setItems(items.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const move = (i: number, d: number) => {
     const j = i + d;
@@ -44,6 +61,7 @@ export function FaqEditor({ eventId, faqs }: { eventId: string; faqs: Faq[] }) {
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => setItems([...items, { q: "", a: "" }])}><Plus className="h-4 w-4" />Add question</Button>
         {!items.length && <Button type="button" variant="ghost" size="sm" onClick={() => setItems(STARTERS)}>Start with common questions</Button>}
+        <AiButton label="Write FAQs with AI" busy={aiBusy} onClick={() => void writeWithAi()} />
         <div className="flex-1" />
         {msg && <span className={`text-sm ${msg.ok ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</span>}
         <Button

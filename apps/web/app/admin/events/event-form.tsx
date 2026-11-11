@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { EVENT_MODES, SUGGESTED_TAGS, type EventModules } from "@elevate/shared";
+import { useRef, useState } from "react";
+import { EVENT_MODES, EVENT_TYPE_LABELS, SUGGESTED_TAGS, type EventModules } from "@elevate/shared";
 import { callApi } from "@/components/client/api";
 import { Button, Card, CardBody, CardHeader, Field, FieldGroup, Input, Select, Textarea } from "@/components/ui";
 import { humanize, paiseToRupees, rupeesToPaise, toLocalInput } from "@/lib/format";
 import { UploadField } from "@/components/client/uploader";
 import { RichTextEditor } from "@/components/client/rich-text-editor";
+import { AiButton, aiWrite, type AiEventInput } from "@/components/client/ai-assist";
 import { EventTypePicker, effectiveModules, type TypeChoice } from "@/components/admin/event-type-picker";
 import { MAX_TAGS, TagsInput, mergeTags } from "@/components/admin/tags-input";
 import { builtInFamilies } from "@/lib/families";
@@ -65,6 +66,36 @@ export function EventForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(!!event?.feeAmount);
+  const formRef = useRef<HTMLFormElement>(null);
+  const taglineRef = useRef<HTMLInputElement>(null);
+  const [taglines, setTaglines] = useState<string[]>([]);
+  const [taglineBusy, setTaglineBusy] = useState(false);
+  const [taglineErr, setTaglineErr] = useState<string | null>(null);
+
+  /** What the AI may use: the form's current (maybe unsaved) values. */
+  function aiEvent(): AiEventInput {
+    const f = formRef.current;
+    const v = (n: string) => ((f?.elements.namedItem(n) as HTMLInputElement | null)?.value ?? "").trim() || undefined;
+    const iso = (n: string) => (v(n) ? new Date(v(n)!).toISOString() : undefined);
+    const picked = f ? Array.from(f.querySelectorAll<HTMLInputElement>('input[name="campusIds"]:checked')).map((el) => campuses.find((c) => c.id === el.value)?.name).filter((x): x is string => !!x) : [];
+    return {
+      title: v("title"), tagline: v("tagline"), type: choice.category?.name ?? EVENT_TYPE_LABELS[type], mode,
+      venue: v("venue"), startsAt: iso("startsAt"), endsAt: iso("endsAt"),
+      campuses: scope === "CAMPUS" ? picked : ["All campuses"], tags,
+    };
+  }
+
+  async function suggestTaglines() {
+    setTaglineBusy(true); setTaglineErr(null);
+    try {
+      const r = await aiWrite({ kind: "tagline", eventId: event?.id, event: aiEvent() });
+      setTaglines(r.options ?? []);
+    } catch (e) {
+      setTaglineErr(e instanceof Error ? e.message : "Could not suggest taglines");
+    } finally {
+      setTaglineBusy(false);
+    }
+  }
   const isHack = modules.teams;
   const parentOptions = parents.filter((p) => p.id !== event?.id);
   if (event?.parentEventId && !parentOptions.some((p) => p.id === event.parentEventId)) {
@@ -81,6 +112,7 @@ export function EventForm({
 
   return (
     <form
+      ref={formRef}
       className="space-y-6"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -160,10 +192,24 @@ export function EventForm({
         <CardHeader title="Basics" />
         <CardBody className="grid gap-4 sm:grid-cols-2">
           <Field label="Title" className="sm:col-span-2"><Input name="title" required minLength={3} defaultValue={event?.title} placeholder="e.g. Build for Bharat Hackathon 2026" /></Field>
-          <Field label="Tagline" className="sm:col-span-2"><Input name="tagline" defaultValue={event?.tagline ?? ""} placeholder="One line that sells it" /></Field>
+          <div className="space-y-2 sm:col-span-2">
+            <Field label="Tagline"><Input ref={taglineRef} name="tagline" defaultValue={event?.tagline ?? ""} placeholder="One line that sells it" /></Field>
+            <div className="flex flex-wrap items-center gap-2">
+              <AiButton label={taglines.length ? "More ideas" : "Suggest taglines"} busy={taglineBusy} onClick={() => void suggestTaglines()} />
+              {taglines.map((t) => (
+                <button
+                  key={t} type="button"
+                  onClick={() => { if (taglineRef.current) taglineRef.current.value = t; setTaglines([]); }}
+                  className="rounded-full border border-border bg-card px-3 py-1 text-xs transition hover:border-primary/50 hover:text-primary"
+                  title="Use this tagline"
+                >{t}</button>
+              ))}
+              {taglineErr && <span className="text-xs text-red-600">{taglineErr}</span>}
+            </div>
+          </div>
           <FieldGroup label="Cover image" className="sm:col-span-2" hint="Wide image, 1600×600 or larger"><UploadField name="coverImageUrl" defaultValue={event?.coverImageUrl} fields={{ eventId: event?.id }} /></FieldGroup>
           <FieldGroup label="Description" className="sm:col-span-2" hint="Shown in the About section of the public page. Add rules, prizes and timeline as page sections in the Event page tab.">
-            <RichTextEditor name="description" defaultValue={event?.description} eventId={event?.id} placeholder="What is this event about? Who is it for?" />
+            <RichTextEditor name="description" defaultValue={event?.description} eventId={event?.id} placeholder="What is this event about? Who is it for?" ai={{ kind: "description", eventId: event?.id, getEvent: aiEvent }} />
           </FieldGroup>
           <div className="sm:col-span-2">
             <TagsInput

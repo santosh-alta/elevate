@@ -3,6 +3,9 @@ import type { NextRequest } from "next/server";
 import { API_BASE, TOKEN_COOKIE } from "@/lib/config";
 import { tenantHeaders } from "@/lib/tenant";
 
+/** AI writing calls can take 10–30s (more if the backup model is needed). */
+export const maxDuration = 90;
+
 /** Same-origin proxy so the browser never talks to the API directly and the JWT stays httpOnly. */
 async function handler(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
@@ -30,7 +33,7 @@ async function handler(req: NextRequest, ctx: { params: Promise<{ path: string[]
     }
     return new Response(res.body, { status: res.status, headers: out });
   } catch {
-    return Response.json({ error: "BadGateway", message: "Elevate API is unreachable" }, { status: 502 });
+    return Response.json({ error: "BadGateway", message: "The server is unreachable. Please try again." }, { status: 502 });
   }
 }
 

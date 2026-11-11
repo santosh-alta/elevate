@@ -62,7 +62,7 @@ export function PageSectionsEditor({ eventId, eventType, initial }: { eventId: s
           </div>
           {open === s.id && (
             <div className="border-t border-border p-2">
-              <RichTextEditor key={s.id} defaultValue={s.html} onChange={(html) => set(s.id, { html })} eventId={eventId} placeholder={`Write the ${s.title || "section"}…`} minHeight="9rem" />
+              <RichTextEditor key={s.id} defaultValue={s.html} onChange={(html) => set(s.id, { html })} eventId={eventId} placeholder={`Write the ${s.title || "section"}…`} minHeight="9rem" ai={{ kind: "section", eventId, sectionTitle: s.title }} />
             </div>
           )}
         </div>
