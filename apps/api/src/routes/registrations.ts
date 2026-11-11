@@ -409,7 +409,9 @@ export function registrationRoutes(app: FastifyInstance) {
     });
     await logActivity(reg.eventId, auth.user.id, "checkin", { userId: reg.userId, name: reg.user.name });
     const checkedIn = await prisma.registration.count({ where: { eventId: reg.eventId, status: "CHECKED_IN" } });
-    return { registration: { ...updated, event: eventRef }, user: reg.user, alreadyCheckedIn: false, warning, checkedInCount: checkedIn };
+    const member = await prisma.teamMember.findFirst({ where: { userId: reg.userId, team: { eventId: reg.eventId } }, include: { team: { select: { id: true, name: true, _count: { select: { members: true } } } } } });
+    const team = member ? { id: member.team.id, name: member.team.name, members: member.team._count.members } : null;
+    return { registration: { ...updated, event: eventRef }, user: reg.user, alreadyCheckedIn: false, warning, checkedInCount: checkedIn, team };
   });
 
   /** Lightweight check-in stats for the volunteer screen. */

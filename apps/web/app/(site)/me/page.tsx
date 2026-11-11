@@ -132,7 +132,12 @@ export default async function MePage() {
                   <Link href={`/events/${r.event!.slug}`} className="font-semibold hover:text-primary">{r.event!.title}</Link>
                   <p className="text-xs text-muted">{fmtRange(r.event!.startsAt, r.event!.endsAt)}</p>
                   <StatusBadge status={r.status} />
-                  <p className="font-mono text-[11px] text-muted">{r.ticketCode}</p>
+                  <p className="font-mono text-xs font-semibold tracking-wider text-muted">Ticket no. {r.ticketCode.slice(-8).toUpperCase()}</p>
+                  {r.status !== "PENDING_PAYMENT" && (
+                    <a href={`/api/proxy/registrations/${r.ticketCode}/ticket.pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                      <Download className="h-3.5 w-3.5" />Download ticket
+                    </a>
+                  )}
                   {r.status === "PENDING_PAYMENT" && <Link href={`/events/${r.event!.slug}/register`} className="block text-xs font-medium text-primary hover:underline">Complete payment →</Link>}
                 </div>
               </Card>
