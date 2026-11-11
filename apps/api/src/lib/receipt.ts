@@ -44,6 +44,8 @@ export async function renderReceiptPdf(p: PaymentForReceipt): Promise<Uint8Array
   const doc = await PDFDocument.create();
   doc.setTitle(`Receipt ${p.receiptNo}`);
   doc.setAuthor(tenant.name);
+  doc.setCreator(tenant.name);
+  doc.setProducer(tenant.name);
   const page = doc.addPage([595.28, 841.89]);
   const { width, height } = page.getSize();
   const fonts = await embedFonts(doc);
@@ -144,6 +146,5 @@ export async function renderReceiptPdf(p: PaymentForReceipt): Promise<Uint8Array
   const contact = [settings.website?.replace(/^https?:\/\//, "").replace(/\/$/, ""), settings.supportEmail, settings.phone].filter(Boolean).join("   |   ");
   if (contact) text(contact, left, 84, 9, fonts.sansSemi, ink);
   text(`This is a computer-generated receipt from ${tenant.name}. No signature is required.`, left, contact ? 68 : 84, 8.5, fonts.sans, muted);
-  text("Powered by Elevate", left, contact ? 54 : 70, 7.5, fonts.sans, muted);
   return doc.save();
 }

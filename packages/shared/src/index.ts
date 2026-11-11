@@ -453,6 +453,12 @@ export const createEventSchema = z.object({
   parentEventId: z.string().optional(),
   categoryId: z.string().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(15).optional(),
+  /** Audience: enrolment years; empty = all */
+  audienceBatches: z.array(z.number().int().min(1990).max(2100)).max(20).optional(),
+  /** Audience: programs; empty = all */
+  audiencePrograms: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  notifyOnAnnounce: z.boolean().optional(),
+  remindersEnabled: z.boolean().optional(),
   pageSections: z.array(z.object({ id: z.string(), title: z.string(), html: z.string(), icon: z.string().optional() })).optional(),
   feeAmount: z.number().int().min(0).optional(),
   currency: z.string().length(3).default("INR"),

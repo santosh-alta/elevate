@@ -60,7 +60,7 @@ export function buildIcs(e: Event, url: string, brandName: string): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    `PRODID:-//Elevate//${icsEscape(brandName)}//EN`,
+    `PRODID:-//${icsEscape(brandName)}//Events//EN`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

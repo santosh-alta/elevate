@@ -1,3 +1,5 @@
+import { announceDueEvents } from "./lib/audience";
+import { syncStudentsIfDue } from "./lib/studentSync";
 import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./plugins/prisma";
 import { sendEmail } from "./lib/mailer";
@@ -64,14 +66,35 @@ export async function sendDueNotifications(log?: FastifyBaseLogger): Promise<num
 
 const UPCOMING = ["ANNOUNCED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "LIVE"] as const;
 
+/** Reminder times before an event, in hours (brand setting; default 24 h and 1 h). */
+export function reminderHoursOf(settings: unknown): number[] {
+  const h = ((settings ?? {}) as { notifications?: { reminderHours?: unknown } }).notifications?.reminderHours;
+  const list = Array.isArray(h) ? h.map(Number).filter((x) => Number.isFinite(x) && x > 0 && x <= 24 * 14) : [24, 1];
+  return [...new Set(list)].sort((a, b) => b - a);
+}
+
+function reminderWording(hours: number) {
+  if (hours >= 48) return { subject: `In ${Math.round(hours / 24)} days`, when: `in ${Math.round(hours / 24)} days` };
+  if (hours >= 24) return { subject: "Tomorrow", when: "in less than 24 hours" };
+  if (hours > 1) return { subject: `In ${hours} hours`, when: `in about ${hours} hours` };
+  return { subject: "Starting soon", when: "within the hour" };
+}
+
 export async function scheduleReminders(now = new Date()): Promise<void> {
-  // Event reminders: 24 h before (if more than 1 h away) and 1 h before.
+  // Event reminders at the brand's chosen times before the start (default 24 h and 1 h).
+  const tenants = new Map((await prisma.tenant.findMany({ select: { id: true, settings: true } })).map((t) => [t.id, reminderHoursOf(t.settings)]));
+  const longest = Math.max(24, ...[...tenants.values()].flat());
   const events = await prisma.event.findMany({
-    where: { status: { in: [...UPCOMING] }, startsAt: { gt: now, lte: new Date(now.getTime() + 24 * HOUR) } },
+    where: { status: { in: [...UPCOMING] }, remindersEnabled: true, startsAt: { gt: now, lte: new Date(now.getTime() + longest * HOUR) } },
   });
   for (const e of events) {
     const lead = e.startsAt.getTime() - now.getTime();
-    const kind = lead <= HOUR ? "1h" : "24h";
+    const hours = tenants.get(e.tenantId) ?? [24, 1];
+    // The closest reminder time that has been reached (e.g. 20 h before → the 24 h reminder).
+    const due = [...hours].sort((a, b) => a - b).find((h) => lead <= h * HOUR);
+    if (due == null) continue;
+    const kind = `${due}h`;
+    const w = reminderWording(due);
     const regs = await prisma.registration.findMany({
       where: { eventId: e.id, status: { in: ["REGISTERED", "APPROVED"] } },
       include: { user: { select: { id: true, name: true } } },
@@ -83,12 +106,17 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
       await enqueue({
         tenantId: e.tenantId, eventId: e.id, userId: r.user.id, channels: ["EMAIL", "IN_APP"],
         template: `event.reminder.${kind}`,
-        subject: kind === "1h" ? `Starting soon: ${e.title}` : `Tomorrow: ${e.title}`,
-        body: `Hi ${r.user.name},\n\nA reminder that ${e.title} starts ${kind === "1h" ? "within the hour" : "in less than 24 hours"} — ${fmtDate(e.startsAt)}.\n${place}\n\nKeep your ticket QR code ready for check-in.`,
+        subject: `${w.subject}: ${e.title}`,
+        body: `Hi ${r.user.name},\n\nA reminder that ${e.title} starts ${w.when}: ${fmtDate(e.startsAt)}.\n${place}\n\nKeep your ticket QR code ready for check-in.`,
         ctaLabel: "View my ticket", ctaUrl: links.me, dedupKey: `event.reminder.${kind}:${r.id}`,
       });
     }
   }
+
+  // "New event, register now" emails to each newly announced event's audience.
+  await announceDueEvents(now);
+  // Student list refresh from the student database (monthly).
+  await syncStudentsIfDue();
 
   // Guest reminder: 2 days before, guests who were invited but haven't filled in their details.
   const guests = await prisma.eventGuest.findMany({

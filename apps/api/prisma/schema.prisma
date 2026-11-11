@@ -26,6 +26,7 @@ model Tenant {
   domains         TenantDomain[]
   campuses        Campus[]
   siteFeedback    SiteFeedback[]
+  students        Student[]
   memberships     Membership[]
   events          Event[]
   certTemplates   CertificateTemplate[]
@@ -55,6 +56,8 @@ model Campus {
   tenantId  String
   name      String
   code      String
+  /// Campus codes in the student database that belong to this campus (e.g. SAGE and SAGESELECT)
+  externalCodes String[] @default([])
   city      String?
   address   String?
   /// Main campus photo for the campus page and cards
@@ -66,6 +69,7 @@ model Campus {
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships Membership[]
   events      EventCampus[]
+  students    Student[]
 
   @@unique([tenantId, code])
 }
@@ -266,6 +270,16 @@ model Event {
   categoryId           String?
   /// Free tags for filtering and reports, e.g. ["AI", "Placement"]
   tags                 String[]    @default([])
+  /// Audience: enrolment years (batches) this event is for; empty = all batches
+  audienceBatches      Int[]       @default([])
+  /// Audience: programs (e.g. BTECH); empty = all programs
+  audiencePrograms     String[]    @default([])
+  /// Email the audience "new event, register now" when the event is announced
+  notifyOnAnnounce     Boolean     @default(true)
+  /// Send reminders before the event to registered people
+  remindersEnabled     Boolean     @default(true)
+  /// When the "new event" email went out (so it's sent once)
+  announcedNotifiedAt  DateTime?
   /// Extra page sections written in the rich-text editor: [{ id, title, html, icon? }] (rules, prizes, timeline, eligibility...)
   pageSections         Json        @default("[]")
   /// Registration fee in the smallest currency unit (paise). 0 or null = free
@@ -1134,4 +1148,38 @@ model AiUsage {
 
   @@id([userId, day, kind])
   @@index([tenantId, day])
+}
+
+/// Students from the institute's student database (synced monthly), including people who never signed up here.
+/// Used to email event invitations to the right campuses, batches and programs.
+model Student {
+  id           String    @id @default(cuid())
+  tenantId     String
+  /// Where the row came from, e.g. "redash:9", and its id there
+  source       String
+  externalId   String
+  name         String
+  email        String?
+  phone        String?
+  /// Campus code and name in the student database
+  campusCode   String?
+  campusName   String?
+  /// Our campus, when the code is mapped
+  campusId     String?
+  program      String?
+  /// Enrolment (admission) year, e.g. 2026
+  batch        Int?
+  passingYear  Int?
+  active       Boolean   @default(true)
+  /// Linked when someone signs in with this email
+  userId       String?
+  syncedAt     DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, source, externalId])
+  @@index([tenantId, email])
+  @@index([tenantId, active, campusId, batch])
 }

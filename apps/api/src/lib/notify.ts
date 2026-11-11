@@ -194,7 +194,7 @@ ${button}
 <tr><td class="px" align="center" valign="middle" height="200" bgcolor="${c.heroBg}" style="height:200px;background:${c.heroBg};color:${c.heroFg};padding:36px 48px;font-family:${font};text-align:center">
 ${footerRows}
 </td></tr>
-<tr><td align="center" style="padding:16px 0 0;font-family:${font};font-size:11px;color:${c.muted}">Powered by Elevate</td></tr>
+<tr><td align="center" style="padding:16px 0 0;font-family:${font};font-size:11px;color:${c.muted}">${esc(tenant.name)} · You're receiving this as a student or event participant.</td></tr>
 </table>
 </td></tr></table>
 </body></html>`;
@@ -203,7 +203,7 @@ ${footerRows}
 export function fromAddress(tenant: Tenant): string {
   const settings = settingsOf(tenant);
   if (settings.emailFrom) return settings.emailFrom;
-  const fallback = process.env.MAIL_FROM ?? "Elevate <no-reply@elevate.app>";
+  const fallback = process.env.MAIL_FROM ?? "Events <no-reply@localhost>";
   const addr = /<([^>]+)>/.exec(fallback)?.[1] ?? fallback;
   return `${tenant.name.replace(/[<>"]/g, "")} <${addr}>`;
 }

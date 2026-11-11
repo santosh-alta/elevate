@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { EVENT_MODES, EVENT_TYPE_LABELS, SUGGESTED_TAGS, type EventModules } from "@elevate/shared";
 import { callApi } from "@/components/client/api";
 import { Button, Card, CardBody, CardHeader, Field, FieldGroup, Input, Select, Textarea } from "@/components/ui";
@@ -9,6 +9,7 @@ import { humanize, paiseToRupees, rupeesToPaise, toLocalInput } from "@/lib/form
 import { UploadField } from "@/components/client/uploader";
 import { RichTextEditor } from "@/components/client/rich-text-editor";
 import { AiButton, aiWrite, type AiEventInput } from "@/components/client/ai-assist";
+import { AudiencePicker } from "@/components/admin/audience-picker";
 import { EventTypePicker, effectiveModules, type TypeChoice } from "@/components/admin/event-type-picker";
 import { MAX_TAGS, TagsInput, mergeTags } from "@/components/admin/tags-input";
 import { builtInFamilies } from "@/lib/families";
@@ -63,6 +64,16 @@ export function EventForm({
   const [mode, setMode] = useState(event?.mode ?? "OFFLINE");
   const [modules, setModules] = useState<EventModules>({ ...effectiveModules(event?.type ?? "HACKATHON", event ? null : initialCategory), ...(event?.modules ?? {}) });
   const initialCampuses = (event?.campuses ?? []).map((c) => ("campus" in c ? c.campus.id : c.id));
+  const [campusSel, setCampusSel] = useState<string[]>(initialCampuses);
+  const [aud, setAud] = useState({
+    batches: event?.audienceBatches ?? [], programs: event?.audiencePrograms ?? [],
+    notify: event?.notifyOnAnnounce ?? true, reminders: event?.remindersEnabled ?? true,
+  });
+  // New events: "email students" starts from the brand's default (Settings → Students & notifications).
+  useEffect(() => {
+    if (event) return;
+    callApi<{ announceByDefault: boolean }>("GET", "/notification-settings").then((s) => setAud((a) => ({ ...a, notify: s.announceByDefault }))).catch(() => {});
+  }, [event]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paid, setPaid] = useState(!!event?.feeAmount);
@@ -133,6 +144,7 @@ export function EventForm({
           capacity: s("capacity") ? Number(s("capacity")) : undefined,
           requiresApproval: fd.get("requiresApproval") === "on",
           modules,
+          audienceBatches: aud.batches, audiencePrograms: aud.programs, notifyOnAnnounce: aud.notify, remindersEnabled: aud.reminders,
         };
         // Clearing optional values: only send null when there was a value before (create never needs it).
         const clear = (k: keyof ElevateEvent) => (event && event[k] != null ? null : undefined);
@@ -250,7 +262,7 @@ export function EventForm({
               <div className="flex flex-wrap gap-2">
                 {campuses.map((c) => (
                   <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                    <input type="checkbox" name="campusIds" value={c.id} defaultChecked={initialCampuses.includes(c.id)} className="accent-[rgb(var(--primary))]" />
+                    <input type="checkbox" name="campusIds" value={c.id} checked={campusSel.includes(c.id)} onChange={(e) => setCampusSel(e.target.checked ? [...campusSel, c.id] : campusSel.filter((x) => x !== c.id))} className="accent-[rgb(var(--primary))]" />
                     {c.name}
                   </label>
                 ))}
@@ -259,6 +271,18 @@ export function EventForm({
           )}
           {mode !== "ONLINE" && <Field label="Venue"><Input name="venue" defaultValue={event?.venue ?? ""} placeholder="Auditorium, Block A" /></Field>}
           {mode !== "OFFLINE" && <Field label="Meeting link"><Input name="meetingUrl" type="url" defaultValue={event?.meetingUrl ?? ""} placeholder="https://meet.google.com/…" /></Field>}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader title="Audience and emails" description="Who this event is for, on top of the campus above. By default: all batches and programs." />
+        <CardBody>
+          <AudiencePicker
+            campusIds={scope === "CAMPUS" ? campusSel : null}
+            batches={aud.batches} programs={aud.programs} notify={aud.notify} reminders={aud.reminders}
+            announced={!!event?.announcedNotifiedAt}
+            onChange={(p) => setAud((a) => ({ ...a, ...p }))}
+          />
         </CardBody>
       </Card>
 

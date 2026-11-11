@@ -31,6 +31,7 @@ import { aiRoutes } from "./routes/ai";
 import { chatRoutes } from "./routes/chat";
 import { checkinRoutes } from "./routes/checkin";
 import { selfCheckinRoutes } from "./routes/selfCheckin";
+import { studentRoutes } from "./routes/students";
 import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
 export async function buildApp() {
@@ -119,6 +120,7 @@ export async function buildApp() {
       chatRoutes(v1);
       checkinRoutes(v1);
       selfCheckinRoutes(v1);
+      studentRoutes(v1);
       devRoutes(v1); // non-production only
     },
     { prefix: "/v1" },

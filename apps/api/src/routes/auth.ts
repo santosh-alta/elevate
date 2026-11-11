@@ -207,7 +207,7 @@ export function authRoutes(app: FastifyInstance) {
     }
     const gh = (path: string) =>
       fetch(`https://api.github.com${path}`, {
-        headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "Elevate" },
+        headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "events-site" },
         signal: AbortSignal.timeout(10_000),
       }).then((r) => (r.ok ? r.json() : null));
     const [profile, emails] = (await Promise.all([gh("/user"), gh("/user/emails")])) as [
