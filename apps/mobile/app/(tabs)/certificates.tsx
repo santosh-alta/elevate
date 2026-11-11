@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import React from "react";
 import { Linking, Text, View } from "react-native";
-import { Api, CERTIFICATE_TYPE_LABELS, Certificate } from "../../src/api";
+import { Api, CERTIFICATE_TYPE_LABELS, Certificate, brand } from "../../src/api";
 import { useSession } from "../../src/session";
 import { withAlpha } from "../../src/theme";
 import { Badge, Button, Card, EmptyState, ErrorBanner, Loading, Muted, Row, Screen, Title, formatDate, humanize, useFocusData } from "../../src/ui";
@@ -79,7 +79,7 @@ export default function CertificatesScreen() {
                   icon="logo-linkedin"
                   size="sm"
                   style={{ flex: 1 }}
-                  onPress={() => Linking.openURL(addToLinkedInUrl(c, tenant?.name ?? "Elevate", pdf))}
+                  onPress={() => Linking.openURL(addToLinkedInUrl(c, tenant?.name ?? brand.appName, pdf))}
                 />
               </Row>
             </Card>

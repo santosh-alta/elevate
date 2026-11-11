@@ -73,10 +73,6 @@ export default function ProfileScreen() {
             ])
           }
         />
-        <Row style={{ justifyContent: "center", marginTop: 16 }}>
-          <Ionicons name="sparkles-outline" size={14} color={theme.colors.muted} />
-          <Muted style={{ fontSize: 12 }}>Powered by Elevate</Muted>
-        </Row>
       </View>
     </Screen>
   );

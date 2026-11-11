@@ -21,7 +21,7 @@ export interface BrandConfig {
 
 export const brand: BrandConfig = (Constants.expoConfig?.extra?.brand as BrandConfig) ?? {
   slug: "altaschool",
-  appName: "Elevate",
+  appName: "Events",
   bundleId: "app.elevate",
   scheme: "elevate",
   iconColor: "#4f46e5",
