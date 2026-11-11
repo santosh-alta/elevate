@@ -4,7 +4,7 @@ import { z } from "zod";
 import { EVENT_TYPE_LABELS } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { isPlatformAdmin, requireStaff, roleOf } from "../lib/permissions";
+import { requireBrandAdmin } from "../lib/permissions";
 
 
 /**
@@ -17,11 +17,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 export function insightRoutes(app: FastifyInstance) {
   app.get("/insights", async (req) => {
-    const auth = requireStaff(req);
+    // Admins and the super admin only: feedback and comparisons are internal.
+    requireBrandAdmin(req);
     const tenant = requireTenant(req);
     const q = z.object({ months: z.coerce.number().int().min(1).max(36).default(12), campusId: z.string().optional() }).parse(req.query);
-    // Campus admins only see their campus (and central events).
-    const campusId = roleOf(req) === "CAMPUS_ADMIN" && !isPlatformAdmin(req) ? auth.membership?.campusId ?? q.campusId : q.campusId;
+    const campusId = q.campusId;
 
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - (q.months - 1), 1);
@@ -34,8 +34,9 @@ export function insightRoutes(app: FastifyInstance) {
       prisma.event.findMany({
         where: { ...base, startsAt: { gte: from } },
         select: {
-          id: true, slug: true, title: true, type: true, scope: true, startsAt: true, config: true,
-          category: { select: { name: true } }, campuses: { select: { campusId: true } },
+          id: true, slug: true, title: true, type: true, scope: true, mode: true, startsAt: true, endsAt: true, config: true, tags: true,
+          coverImageUrl: true, outcome: true,
+          category: { select: { id: true, name: true, icon: true } }, campuses: { select: { campusId: true } },
         },
         orderBy: { startsAt: "asc" },
       }),
@@ -48,7 +49,10 @@ export function insightRoutes(app: FastifyInstance) {
       prisma.registration.groupBy({ by: ["eventId"], where: { eventId: { in: ids }, status: { in: [...ACTIVE] } }, _count: true }),
       prisma.registration.groupBy({ by: ["eventId"], where: { eventId: { in: prevIds }, status: { in: [...ACTIVE] } }, _count: true }),
       prisma.registration.groupBy({ by: ["eventId"], where: { eventId: { in: ids }, status: "CHECKED_IN" }, _count: true }),
-      prisma.feedback.findMany({ where: { eventId: { in: ids } }, select: { eventId: true, rating: true, nps: true, aspects: true } }),
+      prisma.feedback.findMany({
+        where: { eventId: { in: ids } }, orderBy: { createdAt: "desc" },
+        select: { eventId: true, rating: true, nps: true, aspects: true, liked: true, improve: true, comment: true },
+      }),
       prisma.registration.findMany({ where: { eventId: { in: ids }, status: { in: [...ACTIVE] } }, select: { userId: true } }),
       prisma.student.groupBy({ by: ["campusId"], where: { tenantId: tenant.id, active: true, campusId: { not: null } }, _count: true }),
     ]);
@@ -144,15 +148,40 @@ export function insightRoutes(app: FastifyInstance) {
     const byType = types.map((t) => {
       const rs = rows.filter((r) => r.type === t);
       const fb = rs.flatMap((r) => fbBy.get(r.id) ?? []);
-      return { type: t, events: rs.length, participants: sum(rs.map((r) => r.participants)), avgParticipants: Math.round(sum(rs.map((r) => r.participants)) / rs.length), rating: fb.length ? round1(avg(fb.map((f) => f.rating))!) : null };
+      // Average over events that have a turnout (older events without numbers would drag it down).
+      const counted = rs.filter((r) => r.participants > 0);
+      return {
+        type: t, events: rs.length, participants: sum(rs.map((r) => r.participants)), counted: counted.length,
+        avgParticipants: counted.length ? Math.round(sum(counted.map((r) => r.participants)) / counted.length) : 0,
+        rating: fb.length ? round1(avg(fb.map((f) => f.rating))!) : null,
+      };
     }).sort((a, b) => b.participants - a.participants);
 
     const campusName = new Map(campuses.map((c) => [c.id, c.name]));
+    // Compare with the type's average only when at least two events of that type have numbers.
+    const typeAvg = new Map(byType.filter((t) => t.counted >= 2).map((t) => [t.type, t.avgParticipants]));
+    const meta = new Map(events.map((e) => [e.id, e]));
+    const clip = (s: string | null) => (s ? s.replace(/\s+/g, " ").trim().slice(0, 180) : null);
     const eventsOut = rows.map((r) => ({
       id: r.id, slug: r.slug, title: r.title, type: r.type, month: r.month,
       campus: r.campusIds.length ? r.campusIds.map((c) => campusName.get(c) ?? "").join(", ") : "All campuses (HQ)",
       participants: r.participants, attendanceRate: r.registered && r.attended ? round1((r.attended / r.registered) * 100) : null,
       rating: r.rating != null ? round1(r.rating) : null, responses: r.responses, nps: r.nps != null ? round1(r.nps) : null,
+      aspects: r.aspects,
+      // Scorecard: how it compares with the average event of its type, and what people said
+      vsType: typeAvg.get(r.type) && r.participants ? Math.round(((r.participants - typeAvg.get(r.type)!) / typeAvg.get(r.type)!) * 100) : null,
+      ...(() => {
+        const e = meta.get(r.id)!;
+        const fb = fbBy.get(r.id) ?? [];
+        const ai = ((e.outcome ?? {}) as { aiSummary?: { verdict?: string; headline?: string; concerns?: string[]; recommendations?: string[]; highlights?: string[] } }).aiSummary;
+        return {
+          startsAt: e.startsAt, endsAt: e.endsAt, mode: e.mode, tags: e.tags, coverImageUrl: e.coverImageUrl, category: e.category, eventType: e.type,
+          verdict: ai?.verdict ?? null, headline: ai?.headline ?? null,
+          wentWell: (ai?.highlights ?? []).slice(0, 2), toImprove: (ai?.concerns ?? []).slice(0, 2), nextTime: (ai?.recommendations ?? []).slice(0, 2),
+          liked: fb.map((f) => clip(f.liked ?? (f.rating >= 4 ? f.comment : null))).filter(Boolean).slice(0, 2),
+          improve: fb.map((f) => clip(f.improve ?? (f.rating <= 3 ? f.comment : null))).filter(Boolean).slice(0, 2),
+        };
+      })(),
     })).sort((a, b) => b.participants - a.participants);
 
     return { from, to: now, months: q.months, campusId: campusId ?? null, totals, trend, byCampus, byType, events: eventsOut, campuses: campuses.map((c) => ({ id: c.id, name: c.name })) };

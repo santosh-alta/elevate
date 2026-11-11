@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Star } from "lucide-react";
 import { apiGet } from "@/lib/api";
-import { requireStaffPage } from "@/lib/auth";
+import { isBrandAdmin, requireStaffPage } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/format";
 import { Card, EmptyState } from "@/components/ui";
 
@@ -13,7 +13,8 @@ const PARTS: [keyof Fb, string][] = [["liked", "ğŸ‘ Liked"], ["confusing", "ğŸ¤
 
 /** Feedback about the site from students and visitors. */
 export default async function FeedbackAdmin() {
-  await requireStaffPage();
+  const me = await requireStaffPage();
+  if (!isBrandAdmin(me)) return <p className="rounded-xl border border-border p-6 text-sm text-muted">Site feedback is visible to admins and the super admin.</p>;
   const data = await apiGet<{ items: Fb[]; count: number; averageRating: number | null }>("/admin/feedback");
   const items = data?.items ?? [];
   return (

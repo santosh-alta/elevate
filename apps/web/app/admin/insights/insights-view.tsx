@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Lightbulb } from "lucide-react";
 import { BarList, ColumnChart, HeatTable, LineChart } from "@/components/admin/charts";
 import { Card, CardBody, CardHeader } from "@/components/ui";
+import { Scorecards, type Scorecard } from "./scorecards";
 import { cn } from "@/components/ui/cn";
 
 type CampusRow = {
@@ -17,7 +18,7 @@ export type Insights = {
   trend: { month: string; events: number; participants: number; rating: number | null }[];
   byCampus: CampusRow[];
   byType: { type: string; events: number; participants: number; avgParticipants: number; rating: number | null }[];
-  events: { id: string; slug: string; title: string; type: string; month: string; campus: string; participants: number; attendanceRate: number | null; rating: number | null; responses: number; nps: number | null }[];
+  events: Scorecard[];
   campuses: { id: string; name: string }[];
 };
 
@@ -52,6 +53,7 @@ function Kpi({ label, value, hint, change }: { label: string; value: string; hin
 }
 
 export function InsightsView({ data }: { data: Insights }) {
+  const [view, setView] = useState<"overview" | "cards">("overview");
   const [metric, setMetric] = useState<(typeof METRICS)[number]["key"]>("participants");
   const [sort, setSort] = useState<"participants" | "rating" | "attendanceRate" | "month">("participants");
   const t = data.totals;
@@ -84,8 +86,19 @@ export function InsightsView({ data }: { data: Insights }) {
     sort === "month" ? b.month.localeCompare(a.month) : ((b[sort] as number | null) ?? -1) - ((a[sort] as number | null) ?? -1));
   const m = METRICS.find((x) => x.key === metric)!;
 
+  const tabs = (
+    <div className="inline-flex rounded-brand border border-border bg-bg p-1 text-sm" role="tablist">
+      {([["overview", "Overview & trends"], ["cards", `Event scorecards (${data.events.length})`]] as const).map(([k, l]) => (
+        <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)}
+          className={cn("rounded-[calc(var(--radius)-4px)] px-4 py-1.5 font-semibold", view === k ? "bg-card text-primary shadow-sm" : "text-muted")}>{l}</button>
+      ))}
+    </div>
+  );
+  if (view === "cards") return <div className="space-y-5">{tabs}<Scorecards events={data.events} /></div>;
+
   return (
     <div className="space-y-6">
+      {tabs}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Events" value={String(t.events)} change={change(t.events, t.prevEvents)} hint={t.prevEvents ? "vs previous period" : undefined} />
         <Kpi label="Participants" value={t.participants.toLocaleString("en-IN")} change={change(t.participants, t.prevParticipants)} hint={t.prevParticipants ? "vs previous period" : undefined} />

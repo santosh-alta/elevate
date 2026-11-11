@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireStaffPage } from "@/lib/auth";
+import { isBrandAdmin, requireStaffPage } from "@/lib/auth";
 import { apiGet } from "@/lib/api";
 import { Card, CardBody, CardHeader, EmptyState } from "@/components/ui";
 import { InsightsView, type Insights } from "./insights-view";
@@ -9,7 +9,10 @@ export const metadata: Metadata = { title: "Insights" };
 
 /** How events performed: trends over time, and comparisons across campuses and event types. */
 export default async function InsightsPage({ searchParams }: { searchParams: Promise<{ months?: string; campus?: string }> }) {
-  await requireStaffPage();
+  const me = await requireStaffPage();
+  if (!isBrandAdmin(me)) {
+    return <Card><CardHeader title="Insights" /><CardBody><EmptyState title="Admins only" description="Insights and feedback comparisons are visible to admins and the super admin." /></CardBody></Card>;
+  }
   const { months = "12", campus = "" } = await searchParams;
   const data = await apiGet<Insights>(`/insights?months=${encodeURIComponent(months)}${campus ? `&campusId=${encodeURIComponent(campus)}` : ""}`);
   return (

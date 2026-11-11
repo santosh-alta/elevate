@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { requireStaff } from "../lib/permissions";
+import { requireBrandAdmin } from "../lib/permissions";
 import { badRequest } from "../lib/errors";
 
 const text = z.string().trim().max(3000).optional().transform((v) => v || null);
@@ -35,7 +35,7 @@ export function feedbackRoutes(app: FastifyInstance) {
   });
 
   app.get("/admin/feedback", async (req) => {
-    requireStaff(req);
+    requireBrandAdmin(req);
     const tenant = requireTenant(req);
     const items = await prisma.siteFeedback.findMany({ where: { tenantId: tenant.id }, orderBy: { createdAt: "desc" }, take: 500 });
     const rated = items.filter((f) => f.rating);
