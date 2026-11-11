@@ -107,24 +107,22 @@ export function ExternalPreview({ items, brand }: { items: ExternalItem[]; brand
               )}
             </>
           )}
+          {e.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={e.imageUrl} alt="" referrerPolicy="no-referrer" className="absolute bottom-4 left-4 h-16 w-16 rounded-2xl border-2 border-white bg-white object-contain p-1 shadow-lift" />
+          ) : <span className="absolute bottom-4 left-4 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-white bg-amber-50 text-amber-600 shadow-lift"><Trophy className="h-7 w-7" /></span>}
           <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" aria-hidden />
           <button ref={closeRef} type="button" onClick={() => open(null)} aria-label="Close" className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"><X className="h-5 w-5" /></button>
           <span className="absolute left-4 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900 shadow-soft">External · {e.sourceLabel}</span>
         </div>
 
         <div className="overflow-y-auto px-5 pb-5 sm:px-6">
-          <div className="-mt-9 flex items-end gap-3">
-            {e.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={e.imageUrl} alt="" referrerPolicy="no-referrer" className="relative h-[72px] w-[72px] shrink-0 rounded-2xl border-4 border-card bg-white object-contain p-1 shadow-soft" />
-            ) : <span className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-2xl border-4 border-card bg-amber-50 text-amber-600 shadow-soft"><Trophy className="h-7 w-7" /></span>}
-            <div className="flex flex-wrap gap-1.5 pb-1">
-              {e.major && <span className="inline-flex items-center gap-1 rounded-full bg-highlight px-2.5 py-0.5 text-xs font-bold text-highlight-fg"><Trophy className="h-3 w-3" />Major</span>}
-              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", left.urgent ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700")}>{left.text}</span>
-            </div>
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {e.major && <span className="inline-flex items-center gap-1 rounded-full bg-highlight px-2.5 py-0.5 text-xs font-bold text-highlight-fg"><Trophy className="h-3 w-3" />Major</span>}
+            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", left.urgent ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700")}>{left.text}</span>
           </div>
 
-          <h2 className="mt-3 font-heading text-2xl font-extrabold leading-tight tracking-tight">{e.title}</h2>
+          <h2 className="mt-2 font-heading text-2xl font-extrabold leading-tight tracking-tight">{e.title}</h2>
           {e.organizer && <p className="mt-1 text-sm text-muted">by {e.organizer}</p>}
 
           <dl className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
