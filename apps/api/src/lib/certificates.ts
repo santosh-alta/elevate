@@ -304,7 +304,8 @@ export async function renderCertificatePdf(cert: CertificateWithRelations): Prom
   const doc = await PDFDocument.create();
   doc.setTitle(`${TITLES[cert.type]} - ${cert.recipientName}`);
   doc.setAuthor(tenant.name);
-  doc.setCreator("Elevate");
+  doc.setCreator(tenant.name);
+  doc.setProducer(tenant.name);
   const page = doc.addPage([841.89, 595.28]); // A4 landscape
   const { width: W, height: H } = page.getSize();
   const fonts = await embedFonts(doc);

@@ -41,7 +41,11 @@ export function LinkedInDraft({ post, brand }: { post: LinkedInPost; brand: stri
 
   async function patch(body: Record<string, unknown>, ok: string) {
     setBusy(true); setMsg(null);
-    try { await callApi("PATCH", `/linkedin/${post.id}`, body); setMsg(ok); router.refresh(); }
+    try {
+      const r = await callApi<{ featured?: boolean }>("PATCH", `/linkedin/${post.id}`, body);
+      setMsg(r.featured ? `${ok} Your post now shows on the event page.` : ok);
+      router.refresh();
+    }
     catch (e) { setMsg((e as Error).message); }
     finally { setBusy(false); }
   }

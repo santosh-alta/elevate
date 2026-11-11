@@ -9,6 +9,26 @@ import { POST_STYLES, aiLinkedInPost, draftContextFor, generateLinkedInDrafts, s
 import { usageOf, withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { logActivity } from "../lib/activity";
 import { themeOf } from "../lib/brand";
+import { socialEmbed } from "@elevate/shared";
+
+/**
+ * A participant's posted LinkedIn link shows in "From the community" on the public event page.
+ * Only real post links (that can be embedded) are shown; a newer link from the same person replaces their older one.
+ * Admins can still hide any post from the event's Social tab.
+ */
+async function featureOnEventPage(eventId: string, userId: string, name: string, url: string): Promise<boolean> {
+  const embed = socialEmbed(url);
+  if (!embed || embed.platform !== "LINKEDIN") return false;
+  const mine = await prisma.socialPost.findMany({ where: { eventId, ownerId: userId, platform: "LINKEDIN", generatedBy: "participant" } });
+  const same = mine.find((p) => p.url === embed.url);
+  const others = mine.filter((p) => p.url !== embed.url).map((p) => p.id);
+  if (others.length) await prisma.socialPost.deleteMany({ where: { id: { in: others } } });
+  if (same) return same.featured;
+  await prisma.socialPost.create({
+    data: { eventId, platform: "LINKEDIN", url: embed.url, status: "POSTED", postedAt: new Date(), featured: true, authorName: name, ownerId: userId, generatedBy: "participant" },
+  });
+  return true;
+}
 
 const withEvent = { event: { include: { tenant: true } } } as const;
 
@@ -176,6 +196,7 @@ export function certificateRoutes(app: FastifyInstance) {
     if (status === "POSTED" && post.status !== "POSTED") {
       await logActivity(post.eventId, user.id, "linkedin.posted", { url: updated.postUrl });
     }
-    return { ...updated, shareUrl: shareUrl(updated.draft) };
+    const featured = body.postUrl ? await featureOnEventPage(post.eventId, user.id, user.name, body.postUrl) : false;
+    return { ...updated, shareUrl: shareUrl(updated.draft), featured };
   });
 }
