@@ -1,3 +1,4 @@
+import { googleCalendarUrl, icsToken } from "./eventPage";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { EventStatus, Prisma } from "@prisma/client";
@@ -35,7 +36,7 @@ import { logActivity } from "../lib/activity";
 import { canTransition, runCompletionAutomation } from "../lib/lifecycle";
 import { computeLeaderboard, defaultRoundId, judgesPerTeam, roundTeamIds } from "../lib/judging";
 import { enqueue, fmtDate, notifyAudience, safely } from "../lib/notify";
-import { brandBaseUrl } from "../lib/brand";
+import { brandBaseUrl, apiBaseUrl } from "../lib/brand";
 import { newToken } from "./guests";
 import { eventWinners } from "./hackathon";
 import { sanitizeHtml, sanitizeSections } from "../lib/html";
@@ -368,8 +369,19 @@ export function eventRoutes(app: FastifyInstance) {
       select: { id: true, url: true, caption: true, title: true, isHighlight: true, createdAt: true },
     });
 
+    // The joining link (Meet / Zoom) is only for the organisers and people with a confirmed registration.
+    const seesLink = manager || (!!myRegistration && ["REGISTERED", "APPROVED", "CHECKED_IN", "NO_SHOW"].includes(myRegistration.status));
     return {
       ...event,
+      meetingUrl: seesLink ? event.meetingUrl : null,
+      hasMeetingLink: !!event.meetingUrl,
+      // Personal calendar links for a confirmed registration (include the joining link).
+      ...(seesLink && myRegistration && {
+        myCalendar: {
+          ics: `${apiBaseUrl()}/v1/events/${event.id}/calendar.ics?r=${myRegistration.id}&t=${icsToken(myRegistration.id)}`,
+          google: googleCalendarUrl(event, `${await brandBaseUrl(event.tenantId)}/events/${event.slug}`),
+        },
+      }),
       ...eventMeta(event),
       gallery,
       highlights,

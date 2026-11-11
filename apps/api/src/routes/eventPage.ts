@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Event, Prisma } from "@prisma/client";
@@ -52,6 +53,20 @@ function fold(line: string): string {
   return out.join("\r\n ");
 }
 
+/** Signed token for a personal calendar link (opened by calendar apps without signing in). */
+export function icsToken(registrationId: string): string {
+  return createHmac("sha256", process.env.JWT_SECRET ?? "dev-secret").update(`ics:${registrationId}`).digest("base64url").slice(0, 24);
+}
+
+/** "Add to Google Calendar" link. */
+export function googleCalendarUrl(e: Pick<Event, "title" | "startsAt" | "endsAt" | "venue" | "mode" | "meetingUrl" | "tagline">, url: string): string {
+  const d = (x: Date) => x.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const details = [e.tagline, e.mode !== "OFFLINE" && e.meetingUrl ? `Join online: ${e.meetingUrl}` : null, `Details: ${url}`].filter(Boolean).join("\n");
+  const location = e.mode === "ONLINE" ? e.meetingUrl ?? url : e.venue ?? "";
+  const p = new URLSearchParams({ action: "TEMPLATE", text: e.title, dates: `${d(e.startsAt)}/${d(e.endsAt)}`, details, location });
+  return `https://calendar.google.com/calendar/render?${p.toString()}`;
+}
+
 export function buildIcs(e: Event, url: string, brandName: string): string {
   const location = e.mode === "ONLINE" ? e.meetingUrl ?? url : [e.venue, e.mode === "HYBRID" ? e.meetingUrl : null].filter(Boolean).join(" / ");
   const description = [e.tagline, e.mode !== "OFFLINE" && e.meetingUrl ? `Join online: ${e.meetingUrl}` : null, `Details: ${url}`]
@@ -64,7 +79,7 @@ export function buildIcs(e: Event, url: string, brandName: string): string {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:${e.id}@elevate`,
+    `UID:${e.id}@events`,
     `DTSTAMP:${icsDate(new Date())}`,
     `LAST-MODIFIED:${icsDate(e.updatedAt)}`,
     `DTSTART:${icsDate(e.startsAt)}`,
@@ -73,7 +88,7 @@ export function buildIcs(e: Event, url: string, brandName: string): string {
     `DESCRIPTION:${icsEscape(description)}`,
     ...(location ? [`LOCATION:${icsEscape(location)}`] : []),
     `URL:${url}`,
-    `ORGANIZER;CN=${icsEscape(brandName)}:mailto:${e.contactEmail ?? "no-reply@elevate.app"}`,
+    `ORGANIZER;CN=${icsEscape(brandName)}:mailto:${e.contactEmail ?? `no-reply@${new URL(url).hostname}`}`,
     `STATUS:${e.status === "CANCELLED" ? "CANCELLED" : "CONFIRMED"}`,
     "END:VEVENT",
     "END:VCALENDAR",
@@ -90,11 +105,16 @@ const sponsorSchema = z.object({
 });
 
 export function eventPageRoutes(app: FastifyInstance) {
+  /**
+   * Calendar file. With ?r=<registration>&t=<token> (the link in a registration email) it includes the joining link;
+   * without, it doesn't, so the Meet/Zoom link isn't public.
+   */
   app.get<{ Params: { idOrSlug: string } }>("/events/:idOrSlug/calendar.ics", async (req, reply) => {
-    const { preview } = z.object({ preview: z.string().optional() }).parse(req.query);
+    const { preview, r, t } = z.object({ preview: z.string().optional(), r: z.string().optional(), t: z.string().optional() }).parse(req.query);
     const event = await findPublicEvent(req, req.params.idOrSlug, preview);
     const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: event.tenantId } });
-    const ics = buildIcs(event, await eventPageUrl(event), tenant.name);
+    const reg = r && t && icsToken(r) === t ? await prisma.registration.findFirst({ where: { id: r, eventId: event.id, status: { in: ["REGISTERED", "APPROVED", "CHECKED_IN"] } } }) : null;
+    const ics = buildIcs(reg ? event : { ...event, meetingUrl: null }, await eventPageUrl(event), tenant.name);
     return reply
       .type("text/calendar; charset=utf-8")
       .header("Content-Disposition", `attachment; filename="${event.slug}.ics"`)

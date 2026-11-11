@@ -520,6 +520,13 @@ function RegistrationBox({ event, registration, signedIn }: { event: ElevateEven
               <a href={`/api/proxy/payments/${event.myPayment.id}/receipt.pdf`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 text-sm font-medium text-primary hover:underline"><Download className="h-4 w-4" />Payment receipt</a>
             )}
             {event.meetingUrl && event.mode !== "OFFLINE" && <LinkButton href={event.meetingUrl} external className="w-full">Join online <Video className="h-4 w-4" /></LinkButton>}
+            {event.mode !== "OFFLINE" && !event.meetingUrl && event.hasMeetingLink === false && <p className="text-center text-xs text-muted">The joining link will be emailed to you before the event.</p>}
+            {event.myCalendar && (
+              <div className="grid grid-cols-2 gap-2">
+                <a href={event.myCalendar.google} target="_blank" rel="noreferrer" className="rounded-brand border border-border px-3 py-2 text-center text-xs font-semibold hover:border-primary/50 hover:text-primary">Add to Google Calendar</a>
+                <a href={event.myCalendar.ics} className="rounded-brand border border-border px-3 py-2 text-center text-xs font-semibold hover:border-primary/50 hover:text-primary">Apple / Outlook</a>
+              </div>
+            )}
             {!["CHECKED_IN", "COMPLETED"].includes(registration.status) && event.myPayment?.status !== "PAID" && (
               <ApiButton method="DELETE" path={`/events/${event.id}/register`} variant="ghost" size="sm" confirm="Cancel your registration?">Cancel registration</ApiButton>
             )}

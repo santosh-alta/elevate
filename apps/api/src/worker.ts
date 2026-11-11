@@ -1,3 +1,4 @@
+import { buildIcs } from "./routes/eventPage";
 import { announceDueEvents } from "./lib/audience";
 import { requestFeedbackDue, sendReportsDue } from "./lib/afterEvent";
 import { syncStudentsIfDue } from "./lib/studentSync";
@@ -35,11 +36,21 @@ export async function sendDueNotifications(log?: FastifyBaseLogger): Promise<num
     });
     if (!claimed.count) continue;
     try {
-      const data = (n.data ?? {}) as { ctaLabel?: string; ctaUrl?: string; cc?: string[] };
+      const data = (n.data ?? {}) as { ctaLabel?: string; ctaUrl?: string; cc?: string[]; icsRegistrationId?: string };
+      // Calendar invite attached to registration confirmations (with the joining link).
+      let attachments: { filename: string; content: Buffer; contentType: string }[] | undefined;
+      if (data.icsRegistrationId) {
+        const reg = await prisma.registration.findUnique({ where: { id: data.icsRegistrationId }, include: { event: true } });
+        if (reg) {
+          const links = await eventLinks(reg.event);
+          attachments = [{ filename: "invite.ics", content: Buffer.from(buildIcs(reg.event, links.page, n.tenant.name)), contentType: "text/calendar; charset=utf-8; method=PUBLISH" }];
+        }
+      }
       const result = await sendEmail({
         from: fromAddress(n.tenant),
         to: n.toEmail!,
         ...(data.cc?.length && { cc: data.cc }),
+        ...(attachments && { attachments }),
         subject: n.subject,
         text: data.ctaUrl && !n.body.includes(data.ctaUrl) ? `${n.body}\n\n${data.ctaLabel ?? "Open"}: ${data.ctaUrl}` : n.body,
         html: await renderEmailHtml(n.tenant, n.subject, n.body, { label: data.ctaLabel, url: data.ctaUrl }),
@@ -102,14 +113,20 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
     });
     if (!regs.length) continue;
     const links = await eventLinks(e);
-    const place = e.mode === "ONLINE" ? `Join online: ${e.meetingUrl ?? links.page}` : e.venue ? `Venue: ${e.venue}` : "";
+    const online = e.mode !== "OFFLINE" && !!e.meetingUrl;
+    const place = [
+      e.mode !== "ONLINE" && e.venue ? `Venue: ${e.venue}` : "",
+      e.mode !== "OFFLINE" ? `Join online: ${e.meetingUrl ?? "the link will be on the event page"}` : "",
+    ].filter(Boolean).join("\n");
     for (const r of regs) {
       await enqueue({
         tenantId: e.tenantId, eventId: e.id, userId: r.user.id, channels: ["EMAIL", "IN_APP"],
         template: `event.reminder.${kind}`,
         subject: `${w.subject}: ${e.title}`,
-        body: `Hi ${r.user.name},\n\nA reminder that ${e.title} starts ${w.when}: ${fmtDate(e.startsAt)}.\n${place}\n\nKeep your ticket QR code ready for check-in.`,
-        ctaLabel: "View my ticket", ctaUrl: links.me, dedupKey: `event.reminder.${kind}:${r.id}`,
+        body: `Hi ${r.user.name},\n\nA reminder that ${e.title} starts ${w.when}: ${fmtDate(e.startsAt)}.\n${place}\n\n${e.mode === "ONLINE" ? "Join a couple of minutes early so you don't miss the start." : "Keep your ticket QR code ready for check-in."}`,
+        // Online: a "Join now" button in the last reminders; otherwise the ticket.
+        ...(online && (e.mode === "ONLINE" || due <= 3) ? { ctaLabel: "Join now", ctaUrl: e.meetingUrl! } : { ctaLabel: "View my ticket", ctaUrl: links.me }),
+        dedupKey: `event.reminder.${kind}:${r.id}`,
       });
     }
   }

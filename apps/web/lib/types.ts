@@ -71,6 +71,7 @@ export interface ElevateEvent {
   coverImageUrl?: string | null; venue?: string | null; meetingUrl?: string | null;
   startsAt: string; endsAt: string; registrationOpensAt?: string | null; registrationClosesAt?: string | null;
   capacity?: number | null; requiresApproval?: boolean;
+  hasMeetingLink?: boolean; myCalendar?: { ics: string; google: string };
   audienceBatches?: number[]; audiencePrograms?: string[]; notifyOnAnnounce?: boolean; remindersEnabled?: boolean; announcedNotifiedAt?: string | null;
   modules?: Partial<EventModules>;
   config?: { minTeamSize?: number; maxTeamSize?: number; tracks?: Track[]; prizes?: unknown[]; [k: string]: unknown };

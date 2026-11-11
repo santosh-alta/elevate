@@ -292,7 +292,9 @@ export function registrationRoutes(app: FastifyInstance) {
         payment: { select: { id: true, status: true, amount: true, currency: true, receiptNo: true, expiresAt: true, paidAt: true } },
       },
     });
-    return regs.map((r) => ({ ...r, event: { ...r.event, ...eventMeta(r.event) } }));
+    // The joining link only once the seat is confirmed (not while waitlisted or unpaid).
+    const ok = ["REGISTERED", "APPROVED", "CHECKED_IN", "NO_SHOW"];
+    return regs.map((r) => ({ ...r, event: { ...r.event, ...eventMeta(r.event), meetingUrl: ok.includes(r.status) ? r.event.meetingUrl : null } }));
   });
 
   app.get<{ Params: { ticketCode: string } }>("/registrations/:ticketCode/qr.png", async (req, reply) => {

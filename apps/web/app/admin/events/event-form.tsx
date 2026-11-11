@@ -270,7 +270,7 @@ export function EventForm({
             </Field>
           )}
           {mode !== "ONLINE" && <Field label="Venue"><Input name="venue" defaultValue={event?.venue ?? ""} placeholder="Auditorium, Block A" /></Field>}
-          {mode !== "OFFLINE" && <Field label="Meeting link"><Input name="meetingUrl" type="url" defaultValue={event?.meetingUrl ?? ""} placeholder="https://meet.google.com/…" /></Field>}
+          {mode !== "OFFLINE" && <Field label="Joining link (Google Meet, Zoom, Teams…)" hint="Only registered people see it: in their confirmation, calendar invite, reminders and on the event page. Changing it emails everyone the new link."><Input name="meetingUrl" type="url" defaultValue={event?.meetingUrl ?? ""} placeholder="https://meet.google.com/abc-defg-hij" /></Field>}
         </CardBody>
       </Card>
 

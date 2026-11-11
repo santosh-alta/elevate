@@ -1,3 +1,4 @@
+import { googleCalendarUrl, icsToken } from "../routes/eventPage";
 import type { Notification, NotificationChannel, Prisma, Tenant } from "@prisma/client";
 import { Prisma as P } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
@@ -251,15 +252,19 @@ export async function notifyRegistration(registrationId: string, kind: "confirme
         : `Your seat for ${e.title} is confirmed.`,
     `When: ${fmtDate(e.startsAt)}\n${where(e)}`.trim(),
   ];
-  if (kind !== "waitlisted" && !pending) {
-    lines.push(`Your ticket code: ${reg.ticketCode}\nShow the QR code from your ticket page (${links.me}) at the entrance.`);
-    lines.push(`Add it to your calendar: ${links.ics}`);
+  const confirmed = kind !== "waitlisted" && !pending;
+  if (confirmed) {
+    if (e.mode === "ONLINE") lines.push(`Join here at the start time: ${e.meetingUrl ?? "the joining link will be emailed before the event"}`);
+    else lines.push(`Your ticket code: ${reg.ticketCode.slice(-8).toUpperCase()}\nShow the QR code from your ticket page (${links.me}) at the entrance.`);
+    const ics = `${links.ics}?r=${reg.id}&t=${icsToken(reg.id)}`;
+    lines.push(`Add it to your calendar (the invite is attached too):\nGoogle Calendar: ${googleCalendarUrl(e, links.page)}\nOther calendars: ${ics}`);
   }
   await enqueue({
     tenantId: e.tenantId, eventId: e.id, userId: reg.userId, channels: ["EMAIL", "IN_APP"],
     template: `registration.${kind}`, subject, body: lines.join("\n\n"),
     ctaLabel: kind === "waitlisted" || pending ? "View event" : "View my ticket", ctaUrl: kind === "waitlisted" || pending ? links.page : links.me,
-    data: { registrationId: reg.id },
+    // The worker attaches the calendar invite (.ics) to confirmed registrations.
+    data: { registrationId: reg.id, ...(confirmed && { icsRegistrationId: reg.id }) },
   });
 }
 
