@@ -8,7 +8,7 @@ import { notFound } from "../lib/errors";
 import { EXTERNAL_SOURCES, SOURCE_LABELS, externalSettingsOf, syncExternalEvents } from "../lib/externalEvents";
 
 const PUBLIC_EXTERNAL = {
-  id: true, source: true, title: true, organizer: true, url: true, imageUrl: true, startsAt: true, endsAt: true,
+  id: true, source: true, title: true, organizer: true, url: true, imageUrl: true, coverUrl: true, summary: true, teamSize: true, startsAt: true, endsAt: true,
   registrationEndsAt: true, mode: true, location: true, prize: true, participants: true, tags: true, major: true,
 } as const;
 

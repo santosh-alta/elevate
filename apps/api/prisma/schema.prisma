@@ -1224,6 +1224,12 @@ model ExternalEvent {
   organizer          String?
   url                String
   imageUrl           String?
+  /// Wide banner when the platform has one (the logo is imageUrl)
+  coverUrl           String?
+  /// A few sentences about it, plain text (shown in the preview card)
+  summary            String?
+  /// e.g. "1–4 members"
+  teamSize           String?
   startsAt           DateTime
   endsAt             DateTime
   registrationEndsAt DateTime?

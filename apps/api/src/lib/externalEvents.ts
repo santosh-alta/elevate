@@ -27,6 +27,7 @@ export function externalSettingsOf(settings: unknown): ExternalSettings {
 
 type Item = {
   source: string; sourceId: string; title: string; organizer?: string | null; url: string; imageUrl?: string | null;
+  coverUrl?: string | null; summary?: string | null; teamSize?: string | null;
   startsAt: Date; endsAt: Date; registrationEndsAt?: Date | null; mode: "ONLINE" | "OFFLINE" | "HYBRID";
   location?: string | null; prize?: string | null; participants?: number | null; tags: string[]; score: number; major: boolean;
 };
@@ -34,6 +35,27 @@ type Item = {
 const UA = "Mozilla/5.0 (compatible; CampusEventsCalendar/1.0)";
 const valid = (d: Date) => !Number.isNaN(d.getTime());
 const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", ndash: "–", mdash: "—", hellip: "…" };
+
+/** HTML or Markdown → a short plain-text summary (no links, no "join our WhatsApp" lines), cut at a sentence. */
+export function toSummary(raw?: string | null, max = 420): string | null {
+  if (!raw) return null;
+  let t = raw
+    .replace(/<\/(p|li|h\d|div)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&(#\d+|[a-z]+);/gi, (m, e: string) => (e.startsWith("#") ? String.fromCharCode(Number(e.slice(1))) : ENTITIES[e.toLowerCase()] ?? m))
+    .replace(/[*_#>`]+/g, " ");
+  t = t.split("\n").map((l) => l.trim()).filter((l) => l && !/https?:\/\/|whatsapp|telegram|discord/i.test(l)).join(" ");
+  t = t.replace(/\s+/g, " ").replace(/^(overview|about( the (hackathon|event|challenge|competition))?)\s*:?\s+/i, "").trim();
+  if (t.length <= max) return t || null;
+  const cut = t.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  const out = end > max * 0.5 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" "))}…`;
+  return out.replace(/\s+\d+\.$/, "").replace(/[:,;]$/, ".");
+}
+
+const team = (min?: number | null, max?: number | null) => (!max ? null : max === 1 ? "Solo" : `${min && min > 1 ? min : 1}–${max} members`);
 
 async function getJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(url, { ...init, headers: { "User-Agent": UA, Accept: "application/json", ...(init.headers ?? {}) }, signal: AbortSignal.timeout(20_000) });
@@ -46,7 +68,8 @@ type UnstopRow = {
   id: number; title: string; seo_url?: string; public_url?: string; logoUrl2?: string | null; region?: string;
   organisation?: { name?: string } | null; address_with_country_logo?: { city?: string; state?: string; country?: { name?: string } } | null;
   prizes?: { cash?: number | null; currencyCode?: string }[] | null; registerCount?: number; viewsCount?: number; end_date?: string;
-  regnRequirements?: { start_regn_dt?: string; end_regn_dt?: string } | null; workfunction?: { name?: string }[] | null; isPaid?: boolean;
+  regnRequirements?: { start_regn_dt?: string; end_regn_dt?: string; min_team_size?: number; max_team_size?: number } | null;
+  workfunction?: { name?: string }[] | null; isPaid?: boolean; details?: string | null;
 };
 
 async function fromUnstop(): Promise<Item[]> {
@@ -66,6 +89,7 @@ async function fromUnstop(): Promise<Item[]> {
       out.push({
         source: "unstop", sourceId: String(e.id), title: e.title.trim(), organizer: e.organisation?.name ?? null,
         url: e.seo_url ?? `https://unstop.com/${e.public_url ?? ""}`, imageUrl: e.logoUrl2 ?? null,
+        summary: toSummary(e.details), teamSize: team(e.regnRequirements?.min_team_size, e.regnRequirements?.max_team_size),
         startsAt: start, endsAt: end, registrationEndsAt: regEnd && valid(regEnd) ? regEnd : null,
         mode: online ? "ONLINE" : "OFFLINE", location: online ? null : [a?.city, a?.state].filter(Boolean).join(", ") || null,
         prize: prizeSum ? `${inr(prizeSum)} in prizes` : null, participants: regs || null,
@@ -84,7 +108,7 @@ type DevfolioHit = { _source: {
   uuid: string; name: string; slug: string; tagline?: string | null; starts_at: string; ends_at: string; is_online?: boolean;
   city?: string | null; state?: string | null; country?: string | null; participants_count?: number | null; cover_img?: string | null;
   featured?: boolean | null; devfolio_official?: boolean | null; themes?: { name?: string }[] | null; private?: boolean;
-  hackathon_setting?: { reg_ends_at?: string | null; logo?: string | null } | null;
+  hackathon_setting?: { reg_ends_at?: string | null; logo?: string | null } | null; desc?: string | null; team_min?: number | null; team_size?: number | null;
 } };
 
 async function fromDevfolio(): Promise<Item[]> {
@@ -102,7 +126,8 @@ async function fromDevfolio(): Promise<Item[]> {
       const n = h.participants_count ?? 0;
       out.push({
         source: "devfolio", sourceId: h.uuid, title: h.name.trim(), organizer: null,
-        url: `https://${h.slug}.devfolio.co/`, imageUrl: h.hackathon_setting?.logo ?? h.cover_img ?? null,
+        url: `https://${h.slug}.devfolio.co/`, imageUrl: h.hackathon_setting?.logo ?? h.cover_img ?? null, coverUrl: h.cover_img ?? null,
+        summary: toSummary([h.tagline, h.desc].filter(Boolean).join("\n")), teamSize: team(h.team_min, h.team_size),
         startsAt: start, endsAt: end, registrationEndsAt: regEnd && valid(regEnd) ? regEnd : null,
         mode: h.is_online ? "ONLINE" : "OFFLINE", location: h.is_online ? null : [h.city, h.state].filter(Boolean).join(", ") || null,
         prize: null, participants: n || null, tags: (h.themes ?? []).map((t) => t.name ?? "").filter(Boolean).slice(0, 4),
@@ -117,7 +142,7 @@ async function fromDevfolio(): Promise<Item[]> {
 // ---------- MLH (Major League Hacking): the season page embeds its event list as JSON ----------
 type MlhEvent = {
   id: string; slug: string; name: string; startsAt: string; endsAt: string; websiteUrl?: string | null; url?: string;
-  location?: string | null; formatType?: string; logoUrl?: string | null; region?: string | null; venueAddress?: { country?: string | null } | null;
+  location?: string | null; formatType?: string; logoUrl?: string | null; backgroundUrl?: string | null; region?: string | null; venueAddress?: { country?: string | null } | null;
 };
 
 async function fromMlh(): Promise<Item[]> {
@@ -138,7 +163,8 @@ async function fromMlh(): Promise<Item[]> {
     if (!valid(start) || !valid(end)) continue;
     out.push({
       source: "mlh", sourceId: e.id, title: e.name.trim(), organizer: "Major League Hacking",
-      url: e.websiteUrl || `https://www.mlh.com${e.url ?? ""}`, imageUrl: e.logoUrl ?? null,
+      url: e.websiteUrl || `https://www.mlh.com${e.url ?? ""}`, imageUrl: e.logoUrl ?? null, coverUrl: e.backgroundUrl ?? null,
+      summary: `A Major League Hacking member event${online ? ", held online" : ""}. MLH events are free for students and run by student organisers worldwide.`,
       startsAt: start, endsAt: end, registrationEndsAt: null,
       mode: online ? "ONLINE" : hybrid ? "HYBRID" : "OFFLINE", location: online ? null : e.location ?? null,
       prize: null, participants: null, tags: ["MLH"], score: 800, major: true,
@@ -151,7 +177,7 @@ async function fromMlh(): Promise<Item[]> {
 type DevpostRow = {
   id: number; title: string; url: string; thumbnail_url?: string | null; organization_name?: string | null; open_state?: string;
   submission_period_dates?: string; prize_amount?: string; registrations_count?: number; displayed_location?: { location?: string } | null;
-  themes?: { name?: string }[];
+  themes?: { name?: string }[]; prizes_counts?: { cash?: number; other?: number } | null; invite_only?: boolean; featured?: boolean;
 };
 
 /** "Oct 15 - Dec 01, 2026" or "Nov 12 - 20, 2026" → [start, end]. */
@@ -170,6 +196,7 @@ async function fromDevpost(): Promise<Item[]> {
     const d = await getJson<{ hackathons: DevpostRow[] }>(`https://devpost.com/api/hackathons?status[]=upcoming&status[]=open&page=${page}`);
     if (!d.hackathons?.length) break;
     for (const h of d.hackathons) {
+      if (h.invite_only) continue;
       const loc = h.displayed_location?.location ?? "";
       const online = /online/i.test(loc);
       if (!online && !/india/i.test(loc)) continue;
@@ -180,6 +207,10 @@ async function fromDevpost(): Promise<Item[]> {
       out.push({
         source: "devpost", sourceId: String(h.id), title: h.title.trim(), organizer: h.organization_name ?? null,
         url: h.url, imageUrl: h.thumbnail_url ? (h.thumbnail_url.startsWith("//") ? `https:${h.thumbnail_url}` : h.thumbnail_url) : null,
+        summary: [h.organization_name ? `Hosted by ${h.organization_name} on Devpost.` : null,
+          h.themes?.length ? `Themes: ${h.themes.map((t) => t.name).filter(Boolean).join(", ")}.` : null,
+          h.prizes_counts?.cash ? `${h.prizes_counts.cash} cash prize${h.prizes_counts.cash === 1 ? "" : "s"}${h.prizes_counts.other ? ` and ${h.prizes_counts.other} other` : ""}.` : null,
+          "Submit your project online before the deadline."].filter(Boolean).join(" "),
         startsAt: dates[0], endsAt: dates[1], registrationEndsAt: dates[1],
         mode: online ? "ONLINE" : "OFFLINE", location: online ? null : loc || null,
         prize: usd ? `$${usd.toLocaleString("en-US")} in prizes` : null, participants: regs || null,

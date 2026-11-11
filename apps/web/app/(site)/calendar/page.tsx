@@ -9,6 +9,7 @@ import type { ElevateEvent } from "@/lib/types";
 import { PageHero } from "@/components/page-hero";
 import { FilterChip, hrefWith } from "@/components/filter-chips";
 import { cn } from "@/components/ui/cn";
+import { ExternalPreview, ExternalTrigger, type ExternalItem } from "@/components/client/external-preview";
 
 export async function generateMetadata(): Promise<Metadata> {
   const [tenant, origin] = await Promise.all([getTenant(), getOrigin()]);
@@ -19,11 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 type OwnEvent = Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "endsAt" | "mode" | "status" | "venue" | "category"> & {
   campuses?: { campus: { name: string; city?: string | null } }[];
 };
-type External = {
-  id: string; source: string; sourceLabel: string; title: string; organizer?: string | null; url: string; imageUrl?: string | null;
-  startsAt: string; endsAt: string; registrationEndsAt?: string | null; mode: string; location?: string | null;
-  prize?: string | null; participants?: number | null; tags: string[]; major: boolean;
-};
+type External = ExternalItem;
 type Entry =
   | { kind: "own"; e: OwnEvent; note?: string }
   | { kind: "ext"; e: External; note: string };
@@ -104,7 +101,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-primary" aria-hidden />{brand} event: register here</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-dashed border-amber-500 bg-amber-500/10" aria-hidden />External: run by another organiser, register on their site <ArrowUpRight className="h-3 w-3" /></span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-dashed border-amber-500 bg-amber-500/10" aria-hidden />External: run by another organiser. Tap for details</span>
           <span className="inline-flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-amber-500" />Major: big prizes or thousands taking part</span>
         </div>
 
@@ -127,10 +124,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                             {dayKey(x.e.startsAt) === k && <span className="mr-1 font-normal opacity-80">{time(x.e.startsAt)}</span>}{x.e.title}
                           </Link>
                         ) : (
-                          <a href={x.e.url} target="_blank" rel="noopener noreferrer nofollow" title={`External · ${x.e.sourceLabel} · ${x.note}: ${x.e.title}`} className="flex items-center gap-1 truncate rounded-md border border-dashed border-amber-500/80 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-fg hover:bg-amber-500/20">
+                          <ExternalTrigger id={x.e.id} title={`External · ${x.e.sourceLabel} · ${x.note}: ${x.e.title}`} className="flex w-full items-center gap-1 truncate rounded-md border border-dashed border-amber-500/80 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-fg hover:bg-amber-500/20">
                             {x.e.major && <Trophy className="h-3 w-3 shrink-0 text-amber-500" />}
                             <span className="shrink-0 opacity-75">{x.note}:</span><span className="truncate">{x.e.title}</span>
-                          </a>
+                          </ExternalTrigger>
                         )}
                       </li>
                     ))}
@@ -165,6 +162,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           </ol>
         </section>
 
+        <ExternalPreview items={data.external} brand={brand} />
         <p className="mt-10 rounded-xl bg-bg px-4 py-3 text-xs text-muted">
           External events are organised by others and listed so students don&apos;t miss good opportunities. Dates, prizes and rules can change, so check the organiser&apos;s page before registering. Listings come from Unstop, Devfolio, MLH and Devpost, and are refreshed daily.
         </p>
@@ -196,27 +194,27 @@ function OwnRow({ e, brand, day }: { e: OwnEvent; brand: string; day: string }) 
 
 function ExtRow({ e, note }: { e: External; note: string }) {
   return (
-    <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="group flex min-w-0 items-center gap-3 rounded-brand border border-dashed border-amber-500/60 bg-card p-4 transition hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-soft">
+    <ExternalTrigger id={e.id} className="group flex w-full min-w-0 items-center gap-3 rounded-brand border border-dashed border-amber-500/60 bg-card p-4 transition hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-soft">
       {e.imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={e.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-xl border border-border bg-white object-contain p-1" />
       ) : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Trophy className="h-5 w-5" /></span>}
-      <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
+      <span className="block min-w-0 flex-1">
+        <span className="block flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
           <span className="rounded-full border border-amber-500/70 bg-amber-500/10 px-2 py-0.5 text-fg">External · {e.sourceLabel}</span>
           {e.major && <span className="inline-flex items-center gap-1 text-amber-600"><Trophy className="h-3 w-3" />Major</span>}
           <span className="text-muted">{note}</span>
-        </p>
-        <p className="mt-1 truncate font-heading text-base font-bold">{e.title}</p>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted">
+        </span>
+        <span className="block mt-1 truncate font-heading text-base font-bold">{e.title}</span>
+        <span className="block mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted">
           <span>{short(e.startsAt)} – {short(e.endsAt)}</span>
           <span className="inline-flex items-center gap-1">{e.mode === "ONLINE" ? <><Globe className="h-3 w-3" />Online</> : <><MapPin className="h-3 w-3" />{e.location ?? "In person"}</>}</span>
           {e.prize && <span className="inline-flex items-center gap-1 font-medium text-fg/80"><Trophy className="h-3 w-3" />{e.prize}</span>}
           {e.participants ? <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" />{e.participants.toLocaleString("en-IN")} registered</span> : null}
           {e.organizer && <span className="truncate">by {e.organizer}</span>}
-        </p>
-      </div>
-      <span className="hidden items-center gap-1 text-sm font-semibold text-fg/80 sm:flex">Open<ArrowUpRight className="h-4 w-4" /></span>
-    </a>
+        </span>
+      </span>
+      <span className="hidden items-center gap-1 text-sm font-semibold text-fg/80 sm:flex">Details<ArrowUpRight className="h-4 w-4" /></span>
+    </ExternalTrigger>
   );
 }
