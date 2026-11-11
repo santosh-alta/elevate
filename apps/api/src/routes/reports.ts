@@ -9,6 +9,8 @@ import { buildOutcome } from "../lib/outcome";
 import { summariseOutcome } from "../lib/outcomeSummary";
 import { renderEventReportPdf } from "../lib/eventReport";
 import { reportSettingsOf, sendEventReport } from "../lib/afterEvent";
+import { renderWeeklyPdf, sendWeeklyReport, weeklyData } from "../lib/weeklyReport";
+import { requireBrandAdmin } from "../lib/permissions";
 import { withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { EVENT_FAMILIES, familyOf, type EventType } from "@elevate/shared";
 import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
@@ -77,6 +79,22 @@ export function reportRoutes(app: FastifyInstance) {
       .header("Content-Disposition", `attachment; filename="${filename}"`)
       .header("Cache-Control", "no-store")
       .send(Buffer.from(pdf));
+  });
+
+  /** Weekly combined report: preview the PDF, or email it to the report recipients now. Admins only. */
+  app.get("/reports/weekly.pdf", async (req, reply) => {
+    requireBrandAdmin(req);
+    const tenant = requireTenant(req);
+    const { g, att } = await weeklyData(tenant.id);
+    const pdf = await renderWeeklyPdf(await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id } }), g, att);
+    return reply.type("application/pdf").header("Content-Disposition", 'inline; filename="weekly-report.pdf"').header("Cache-Control", "no-store").send(Buffer.from(pdf));
+  });
+
+  app.post("/reports/weekly/send", async (req) => {
+    requireBrandAdmin(req);
+    const tenant = requireTenant(req);
+    if (!reportSettingsOf(tenant.settings).to.length) throw badRequest("Add report recipients in Settings → Notifications first");
+    return sendWeeklyReport(tenant.id);
   });
 
   /** Email the outcome report to the leadership recipients now (also happens automatically after the event). */

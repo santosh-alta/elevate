@@ -9,6 +9,7 @@ import { studentSourceFor, syncStudents } from "../lib/studentSync";
 import { audience } from "../lib/audience";
 import { reminderHoursOf } from "../worker";
 import { reportSettingsOf } from "../lib/afterEvent";
+import { weeklySettingsOf } from "../lib/weeklyReport";
 
 /** Student list (synced from the student database), event audiences and notification settings. */
 export function studentRoutes(app: FastifyInstance) {
@@ -120,6 +121,7 @@ export function studentRoutes(app: FastifyInstance) {
       feedbackAfterHours: z.number().min(0.5).max(72).optional(),
       registerNudgeHours: z.array(z.number().positive().max(24 * 14)).max(4).optional(),
       taskDigest: z.boolean().optional(),
+      weekly: z.object({ enabled: z.boolean(), weekday: z.number().int().min(0).max(6), hour: z.number().int().min(0).max(23) }).optional(),
     }).parse(req.body);
     const fresh = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id }, select: { settings: true } });
     const settings = { ...((fresh.settings ?? {}) as Record<string, unknown>) };
@@ -130,6 +132,7 @@ export function studentRoutes(app: FastifyInstance) {
       ...(body.registerNudgeHours !== undefined && { registerNudgeHours: [...new Set(body.registerNudgeHours)].sort((a, b) => b - a) }),
       ...(body.taskDigest !== undefined && { taskDigest: body.taskDigest }),
     };
+    if (body.weekly) settings.weeklyReport = { ...((settings.weeklyReport ?? {}) as object), ...body.weekly };
     if (body.report) settings.eventReport = { to: body.report.to.map((e) => e.toLowerCase()), cc: body.report.cc.map((e) => e.toLowerCase()), afterDays: body.report.afterDays };
     await prisma.tenant.update({ where: { id: tenant.id }, data: { settings: settings as Prisma.InputJsonValue } });
     return notificationSettingsOf(settings);
@@ -146,5 +149,6 @@ export function notificationSettingsOf(settings: unknown) {
     feedbackAfterHours: typeof n.feedbackAfterHours === "number" ? n.feedbackAfterHours : 2,
     registerNudgeHours: Array.isArray(n.registerNudgeHours) ? n.registerNudgeHours : [],
     taskDigest: n.taskDigest !== false,
+    weekly: (({ enabled, weekday, hour }) => ({ enabled, weekday, hour }))(weeklySettingsOf(settings)),
   };
 }

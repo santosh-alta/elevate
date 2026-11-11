@@ -10,7 +10,9 @@ type Settings = {
   reminderHours: number[]; announceByDefault: boolean;
   report: { to: string[]; cc: string[]; afterDays: number };
   feedbackAfterHours: number; registerNudgeHours: number[]; taskDigest: boolean;
+  weekly: { enabled: boolean; weekday: number; hour: number };
 };
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const REMINDERS = [{ h: 168, label: "1 week" }, { h: 72, label: "3 days" }, { h: 24, label: "1 day" }, { h: 3, label: "3 hours" }, { h: 1, label: "1 hour" }];
 const NUDGES = [{ h: 168, label: "1 week" }, { h: 72, label: "3 days" }, { h: 24, label: "1 day" }, { h: 6, label: "6 hours" }];
@@ -125,6 +127,39 @@ export function NotificationSettings({ canEdit }: { canEdit: boolean }) {
             </span>
             after the event ends
           </label>
+        </Section>
+
+        <Section icon={<FileBarChart className="h-4 w-4 text-primary" />} title="Weekly report" text="Every week to the same To and CC as the outcome report: last week's events, what's coming up, campus comparison and what needs attention, with a PDF.">
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" disabled={off} checked={s.weekly.enabled} onChange={(e) => setS({ ...s, weekly: { ...s.weekly, enabled: e.target.checked } })} className="accent-[rgb(var(--primary))]" />
+            Send the weekly report
+          </label>
+          {s.weekly.enabled && (
+            <label className="flex flex-wrap items-center gap-2 text-sm">Every
+              <span className="inline-block w-36">
+                <Select disabled={off} value={s.weekly.weekday} onChange={(e) => setS({ ...s, weekly: { ...s.weekly, weekday: Number(e.target.value) } })} className="h-9 text-sm">
+                  {WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                </Select>
+              </span>
+              at
+              <span className="inline-block w-28">
+                <Select disabled={off} value={s.weekly.hour} onChange={(e) => setS({ ...s, weekly: { ...s.weekly, hour: Number(e.target.value) } })} className="h-9 text-sm">
+                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{`${((h + 11) % 12) + 1}:00 ${h < 12 ? "AM" : "PM"}`}</option>)}
+                </Select>
+              </span>
+              India time
+            </label>
+          )}
+          <div className="flex flex-wrap gap-3 text-sm">
+            <a href="/api/proxy/reports/weekly.pdf" target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">Preview this week&rsquo;s PDF ↗</a>
+            {canEdit && (
+              <button type="button" className="font-semibold text-primary hover:underline" onClick={async () => {
+                if (!window.confirm("Email the weekly report to the report recipients now?")) return;
+                try { await callApi("POST", "/reports/weekly/send"); setMsg({ ok: true, text: "Weekly report sent." }); }
+                catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't send" }); }
+              }}>Send it now</button>
+            )}
+          </div>
         </Section>
 
         <Section icon={<ClipboardList className="h-4 w-4 text-primary" />} title="Team tasks" text="A daily email to people with overdue checklist tasks (with their team leads).">

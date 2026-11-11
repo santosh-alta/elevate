@@ -1,6 +1,7 @@
 import { buildIcs } from "./routes/eventPage";
 import { announceDueEvents, nudgeUnregistered } from "./lib/audience";
 import { requestFeedbackDue, sendReportsDue } from "./lib/afterEvent";
+import { sendWeeklyReportsDue } from "./lib/weeklyReport";
 import { syncStudentsIfDue } from "./lib/studentSync";
 import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./plugins/prisma";
@@ -138,6 +139,8 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
   // After the event: feedback request (~2 h after the end), then the outcome report to leadership.
   await requestFeedbackDue(now);
   await sendReportsDue(now);
+  // Weekly combined report to leadership (brand setting: day and hour).
+  await sendWeeklyReportsDue(now);
   // Student list refresh from the student database (monthly).
   await syncStudentsIfDue();
 

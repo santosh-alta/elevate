@@ -21,11 +21,24 @@ export function insightRoutes(app: FastifyInstance) {
     requireBrandAdmin(req);
     const tenant = requireTenant(req);
     const q = z.object({ months: z.coerce.number().int().min(1).max(36).default(12), campusId: z.string().optional() }).parse(req.query);
-    const campusId = q.campusId;
-
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth() - (q.months - 1), 1);
     const prevFrom = new Date(from.getFullYear(), from.getMonth() - q.months, 1);
+    return computeInsights(tenant.id, { from, prevFrom, to: now, months: q.months, campusId: q.campusId });
+  });
+}
+
+/**
+ * The numbers behind Insights (also used by the weekly report): events that ended between `from` and `to`,
+ * compared with the period from `prevFrom` to `from`.
+ */
+export async function computeInsights(tenantId: string, o: { from: Date; prevFrom: Date; to: Date; months: number; campusId?: string }) {
+    const tenant = { id: tenantId };
+    const campusId = o.campusId;
+    const q = { months: o.months };
+    const now = o.to;
+    const from = o.from;
+    const prevFrom = o.prevFrom;
     const base: Prisma.EventWhereInput = {
       tenantId: tenant.id, status: { notIn: ["DRAFT", "PLANNING", "CANCELLED"] }, approvalStatus: "APPROVED", endsAt: { lt: now },
       ...(campusId && { OR: [{ scope: "CENTRAL" }, { campuses: { some: { campusId } } }] }),
@@ -185,5 +198,5 @@ export function insightRoutes(app: FastifyInstance) {
     })).sort((a, b) => b.participants - a.participants);
 
     return { from, to: now, months: q.months, campusId: campusId ?? null, totals, trend, byCampus, byType, events: eventsOut, campuses: campuses.map((c) => ({ id: c.id, name: c.name })) };
-  });
 }
+
