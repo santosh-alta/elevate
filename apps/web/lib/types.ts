@@ -6,7 +6,7 @@ export interface CampusDetails {
   university?: string; state?: string; region?: string; about?: string; approvals?: string[]; programme?: string; websiteUrl?: string;
   gallery?: { url: string; caption?: string }[];
 }
-export interface Campus { id: string; name: string; code: string; city?: string | null; address?: string | null; photoUrl?: string | null; details?: CampusDetails | null }
+export interface Campus { id: string; name: string; code: string; city?: string | null; region?: string | null; address?: string | null; photoUrl?: string | null; details?: CampusDetails | null }
 export interface CampusSummary extends Campus { slug: string; upcoming: number; past: number }
 export interface CampusProfile extends Campus {
   slug: string;

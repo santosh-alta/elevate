@@ -33,7 +33,7 @@ export default async function CampusesPage({ params }: { params: Promise<{ host:
                 key={c.id}
                 href={campusHref(c)}
                 data-reveal
-                className="group overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-1 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="card-glow group overflow-hidden rounded-brand border border-border/80 bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <div className="relative aspect-[16/10] overflow-hidden bg-hero-bg">
                   {c.photoUrl && (

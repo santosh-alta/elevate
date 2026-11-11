@@ -99,3 +99,50 @@ html[data-scrolled="true"] .site-header { box-shadow: 0 6px 24px -12px rgb(15 23
   *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   .js-reveal [data-reveal]:not(.is-visible) { opacity: 1; transform: none; }
 }
+
+/* ───────── Visual language (inspired by shadcn/ui, daisyUI, TW Elements) ───────── */
+
+/* Gradient text in the brand colours, slowly shimmering */
+.text-gradient-brand {
+  background-image: linear-gradient(90deg, rgb(var(--hero-accent)), rgb(var(--gradient-to)), rgb(var(--gradient-from)), rgb(var(--hero-accent)));
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+
+/* Frosted glass panels (on dark heroes and over images) */
+.glass { background: rgb(255 255 255 / 0.08); border: 1px solid rgb(255 255 255 / 0.16); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.glass-light { background: rgb(255 255 255 / 0.72); border: 1px solid rgb(255 255 255 / 0.6); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+
+/* Faint grid and dot patterns that fade out at the edges */
+.bg-grid {
+  background-image: linear-gradient(rgb(var(--hero-fg) / 0.07) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--hero-fg) / 0.07) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 75%);
+}
+.bg-dots {
+  background-image: radial-gradient(rgb(var(--fg) / 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* Shine that sweeps across a button on hover */
+.btn-sheen { position: relative; overflow: hidden; isolation: isolate; }
+.btn-sheen::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; z-index: -1;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  transform: translateX(-120%) skewX(-20deg);
+}
+.btn-sheen:hover::after { animation: sheen 0.9s ease; }
+
+/* Card with a gradient ring that appears on hover */
+.card-glow { position: relative; }
+.card-glow::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(135deg, rgb(var(--gradient-from)), rgb(var(--gradient-to)));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity 0.3s ease;
+}
+.card-glow:hover::before, .card-glow:focus-visible::before { opacity: 1; }
+
+/* Horizontal marquee that pauses on hover */
+.marquee:hover .animate-marquee { animation-play-state: paused; }

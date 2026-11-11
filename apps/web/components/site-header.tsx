@@ -7,6 +7,7 @@ import { ROLE_LABELS } from "@elevate/shared";
 import { AccountMenu } from "./client/account-menu";
 import { NotificationBell } from "./client/notification-bell";
 import { HeaderUser } from "./client/header-user";
+import { SiteNav } from "./client/site-nav";
 import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
@@ -23,7 +24,7 @@ export async function SiteHeader({ tenant: given, clientUser = false }: { tenant
   const theme = resolveTheme(tenant.theme);
   const unread = me ? (await apiList<AppNotification>("/me/notifications?unread=1")).filter((n) => !n.readAt).length : 0;
   return (
-    <header className="site-header sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+    <header className="site-header sticky top-0 z-30 border-b border-border/70 bg-card/75 backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
         <Link href="/" className="logo-hover flex min-w-0 items-center gap-3 rounded-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent" aria-label={`${tenant.name} Events home`}>
           {theme.logoUrl ? (
@@ -40,9 +41,7 @@ export async function SiteHeader({ tenant: given, clientUser = false }: { tenant
           )}
         </Link>
         <nav className="flex items-center gap-1.5 text-sm">
-          <Link href="/events" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Events</Link>
-          {tenant.campuses.length > 1 && <Link href="/campuses" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Campuses</Link>}
-          <Link href="/winners" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Winners</Link>
+          <SiteNav showCampuses={tenant.campuses.length > 1} />
           {clientUser ? <HeaderUser /> : me ? (
             <>
               <NotificationBell initialUnread={unread} />
@@ -80,8 +79,13 @@ export async function SiteFooter({ tenant: given }: { tenant?: Tenant } = {}) {
   const linkCls = "inline-flex items-center gap-2 text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline";
   const tagline = theme.tagline ?? (tenant.settings.tagline as string | undefined);
   return (
-    <footer className="mt-20 bg-hero-bg text-hero-fg">
+    <footer className="relative isolate mt-24 overflow-hidden bg-hero-bg text-hero-fg">
       <div className="h-1.5 bg-brand-gradient" aria-hidden />
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-24 -top-24 h-80 w-80 animate-aurora-slow rounded-full opacity-25 blur-3xl" style={{ background: "rgb(var(--gradient-from))" }} />
+        <div className="absolute -bottom-32 right-0 h-72 w-72 animate-aurora rounded-full opacity-20 blur-3xl" style={{ background: "rgb(var(--gradient-to))" }} />
+        <div className="bg-grid absolute inset-0 opacity-60" />
+      </div>
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
         <div className="space-y-4">
           <BrandLogo tenant={tenant} variant="dark" size={40} showName />

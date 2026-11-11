@@ -7,6 +7,7 @@ import { tenantForHost } from "@/lib/tenant";
 import { campusHref, campusTitle } from "@/lib/format";
 import type { CampusProfile, CampusSummary, ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
+import { CountUp } from "@/components/client/count-up";
 import { Card, EmptyState, LinkButton } from "@/components/ui";
 
 type Props = { params: Promise<{ host: string; code: string }> };
@@ -57,9 +58,13 @@ export default async function CampusPage({ params }: Props) {
           <img src={campus.photoUrl} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />
         )}
         <div className="absolute inset-0 -z-10 bg-gradient-to-r from-hero-bg via-hero-bg/85 to-hero-bg/40" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -right-24 -top-24 h-80 w-80 animate-aurora rounded-full opacity-30 blur-3xl" style={{ background: "rgb(var(--gradient-from))" }} />
+          <div className="bg-grid absolute inset-0" />
+        </div>
         <div className="mx-auto max-w-6xl px-4 py-16 sm:py-24">
           <Link href="/campuses" className="text-sm text-hero-fg/80 hover:text-hero-fg">← All campuses</Link>
-          <h1 className="mt-3 font-heading text-4xl font-extrabold tracking-tight sm:text-6xl">{title}</h1>
+          <h1 className="mt-3 animate-fade-up font-heading text-4xl font-extrabold tracking-tight sm:text-7xl">{title}</h1>
           <p className="mt-3 flex items-center gap-2 text-lg text-hero-fg/90">
             <MapPin className="h-5 w-5 text-hero-accent" />
             {[d.university ?? campus.name, [campus.city, d.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}
@@ -86,10 +91,10 @@ export default async function CampusPage({ params }: Props) {
             { icon: Users, value: campus.stats.participants, label: "Students took part" },
             { icon: Trophy, value: campus.stats.hackathons, label: "Hackathons & contests" },
           ].map(({ icon: Icon, value, label }) => (
-            <Card key={label} className="flex items-center gap-4 p-5">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/15 text-primary"><Icon className="h-5 w-5" /></span>
+            <Card key={label} data-reveal className="card-glow flex items-center gap-4 p-5 transition duration-300 hover:-translate-y-0.5 hover:shadow-lift">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-hero-bg text-hero-accent"><Icon className="h-5 w-5" /></span>
               <div>
-                <p className="font-heading text-2xl font-bold tabular-nums">{value.toLocaleString("en-IN")}</p>
+                <p className="font-heading text-3xl font-bold"><CountUp value={value} /></p>
                 <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
               </div>
             </Card>

@@ -63,26 +63,44 @@ export function ModeBadge({ mode }: { mode: ElevateEvent["mode"] }) {
   return <Badge tone={tone}>{mode === "ONLINE" ? <Video className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}{humanize(mode)}</Badge>;
 }
 
+/** Day and month in India time, for the calendar tile on cards. */
+function dateTile(iso: string) {
+  const d = new Date(iso);
+  const part = (o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", ...o });
+  return { day: part({ day: "numeric" }), month: part({ month: "short" }).toUpperCase() };
+}
+
 export function EventCard({ event, href }: { event: ElevateEvent; href?: string }) {
   const campuses = eventCampuses(event);
   const turnout = turnoutLabel(event);
   const teams = Number(event.config?.teams ?? 0);
+  const { day, month } = dateTile(event.startsAt);
+  const where = event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.city ?? c.name).join(" + ") || "Campus event";
   return (
     <Link
       href={href ?? `/events/${event.slug}`}
       data-reveal
-      className="group flex flex-col overflow-hidden rounded-brand border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="card-glow group flex flex-col overflow-hidden rounded-brand border border-border/80 bg-card shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lift focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <EventCover event={event} className="aspect-[16/9] h-auto" />
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex flex-wrap gap-1.5">
-          <StatusBadge status={event.status} />
-          <ModeBadge mode={event.mode} />
+      <div className="relative overflow-hidden">
+        <div className="transition duration-700 ease-out group-hover:scale-[1.04]">
+          <EventCover event={event} className="aspect-[16/9] h-auto" showLabel={false} />
         </div>
+        {/* Calendar tile and status, as glass chips over the cover */}
+        <div className="glass-light absolute left-3 top-3 flex w-12 flex-col items-center overflow-hidden rounded-xl text-center shadow-soft">
+          <span className="w-full bg-primary py-0.5 text-[9px] font-bold tracking-wider text-primary-fg">{month}</span>
+          <span className="py-0.5 font-heading text-lg font-extrabold leading-tight text-fg">{day}</span>
+        </div>
+        <div className="absolute right-3 top-3 flex gap-1.5">
+          <StatusBadge status={event.status} />
+          {event.mode !== "OFFLINE" && <ModeBadge mode={event.mode} />}
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col gap-3 p-5">
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-primary">{eventLabel(event)}</p>
-          <h3 className="font-heading text-lg font-bold leading-snug tracking-tight group-hover:underline group-hover:decoration-accent group-hover:decoration-2 group-hover:underline-offset-4">{event.title}</h3>
-          {event.tagline && <p className="mt-1 line-clamp-2 text-sm text-muted">{event.tagline}</p>}
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{eventLabel(event)}</p>
+          <h3 className="font-heading text-lg font-bold leading-snug tracking-tight transition-colors group-hover:text-primary">{event.title}</h3>
+          {event.tagline && <p className="mt-1.5 line-clamp-2 text-sm text-muted">{event.tagline}</p>}
         </div>
         {!!event.tags?.length && (
           <ul className="flex flex-wrap gap-1" aria-label="Tags">
@@ -90,18 +108,10 @@ export function EventCard({ event, href }: { event: ElevateEvent; href?: string 
             {event.tags.length > 3 && <li className="px-1 py-0.5 text-[11px] text-muted">+{event.tags.length - 3}</li>}
           </ul>
         )}
-        <div className="mt-auto space-y-1 text-xs text-muted">
-          <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{fmtRange(event.startsAt, event.endsAt)}</p>
-          <p className="flex items-center gap-1.5">
-            <MapPin className="h-3.5 w-3.5" />
-            {event.scope === "CENTRAL" ? "Central (HQ)" : campuses.map((c) => c.name).join(" + ") || "Campus event"}
-          </p>
-          {turnout && (
-            <p className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              {turnout}{teams ? ` · ${teams} teams` : ""}
-            </p>
-          )}
+        <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/70 pt-3 text-xs text-muted">
+          <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-accent" />{fmtRange(event.startsAt, event.endsAt)}</span>
+          <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-accent" />{where}</span>
+          {turnout && <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-accent" />{turnout}{teams ? ` · ${teams} teams` : ""}</span>}
         </div>
       </div>
     </Link>

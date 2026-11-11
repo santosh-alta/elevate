@@ -18,8 +18,8 @@ export function FilterChip({ href, active, children, className }: { href: string
       scroll={false}
       aria-current={active ? "true" : undefined}
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        active ? "border-primary bg-primary text-primary-fg" : "border-border bg-card text-fg hover:border-primary/60 hover:text-primary",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium shadow-soft transition-all duration-200 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+        active ? "border-transparent bg-hero-bg text-hero-fg shadow-lift" : "border-border bg-card text-fg hover:-translate-y-px hover:border-accent/60 hover:text-primary",
         className,
       )}
     >

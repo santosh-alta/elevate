@@ -61,7 +61,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
     <>
     <PageHero title="Events" description={`Find hackathons, workshops, seminars and more across ${tenant.name}.`} className="pb-10" />
     <div className="mx-auto max-w-6xl px-4 pb-10">
-      <form role="search" aria-label="Filter events" className="relative -mt-8 grid gap-3 rounded-brand border border-border bg-card p-4 shadow-lg sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+      <form role="search" aria-label="Filter events" className="relative -mt-10 grid animate-fade-up gap-3 rounded-brand border border-border/70 bg-card p-4 shadow-lift sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
         {family && <input type="hidden" name="family" value={family} />}
         {sp.tag && <input type="hidden" name="tag" value={sp.tag} />}
         {sp.type && <input type="hidden" name="type" value={sp.type} />}

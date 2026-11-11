@@ -26,7 +26,7 @@ export function authRoutes(app: FastifyInstance) {
     const campuses = await prisma.campus.findMany({
       where: { tenantId: tenant.id },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, code: true, city: true, photoUrl: true },
+      select: { id: true, name: true, code: true, city: true, photoUrl: true, details: true },
     });
     // Public settings only.
     const s = (tenant.settings ?? {}) as Record<string, unknown>;
@@ -39,7 +39,8 @@ export function authRoutes(app: FastifyInstance) {
         hashtags: s.hashtags ?? [], linkedinOrgUrl: s.linkedinOrgUrl, supportEmail: s.supportEmail, social: s.social ?? {},
         website: s.website, phone: s.phone, address: s.address, signatories: s.signatories ?? [],
       },
-      campuses,
+      // Only the display region from each campus profile (e.g. "Delhi NCR"); the rest is on /campuses/:code.
+      campuses: campuses.map(({ details, ...c }) => ({ ...c, region: ((details ?? {}) as { region?: string }).region ?? null })),
     };
   });
 

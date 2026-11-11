@@ -137,9 +137,12 @@ export default async function EventPage({ params, searchParams }: Params) {
       <section className="relative isolate overflow-hidden bg-hero-bg text-hero-fg">
         <div
           aria-hidden
-          className="absolute inset-0 -z-10"
-          style={{ backgroundImage: "radial-gradient(55% 90% at 100% 0%, rgb(var(--gradient-from) / 0.28), transparent 60%), radial-gradient(45% 70% at 0% 100%, rgb(var(--gradient-to) / 0.18), transparent 60%)" }}
-        />
+          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+        >
+          <div className="absolute -right-24 -top-32 h-96 w-96 animate-aurora rounded-full opacity-40 blur-3xl" style={{ background: "rgb(var(--gradient-from))" }} />
+          <div className="absolute -bottom-40 left-1/4 h-80 w-80 animate-aurora-slow rounded-full opacity-25 blur-3xl" style={{ background: "rgb(var(--gradient-to))" }} />
+          <div className="bg-grid absolute inset-0" />
+        </div>
         <div className="mx-auto grid max-w-6xl items-center gap-8 px-4 pb-24 pt-8 sm:pt-12 lg:grid-cols-[1.1fr_1fr] lg:gap-12 lg:pb-28">
           <div className="order-2 min-w-0 lg:order-1">
             {event.parentEvent && (
@@ -148,15 +151,15 @@ export default async function EventPage({ params, searchParams }: Params) {
                 <ChevronRight className="h-3.5 w-3.5" /><span className="truncate">{event.title}</span>
               </nav>
             )}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex animate-fade-up flex-wrap gap-2">
               <StatusBadge status={event.status} />
               <Badge tone="highlight">{eventLabel(event)}</Badge>
               {event.mode !== "OFFLINE" && <ModeBadge mode={event.mode} />}
             </div>
-            <h1 className="mt-5 font-heading text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">{event.title}</h1>
-            {event.tagline && <p className="mt-3 max-w-xl text-lg text-hero-fg/85">{event.tagline}</p>}
-            <div className="mt-5 h-1.5 w-20 rounded-full bg-brand-gradient" aria-hidden />
-            <div className="mt-6 flex flex-wrap items-center gap-4">
+            <h1 className="mt-5 animate-fade-up font-heading text-4xl font-extrabold leading-[1.06] tracking-tight [animation-delay:60ms] sm:text-5xl lg:text-6xl">{event.title}</h1>
+            {event.tagline && <p className="mt-4 max-w-xl animate-fade-up text-lg text-hero-fg/85 [animation-delay:120ms]">{event.tagline}</p>}
+            <div className="mt-5 h-1.5 w-20 animate-fade-up rounded-full bg-brand-gradient [animation-delay:160ms]" aria-hidden />
+            <div className="mt-6 flex animate-fade-up flex-wrap items-center gap-4 [animation-delay:200ms]">
               {event.status === "REGISTRATION_OPEN" && !registration && (
                 <LinkButton href={me ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} size="lg" variant="cta">
                   {isTeamEvent ? "Register your team" : "Register now"} <ArrowRight className="h-4 w-4" />
@@ -171,9 +174,9 @@ export default async function EventPage({ params, searchParams }: Params) {
             {!ended && event.status !== "CANCELLED" && <div className="mt-6"><Countdown startsAt={event.startsAt} endsAt={event.endsAt} tone="dark" /></div>}
           </div>
           <div className="order-1 lg:order-2">
-            <div className="relative mr-3 mb-3 sm:mr-4 sm:mb-4">
-              <div aria-hidden className="absolute inset-0 translate-x-3 translate-y-3 rounded-brand bg-brand-gradient-diagonal sm:translate-x-4 sm:translate-y-4" />
-              <div className="relative overflow-hidden rounded-brand bg-hero-bg shadow-2xl ring-1 ring-hero-fg/10">
+            <div className="group relative mr-3 mb-3 animate-fade-up [animation-delay:120ms] [perspective:1200px] sm:mr-4 sm:mb-4">
+              <div aria-hidden className="absolute inset-0 translate-x-3 translate-y-3 rounded-brand bg-brand-gradient-diagonal opacity-90 blur-[1px] transition duration-500 group-hover:translate-x-4 group-hover:translate-y-4 sm:translate-x-4 sm:translate-y-4" />
+              <div className="relative overflow-hidden rounded-brand bg-hero-bg shadow-2xl ring-1 ring-hero-fg/10 transition duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(-4deg)_rotateX(2deg)]">
                 <EventCover event={event} className="aspect-[16/9] h-auto" iconUrl={theme.iconUrl} />
               </div>
             </div>
@@ -181,7 +184,7 @@ export default async function EventPage({ params, searchParams }: Params) {
         </div>
       </section>
       <div className="mx-auto max-w-6xl px-4">
-        <div className="relative -mt-14 rounded-brand border border-border bg-card p-5 shadow-lg sm:p-6">
+        <div className="relative -mt-14 animate-fade-up rounded-brand border border-border/70 bg-card p-5 shadow-lift [animation-delay:240ms] sm:p-6">
           <div className="grid gap-4 text-sm sm:grid-cols-3">
             <Info icon={<CalendarDays className="h-4 w-4" />} label="When" value={fmtRange(event.startsAt, event.endsAt)} />
             <Info

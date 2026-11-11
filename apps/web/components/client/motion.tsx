@@ -11,26 +11,46 @@ import { ArrowUp } from "lucide-react";
 export function ScrollReveal() {
   const pathname = usePathname();
   useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>("main section, main [data-reveal]"));
-    els.forEach((el) => el.setAttribute("data-reveal", ""));
-    const siblingsIndex = new Map<Element, number>();
-    for (const el of els) {
-      const parent = el.parentElement;
-      if (!parent) continue;
-      const i = siblingsIndex.get(parent) ?? 0;
-      siblingsIndex.set(parent, i + 1);
-      if (i > 0) el.style.setProperty("--reveal-delay", `${Math.min(i, 3) * 40}ms`);
-    }
-    // Anything on screen or just below it is shown straight away, so nothing waits or flickers.
-    for (const el of els) if (el.getBoundingClientRect().top < window.innerHeight * 1.25) el.classList.add("is-visible");
-    document.documentElement.classList.add("js-reveal");
+    const SELECTOR = "main section, main [data-reveal]";
     const io = new IntersectionObserver(
       (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("is-visible"); io.unobserve(e.target); } }),
       // Start revealing ~300px before an item scrolls into view, so it is already there when you reach it.
       { rootMargin: "0px 0px 300px 0px", threshold: 0 },
     );
-    els.filter((el) => !el.classList.contains("is-visible")).forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    const seen = new WeakSet<Element>();
+    /** Prepares new reveal targets: on screen (or just below) → shown at once; further down → revealed on scroll. */
+    const prepare = (els: HTMLElement[]) => {
+      const fresh = els.filter((el) => !seen.has(el));
+      const siblings = new Map<Element, number>();
+      for (const el of fresh) {
+        seen.add(el);
+        el.setAttribute("data-reveal", "");
+        const parent = el.parentElement;
+        if (parent) {
+          const i = siblings.get(parent) ?? 0;
+          siblings.set(parent, i + 1);
+          if (i > 0) el.style.setProperty("--reveal-delay", `${Math.min(i, 3) * 40}ms`);
+        }
+        if (el.getBoundingClientRect().top < window.innerHeight * 1.25) el.classList.add("is-visible");
+        else io.observe(el);
+      }
+    };
+    prepare(Array.from(document.querySelectorAll<HTMLElement>(SELECTOR)));
+    document.documentElement.classList.add("js-reveal");
+    // Content that arrives later (streamed pages, client updates) is picked up too, so nothing stays hidden.
+    const mo = new MutationObserver((records) => {
+      const added: HTMLElement[] = [];
+      for (const r of records) {
+        r.addedNodes.forEach((n) => {
+          if (!(n instanceof HTMLElement)) return;
+          if (n.matches(SELECTOR)) added.push(n);
+          added.push(...Array.from(n.querySelectorAll<HTMLElement>(SELECTOR)));
+        });
+      }
+      if (added.length) prepare(added);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => { io.disconnect(); mo.disconnect(); };
   }, [pathname]);
   return null;
 }

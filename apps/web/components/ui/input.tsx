@@ -1,7 +1,7 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { cn } from "./cn";
 
-const base = "w-full rounded-brand border border-border bg-card px-3 py-2 text-sm text-fg placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:opacity-60";
+const base = "w-full rounded-brand border border-border bg-card px-3 py-2 text-sm text-fg shadow-soft transition-[border-color,box-shadow] duration-200 placeholder:text-muted/70 hover:border-fg/20 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15 disabled:opacity-60";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(base, "h-10", className)} {...props} />;

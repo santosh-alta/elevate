@@ -23,6 +23,30 @@ export default {
       borderRadius: {
         brand: "var(--radius)",
       },
+      boxShadow: {
+        // Layered, soft shadows (shadcn-style) instead of a single hard drop shadow.
+        soft: "0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px -2px rgb(15 23 42 / 0.06)",
+        lift: "0 2px 4px rgb(15 23 42 / 0.04), 0 12px 32px -8px rgb(15 23 42 / 0.18)",
+        glow: "0 0 0 1px rgb(var(--accent) / 0.35), 0 12px 40px -12px rgb(var(--accent) / 0.45)",
+      },
+      keyframes: {
+        aurora: { "0%,100%": { transform: "translate(0,0) scale(1)" }, "33%": { transform: "translate(6%,-8%) scale(1.08)" }, "66%": { transform: "translate(-5%,6%) scale(0.95)" } },
+        shimmer: { "0%": { backgroundPosition: "0% 50%" }, "100%": { backgroundPosition: "200% 50%" } },
+        sheen: { "0%": { transform: "translateX(-120%) skewX(-20deg)" }, "100%": { transform: "translateX(220%) skewX(-20deg)" } },
+        float: { "0%,100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-6px)" } },
+        marquee: { "0%": { transform: "translateX(0)" }, "100%": { transform: "translateX(-50%)" } },
+        "fade-up": { "0%": { opacity: "0", transform: "translateY(14px)" }, "100%": { opacity: "1", transform: "none" } },
+        "pulse-dot": { "0%": { boxShadow: "0 0 0 0 rgb(var(--hero-accent) / 0.6)" }, "70%": { boxShadow: "0 0 0 8px rgb(var(--hero-accent) / 0)" }, "100%": { boxShadow: "0 0 0 0 rgb(var(--hero-accent) / 0)" } },
+      },
+      animation: {
+        aurora: "aurora 18s ease-in-out infinite",
+        "aurora-slow": "aurora 26s ease-in-out infinite reverse",
+        shimmer: "shimmer 6s linear infinite",
+        float: "float 4s ease-in-out infinite",
+        marquee: "marquee 40s linear infinite",
+        "fade-up": "fade-up 0.7s cubic-bezier(0.2,0.7,0.2,1) both",
+        "pulse-dot": "pulse-dot 2s ease-out infinite",
+      },
       fontFamily: {
         sans: ["var(--font-brand)", "ui-sans-serif", "system-ui", "sans-serif"],
         heading: ["var(--font-heading)", "var(--font-brand)", "ui-sans-serif", "system-ui", "sans-serif"],
