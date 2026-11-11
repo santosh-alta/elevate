@@ -119,6 +119,7 @@ export async function SiteFooter({ tenant: given }: { tenant?: Tenant } = {}) {
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-hero-fg/80">Explore</p>
           <ul className="space-y-2">
             <li><Link href="/events" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">All events</Link></li>
+            <li><Link href="/calendar" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">Event calendar</Link></li>
             <li><Link href="/winners" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">Winners hall of fame</Link></li>
             <li><Link href="/me" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">My tickets &amp; certificates</Link></li>
             <li><Link href="/feedback" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">Share feedback</Link></li>

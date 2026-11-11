@@ -35,6 +35,7 @@ model Tenant {
   notifications   Notification[]
   judgingPresets  JudgingPreset[]
   eventCategories EventCategory[]
+  externalEvents  ExternalEvent[]
 }
 
 model TenantDomain {
@@ -52,19 +53,19 @@ model TenantDomain {
 }
 
 model Campus {
-  id        String   @id @default(cuid())
-  tenantId  String
-  name      String
-  code      String
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  code          String
   /// Campus codes in the student database that belong to this campus (e.g. SAGE and SAGESELECT)
   externalCodes String[] @default([])
-  city      String?
-  address   String?
+  city          String?
+  address       String?
   /// Main campus photo for the campus page and cards
-  photoUrl  String?
+  photoUrl      String?
   /// Public campus profile: { university, state, about, approvals: string[], programme, websiteUrl, gallery: string[] }
-  details   Json?
-  createdAt DateTime @default(now())
+  details       Json?
+  createdAt     DateTime @default(now())
 
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships Membership[]
@@ -77,34 +78,34 @@ model Campus {
 // ───────────────────────────── People ─────────────────────────────
 
 model User {
-  id              String   @id @default(cuid())
-  email           String   @unique
-  name            String
-  phone           String?
-  avatarUrl       String?
-  linkedinUrl     String?
-  githubUrl       String?
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String
+  phone              String?
+  avatarUrl          String?
+  linkedinUrl        String?
+  githubUrl          String?
   /// College, university or organisation
-  college         String?
+  college            String?
   /// Course or degree, e.g. "B.Tech CSE"
-  degree          String?
-  graduationYear  Int?
-  city            String?
-  portfolioUrl    String?
-  leetcodeUrl     String?
-  gfgUrl          String?
-  codechefUrl     String?
-  hackerrankUrl   String?
-  codeforcesUrl   String?
+  degree             String?
+  graduationYear     Int?
+  city               String?
+  portfolioUrl       String?
+  leetcodeUrl        String?
+  gfgUrl             String?
+  codechefUrl        String?
+  hackerrankUrl      String?
+  codeforcesUrl      String?
   /// Set when the person has filled in the one-time profile page after first sign-in
   profileCompletedAt DateTime?
-  isPlatformAdmin Boolean  @default(false)
+  isPlatformAdmin    Boolean   @default(false)
   /// Google account id ("sub") once the user has signed in with Google
-  googleSub       String?  @unique
+  googleSub          String?   @unique
   /// GitHub account id once the user has signed in with GitHub
-  githubId        String?  @unique
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  githubId           String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   memberships      Membership[]
   ownedEvents      Event[]           @relation("EventOwner")
@@ -237,16 +238,16 @@ enum EventStatus {
 }
 
 model Event {
-  id                   String      @id @default(cuid())
+  id                   String         @id @default(cuid())
   tenantId             String
   slug                 String
   title                String
   tagline              String?
   description          String?
   type                 EventType
-  scope                EventScope  @default(CENTRAL)
-  mode                 EventMode   @default(OFFLINE)
-  status               EventStatus @default(DRAFT)
+  scope                EventScope     @default(CENTRAL)
+  mode                 EventMode      @default(OFFLINE)
+  status               EventStatus    @default(DRAFT)
   coverImageUrl        String?
   venue                String?
   meetingUrl           String?
@@ -255,37 +256,37 @@ model Event {
   registrationOpensAt  DateTime?
   registrationClosesAt DateTime?
   capacity             Int?
-  requiresApproval     Boolean     @default(false)
+  requiresApproval     Boolean        @default(false)
   /// Enabled modules: { teams, judging, submissions, guests, checkin, certificates, feedback, budget }
-  modules              Json        @default("{}")
+  modules              Json           @default("{}")
   /// Hackathon config: { minTeamSize, maxTeamSize, tracks: [{id,name,description}], prizes: [...] }
-  config               Json        @default("{}")
+  config               Json           @default("{}")
   /// Custom registration questions: [{ id, label, type, required, options? }]
-  registrationForm     Json        @default("[]")
+  registrationForm     Json           @default("[]")
   driveFolderUrl       String?
   livestreamUrl        String?
   venueMapUrl          String?
   contactEmail         String?
   contactPhone         String?
   /// [{ q, a }]
-  faqs                 Json        @default("[]")
+  faqs                 Json           @default("[]")
   /// Secret token that lets staff share a preview of a DRAFT/PLANNING event page
-  previewToken         String      @unique @default(cuid())
+  previewToken         String         @unique @default(cuid())
   clonedFromId         String?
   /// Fests: a sub-event points at its umbrella event (e.g. a hackathon inside a tech fest)
   parentEventId        String?
   /// Brand's own event type (e.g. "Founder Friday"); behaves like `type`
   categoryId           String?
   /// Free tags for filtering and reports, e.g. ["AI", "Placement"]
-  tags                 String[]    @default([])
+  tags                 String[]       @default([])
   /// Audience: enrolment years (batches) this event is for; empty = all batches
-  audienceBatches      Int[]       @default([])
+  audienceBatches      Int[]          @default([])
   /// Audience: programs (e.g. BTECH); empty = all programs
-  audiencePrograms     String[]    @default([])
+  audiencePrograms     String[]       @default([])
   /// Email the audience "new event, register now" when the event is announced
-  notifyOnAnnounce     Boolean     @default(false)
+  notifyOnAnnounce     Boolean        @default(false)
   /// Send reminders before the event to registered people
-  remindersEnabled     Boolean     @default(true)
+  remindersEnabled     Boolean        @default(true)
   /// When the "new event" email went out (so it's sent once)
   announcedNotifiedAt  DateTime?
   /// When the feedback request went out after the event (sent once)
@@ -293,11 +294,11 @@ model Event {
   /// When the outcome report was emailed to leadership (sent once)
   reportSentAt         DateTime?
   /// Extra page sections written in the rich-text editor: [{ id, title, html, icon? }] (rules, prizes, timeline, eligibility...)
-  pageSections         Json        @default("[]")
+  pageSections         Json           @default("[]")
   /// Registration fee in the smallest currency unit (paise). 0 or null = free
   feeAmount            Int?
-  currency             String      @default("INR")
-  feeType              FeeType     @default(PER_PERSON)
+  currency             String         @default("INR")
+  feeType              FeeType        @default(PER_PERSON)
   earlyBirdAmount      Int?
   earlyBirdEndsAt      DateTime?
   submissionsOpenAt    DateTime?
@@ -308,7 +309,7 @@ model Event {
   createdById          String?
   /// Who is accountable for the event (defaults to its creator; admins can reassign)
   ownerId              String?
-  owner                User?       @relation("EventOwner", fields: [ownerId], references: [id])
+  owner                User?          @relation("EventOwner", fields: [ownerId], references: [id])
   /// Organizer-created events must be approved before they can be published
   approvalStatus       ApprovalStatus @default(APPROVED)
   /// Reviewer's note, shown to the organizer (e.g. why it was sent back)
@@ -317,9 +318,9 @@ model Event {
   reviewedAt           DateTime?
   reviewedById         String?
   /// Whether this event may charge a fee (off for organizer events until an admin allows it)
-  paidAllowed          Boolean     @default(true)
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  paidAllowed          Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campuses          EventCampus[]
@@ -426,22 +427,22 @@ model TaskTemplate {
 }
 
 model EventTask {
-  id          String     @id @default(cuid())
-  eventId     String
-  phase       TaskPhase
-  title       String
-  notes       String?
-  status      TaskStatus @default(TODO)
-  dueAt       DateTime?
-  assigneeId  String?
-  completedAt DateTime?
-  sortOrder   Int        @default(0)
+  id            String     @id @default(cuid())
+  eventId       String
+  phase         TaskPhase
+  title         String
+  notes         String?
+  status        TaskStatus @default(TODO)
+  dueAt         DateTime?
+  assigneeId    String?
+  completedAt   DateTime?
+  sortOrder     Int        @default(0)
   /// Optional evidence link (poster, drive, booking confirmation)
-  evidenceUrl String?
+  evidenceUrl   String?
   /// Team responsible (OWNER, OPERATIONS, SOCIAL_MEDIA)
   team          String?
   /// evidenceUrl must be set before the task can be marked done
-  proofRequired Boolean @default(false)
+  proofRequired Boolean    @default(false)
 
   event    Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   assignee User? @relation("TaskAssignee", fields: [assigneeId], references: [id])
@@ -1180,28 +1181,28 @@ model AiUsage {
 /// Students from the institute's student database (synced monthly), including people who never signed up here.
 /// Used to email event invitations to the right campuses, batches and programs.
 model Student {
-  id           String    @id @default(cuid())
-  tenantId     String
+  id          String   @id @default(cuid())
+  tenantId    String
   /// Where the row came from, e.g. "redash:9", and its id there
-  source       String
-  externalId   String
-  name         String
-  email        String?
-  phone        String?
+  source      String
+  externalId  String
+  name        String
+  email       String?
+  phone       String?
   /// Campus code and name in the student database
-  campusCode   String?
-  campusName   String?
+  campusCode  String?
+  campusName  String?
   /// Our campus, when the code is mapped
-  campusId     String?
-  program      String?
+  campusId    String?
+  program     String?
   /// Enrolment (admission) year, e.g. 2026
-  batch        Int?
-  passingYear  Int?
-  active       Boolean   @default(true)
+  batch       Int?
+  passingYear Int?
+  active      Boolean  @default(true)
   /// Linked when someone signs in with this email
-  userId       String?
-  syncedAt     DateTime  @default(now())
-  createdAt    DateTime  @default(now())
+  userId      String?
+  syncedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campus Campus? @relation(fields: [campusId], references: [id], onDelete: SetNull)
@@ -1209,4 +1210,42 @@ model Student {
   @@unique([tenantId, source, externalId])
   @@index([tenantId, email])
   @@index([tenantId, active, campusId, batch])
+}
+
+/// Hackathons and competitions on other platforms (Unstop, Devfolio, MLH, Devpost) that students can join.
+/// Pulled daily; shown on the public calendar marked "External" once approved (or automatically when major).
+model ExternalEvent {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  /// "unstop" | "devfolio" | "mlh" | "devpost" | "manual"
+  source             String
+  sourceId           String
+  title              String
+  organizer          String?
+  url                String
+  imageUrl           String?
+  startsAt           DateTime
+  endsAt             DateTime
+  registrationEndsAt DateTime?
+  /// "ONLINE" | "OFFLINE" | "HYBRID"
+  mode               String    @default("ONLINE")
+  location           String?
+  prize              String?
+  participants       Int?
+  tags               String[]  @default([])
+  /// Popularity score used to pick the major ones (registrations, prize money, featured)
+  score              Float     @default(0)
+  major              Boolean   @default(false)
+  /// "SUGGESTED" (waiting for review) | "APPROVED" (shown) | "HIDDEN"
+  status             String    @default("SUGGESTED")
+  /// Set when an admin approves or hides it, so the daily sync never overrides that choice
+  reviewedAt         DateTime?
+  fetchedAt          DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, source, sourceId])
+  @@index([tenantId, status, startsAt])
 }

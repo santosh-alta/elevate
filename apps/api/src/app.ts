@@ -33,6 +33,7 @@ import { checkinRoutes } from "./routes/checkin";
 import { selfCheckinRoutes } from "./routes/selfCheckin";
 import { studentRoutes } from "./routes/students";
 import { insightRoutes } from "./routes/insights";
+import { externalEventRoutes } from "./routes/externalEvents";
 import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
 export async function buildApp() {
@@ -123,6 +124,7 @@ export async function buildApp() {
       selfCheckinRoutes(v1);
       studentRoutes(v1);
       insightRoutes(v1);
+      externalEventRoutes(v1);
       devRoutes(v1); // non-production only
     },
     { prefix: "/v1" },

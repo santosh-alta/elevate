@@ -5,12 +5,14 @@ import type { TourStep } from "@/components/client/site-tour";
  * current page (home-only steps on an event page, Insights for non-admins, and so on).
  */
 /** Browsing pages only: not check-in, judging, sign-in or forms. */
-export const PUBLIC_TOUR_PATHS = "^/(events(/[^/]+)?|campuses(/[^/]+)?|winners)?/?$";
+export const PUBLIC_TOUR_PATHS = "^/(events(/[^/]+)?|campuses(/[^/]+)?|winners|calendar)?/?$";
 
 export function publicTour(brand: string): TourStep[] {
   return [
     { title: `Welcome to ${brand} Events 👋`, body: "Hackathons, workshops, talks and competitions across every campus, all in one place. Here's a quick look around. It takes under a minute." },
-    { target: "site-nav", title: "Find your way", body: "Browse every event, see what's happening at each campus, and meet the winners of past hackathons and competitions." },
+    { target: "site-nav", title: "Find your way", body: "Browse every event, see them by date on the Calendar, check what's happening at each campus, and meet the winners of past hackathons and competitions." },
+    { target: "calendar-filter", title: "Ours and outside events", body: "Solid ones are our own events: register right here. Dashed ones are major hackathons on other platforms (Unstop, Devfolio, MLH, Devpost) that you can join too." },
+    { target: "calendar-agenda", title: "Day by day", body: "Everything this month by date. External ones show the deadline to apply and open on the organiser's site." },
     { target: "home-cta", title: "Start here", body: "Explore upcoming events, or open My tickets & certificates to see everything you've registered for and earned." },
     { target: "home-stats", title: "Our community so far", body: "Events held, people who took part, and the campuses that make up the community." },
     { target: "home-campuses", title: "Every campus", body: "Tap a campus to see its upcoming events, past highlights and photos." },
@@ -36,6 +38,7 @@ export function adminTour(brand: string): TourStep[] {
     { target: "admin-review", title: "Review queue", body: "Event pages submitted by organizers wait here for approval before they go live." },
     { target: "admin-tasks", title: "My tasks", body: "Your checklist across events: what operations and social media need to do, and when." },
     { target: "admin-calendar", title: "Calendar", body: "Every event across campuses on one calendar, to avoid clashes." },
+    { target: "admin-external", title: "Outside events", body: "Major hackathons on Unstop, Devfolio, MLH and Devpost, pulled daily. Choose which ones students see on the public calendar, or add one yourself." },
     { target: "admin-insights", title: "Insights", body: "Trends, campus comparisons and a scorecard for every event: turnout, ratings, what worked and what to improve." },
     { target: "admin-feedback", title: "Feedback", body: "What participants said after each event, with ratings by area and AI summaries." },
     { target: "admin-guests", title: "Guest library", body: "Speakers, judges and mentors you've worked with, ready to invite again." },

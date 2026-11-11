@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CalendarRange, Menu, MapPin, Trophy, X } from "lucide-react";
+import { CalendarDays, CalendarRange, Menu, MapPin, Trophy, X } from "lucide-react";
 
 type Item = { href: string; label: string; icon: typeof Menu };
 
@@ -13,6 +13,7 @@ export function SiteNav({ showCampuses }: { showCampuses: boolean }) {
   const [open, setOpen] = useState(false);
   const items: Item[] = [
     { href: "/events", label: "Events", icon: CalendarRange },
+    { href: "/calendar", label: "Calendar", icon: CalendarDays },
     ...(showCampuses ? [{ href: "/campuses", label: "Campuses", icon: MapPin }] : []),
     { href: "/winners", label: "Winners", icon: Trophy },
   ];
