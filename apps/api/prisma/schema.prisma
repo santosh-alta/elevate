@@ -475,12 +475,23 @@ model GuestProfile {
   expertise    String[] @default([])
   /// Internal notes (relationship history, preferences). Never public.
   notes        String?
+  /// "ALTA" for the brand's own instructors and staff (synced from the student database), else "EXTERNAL"
+  affiliation  String   @default("EXTERNAL")
+  /// Where a synced profile came from, and its id there (email)
+  source       String?
+  externalId   String?
+  /// Synced instructors who no longer teach are kept but marked inactive
+  active       Boolean  @default(true)
+  /// Campus codes they teach at
+  campuses     String[] @default([])
+  contractType String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   appearances EventGuest[]
 
+  @@unique([tenantId, source, externalId])
   @@index([tenantId, name])
 }
 

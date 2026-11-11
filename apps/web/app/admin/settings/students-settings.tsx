@@ -8,7 +8,7 @@ import { cn } from "@/components/ui/cn";
 import type { Campus } from "@/lib/types";
 
 type Summary = {
-  connected: boolean; lastSyncAt: string | null; total: number;
+  connected: boolean; lastSyncAt: string | null; total: number; faculty?: number;
   campuses: { campusId: string | null; name: string; codes: string[]; students: number }[];
   batches: { batch: number; students: number }[];
   programs: { program: string; students: number }[];
@@ -87,7 +87,7 @@ export function StudentsSettings({ campuses, canEdit }: { campuses: Pick<Campus,
           {!s ? <p className="text-sm text-muted">Loading…</p> : (
             <>
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                <span className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><strong>{s.total.toLocaleString("en-IN")}</strong> active students</span>
+                <span className="flex items-center gap-2"><Database className="h-4 w-4 text-primary" /><strong>{s.total.toLocaleString("en-IN")}</strong> active students{s.faculty ? <> · <strong>{s.faculty}</strong> ALTA instructors</> : null}</span>
                 <span className="text-muted">{s.lastSyncAt ? `Last synced ${new Date(s.lastSyncAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} · next sync in about a month` : "Not synced yet"}</span>
                 {!s.connected && <span className="text-amber-700">Student database not connected</span>}
               </div>

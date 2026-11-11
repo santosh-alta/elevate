@@ -34,9 +34,10 @@ export function studentRoutes(app: FastifyInstance) {
       campusRows.set(key, row);
     }
     const sync = ((tenant.settings ?? {}) as { studentSync?: { lastSyncAt?: string; total?: number } }).studentSync ?? null;
+    const faculty = await prisma.guestProfile.count({ where: { tenantId: tenant.id, affiliation: "ALTA", active: true } });
     return {
       connected: !!studentSourceFor(tenant.slug) && !!process.env.REDASH_URL && !!process.env.REDASH_KEY,
-      lastSyncAt: sync?.lastSyncAt ?? null, total,
+      lastSyncAt: sync?.lastSyncAt ?? null, total, faculty,
       campuses: [...campusRows.values()].sort((a, b) => b.students - a.students),
       batches: byBatch.filter((b) => b.batch).map((b) => ({ batch: b.batch!, students: b._count })),
       programs: byProgram.filter((p) => p.program).map((p) => ({ program: p.program!, students: p._count })).sort((a, b) => b.students - a.students),

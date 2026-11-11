@@ -51,6 +51,7 @@ export interface GuestProfile {
   id: string; name: string; email?: string | null; phone?: string | null; designation?: string | null;
   organization?: string | null; bio?: string | null; photoUrl?: string | null; linkedinUrl?: string | null;
   websiteUrl?: string | null; city?: string | null; expertise?: string[]; notes?: string | null;
+  affiliation?: "ALTA" | "EXTERNAL"; active?: boolean; campuses?: string[]; contractType?: string | null;
   appearances?: Guest[] | number; lastEvent?: ElevateEvent | null; _count?: Record<string, number>;
 }
 export interface Sponsor { id: string; name: string; logoUrl?: string | null; website?: string | null; tier?: string; sortOrder?: number }

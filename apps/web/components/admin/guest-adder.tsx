@@ -76,7 +76,7 @@ export function GuestAdder({ eventId, staff }: { eventId: string; staff: { id: s
                   ) : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{p.name.slice(0, 1)}</div>}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
-                    <p className="truncate text-xs text-muted">{[p.designation, p.organization].filter(Boolean).join(", ")}{typeof p.appearances === "number" ? ` · ${p.appearances} events` : ""}</p>
+                    <p className="truncate text-xs text-muted">{p.affiliation === "ALTA" ? "ALTA faculty · " : "External · "}{[p.designation, p.organization].filter(Boolean).join(", ")}{typeof p.appearances === "number" ? ` · ${p.appearances} events` : ""}</p>
                   </div>
                   <Button size="sm" variant="secondary" disabled={busy} onClick={() => add({ profileId: p.id, role })}>Add</Button>
                 </li>

@@ -33,6 +33,7 @@ const profileSchema = z.object({
   city: optStr,
   expertise: z.array(z.string().trim().min(1)).max(30).optional(),
   notes: optStr,
+  affiliation: z.enum(["ALTA", "EXTERNAL"]).optional(),
 });
 
 const guestSchema = z.object({
@@ -153,10 +154,13 @@ export function guestRoutes(app: FastifyInstance) {
   app.get("/guest-profiles", async (req) => {
     requireStaff(req);
     const tenant = requireTenant(req);
-    const { q } = z.object({ q: z.string().trim().optional() }).parse(req.query);
+    const { q, affiliation } = z.object({ q: z.string().trim().optional(), affiliation: z.enum(["ALTA", "EXTERNAL"]).optional() }).parse(req.query);
     const profiles = await prisma.guestProfile.findMany({
       where: {
         tenantId: tenant.id,
+        ...(affiliation && { affiliation }),
+        // Former instructors (no longer teaching) are hidden unless searched for by name.
+        ...(!q && { active: true }),
         ...(q && {
           OR: [
             { name: { contains: q, mode: "insensitive" } },
@@ -166,8 +170,8 @@ export function guestRoutes(app: FastifyInstance) {
           ],
         }),
       },
-      orderBy: { name: "asc" },
-      take: 200,
+      orderBy: [{ affiliation: "asc" }, { name: "asc" }],
+      take: 300,
       include: {
         _count: { select: { appearances: true } },
         appearances: {

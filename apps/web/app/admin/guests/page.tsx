@@ -11,17 +11,18 @@ import { GuestAvatar } from "@/components/guest-avatar";
 
 export const metadata: Metadata = { title: "Guest library" };
 
-export default async function GuestLibraryPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function GuestLibraryPage({ searchParams }: { searchParams: Promise<{ q?: string; who?: string }> }) {
   await requireStaffPage();
-  const { q = "" } = await searchParams;
-  const profiles = await apiList<GuestProfile>(`/guest-profiles?q=${encodeURIComponent(q)}`);
+  const { q = "", who = "" } = await searchParams;
+  const aff = who === "alta" ? "ALTA" : who === "external" ? "EXTERNAL" : "";
+  const profiles = await apiList<GuestProfile>(`/guest-profiles?q=${encodeURIComponent(q)}${aff ? `&affiliation=${aff}` : ""}`);
   const count = (p: GuestProfile) => (typeof p.appearances === "number" ? p.appearances : Array.isArray(p.appearances) ? p.appearances.length : p._count?.appearances ?? 0);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Guest library</h1>
-        <p className="text-sm text-muted">Every speaker, founder, investor and chief guest who has joined our events, with their full history.</p>
+        <p className="text-sm text-muted">ALTA instructors (synced monthly from the student database) and external speakers, mentors and judges, with their full event history.</p>
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <Card>
@@ -33,6 +34,12 @@ export default async function GuestLibraryPage({ searchParams }: { searchParams:
               </div>
               <Button type="submit" variant="outline">Search</Button>
             </form>
+            <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-medium">
+              {([["", "Everyone"], ["alta", "ALTA faculty"], ["external", "External"]] as const).map(([k, label]) => (
+                <Link key={k} href={`/admin/guests?${new URLSearchParams({ ...(q && { q }), ...(k && { who: k }) })}`}
+                  className={`rounded-full border px-3 py-1 ${who === k ? "border-primary bg-primary text-primary-fg" : "border-border hover:border-primary/50"}`}>{label}</Link>
+              ))}
+            </div>
           </CardBody>
           {profiles.length ? (
             <Table>
@@ -43,7 +50,13 @@ export default async function GuestLibraryPage({ searchParams }: { searchParams:
                     <Td>
                       <Link href={`/admin/guests/${p.id}`} className="flex items-center gap-3 hover:text-primary">
                         <GuestAvatar guest={p} size="h-9 w-9" />
-                        <span><span className="block font-medium">{p.name}</span><span className="block text-xs text-muted">{[p.designation, p.organization].filter(Boolean).join(", ")}</span></span>
+                        <span>
+                          <span className="flex items-center gap-2 font-medium">{p.name}
+                            {p.affiliation === "ALTA" ? <Badge tone="purple">ALTA faculty</Badge> : <Badge tone="gray">External</Badge>}
+                            {p.active === false && <Badge tone="gray">Former</Badge>}
+                          </span>
+                          <span className="block text-xs text-muted">{[p.designation, p.affiliation === "ALTA" && p.campuses?.length ? p.campuses.join(", ") : p.organization].filter(Boolean).join(" · ")}</span>
+                        </span>
                       </Link>
                     </Td>
                     <Td><div className="flex max-w-xs flex-wrap gap-1">{(p.expertise ?? []).slice(0, 3).map((x) => <Badge key={x}>{x}</Badge>)}</div></Td>

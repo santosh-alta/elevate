@@ -22,6 +22,32 @@ LEFT JOIN campus c ON c.id = u.campus_id
 LEFT JOIN programs p ON p.id = u.program
 WHERE u.role = 'student' AND u.status = '1' AND u.isTestingUser = '0'`;
 
+/**
+ * ALTA instructors: an active staff account with an @altaschool.tech or @sunstone.in email, currently assigned to
+ * teach a section (2023 batch onward) at a campus with ALTA students. University faculty and everyone else are left out.
+ */
+const FACULTY_SQL = `SELECT f.id AS id,
+  TRIM(CONCAT_WS(' ', f.first_name, NULLIF(f.middle_name, ''), f.last_name)) AS name,
+  LOWER(pu.email) AS email, f.phone AS phone, d.designation AS designation, f.contract_type AS contract_type, f.bio AS bio,
+  GROUP_CONCAT(DISTINCT c.campus_name ORDER BY c.campus_name) AS campuses,
+  (SELECT GROUP_CONCAT(DISTINCT e.name ORDER BY e.name) FROM faculty_expertise_mapping fem JOIN expertise e ON e.id = fem.expertise_id WHERE fem.faculty_id = f.id AND fem.status = '1') AS expertise
+FROM faculty f
+JOIN panel_users pu ON pu.id = f.panel_user_id
+JOIN panel_user_subject_section_map m ON m.panel_user_id = f.panel_user_id AND m.status = '1'
+JOIN sections s ON s.id = m.section_id
+JOIN campus c ON c.id = s.campus_id
+LEFT JOIN panel_designations d ON d.id = f.designation_id
+WHERE f.status = '1' AND pu.email NOT LIKE '%\\_deleted\\_%'
+  AND (pu.email LIKE '%@altaschool.tech' OR pu.email LIKE '%@sunstone.in')
+  AND s.admission_year >= 2023
+  AND s.campus_id IN (SELECT DISTINCT campus_id FROM users WHERE role = 'student' AND status = '1' AND isTestingUser = '0')
+GROUP BY f.id, name, email, f.phone, d.designation, f.contract_type, f.bio`;
+
+type FacultyRow = {
+  id: number | string; name: string | null; email: string | null; phone: string | null; designation: string | null;
+  contract_type: string | null; bio: string | null; campuses: string | null; expertise: string | null;
+};
+
 type Row = {
   id: number | string; name: string | null; email: string | null; phone: string | null;
   batch: number | string | null; passing_year: number | string | null;
@@ -49,8 +75,8 @@ async function redash<T>(path: string, body?: unknown): Promise<T> {
 }
 
 /** Runs a read-only SQL query on a Redash data source and returns the rows. */
-async function runQuery(dataSourceId: number, sql: string): Promise<Row[]> {
-  type Result = { query_result?: { data: { rows: Row[] } }; job?: { id: string; status: number; error?: string; query_result_id?: number } };
+async function runQuery<R = Row>(dataSourceId: number, sql: string): Promise<R[]> {
+  type Result = { query_result?: { data: { rows: R[] } }; job?: { id: string; status: number; error?: string; query_result_id?: number } };
   let r = await redash<Result>("/api/query_results", { data_source_id: dataSourceId, query: sql, max_age: 0 });
   if (r.job) {
     let job = r.job;
@@ -72,7 +98,7 @@ const int = (v: unknown) => {
 };
 
 export type SyncResult = {
-  imported: number; updated: number; deactivated: number; total: number;
+  imported: number; updated: number; deactivated: number; total: number; faculty: number;
   matchedCampuses: { code: string; campus: string }[]; unmatched: { code: string; name: string; students: number }[];
   finishedAt: string;
 };
@@ -156,11 +182,17 @@ export async function syncStudents(tenantId: string): Promise<SyncResult> {
     ? (await prisma.student.updateMany({ where: { tenantId, source, externalId: { in: gone }, active: true }, data: { active: false } })).count
     : 0;
 
-  const result: SyncResult = { imported, updated, deactivated, total: seen.size, matchedCampuses: matched, unmatched, finishedAt: now.toISOString() };
+  let faculty = 0;
+  try {
+    faculty = await syncFaculty(tenantId, tenant.name, ds, now);
+  } catch (e) {
+    console.warn("[faculty] sync failed", e);
+  }
+  const result: SyncResult = { imported, updated, deactivated, total: seen.size, faculty, matchedCampuses: matched, unmatched, finishedAt: now.toISOString() };
   const fresh = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { settings: true } });
   await prisma.tenant.update({
     where: { id: tenantId },
-    data: { settings: { ...((fresh.settings ?? {}) as object), studentSync: { lastSyncAt: result.finishedAt, total: result.total, unmatched } } as Prisma.InputJsonValue },
+    data: { settings: { ...((fresh.settings ?? {}) as object), studentSync: { lastSyncAt: result.finishedAt, total: result.total, faculty: result.faculty, unmatched } } as Prisma.InputJsonValue },
   });
   return result;
 }
@@ -184,4 +216,55 @@ export async function syncStudentsIfDue(): Promise<void> {
       console.warn(`[students] ${t.slug} sync failed`, e);
     }
   }
+}
+
+/**
+ * Puts ALTA instructors into the guest directory, tagged ALTA, so they can be picked as speakers, mentors or judges.
+ * One profile per email (people with several faculty records are merged). Details they or the team filled in
+ * (bio, photo, links) are never overwritten. Instructors who stop teaching are marked inactive.
+ */
+async function syncFaculty(tenantId: string, org: string, ds: number, now: Date): Promise<number> {
+  const rows = await runQuery<FacultyRow>(ds, FACULTY_SQL);
+  const source = `redash:${ds}:faculty`;
+  const people = new Map<string, { name: string; phone: string | null; designation: string | null; contract: string | null; bio: string | null; campuses: Set<string>; expertise: Set<string> }>();
+  for (const r of rows) {
+    const email = r.email?.toLowerCase().trim();
+    if (!email || !r.name) continue;
+    const p = people.get(email) ?? { name: r.name.trim(), phone: null, designation: null, contract: null, bio: null, campuses: new Set<string>(), expertise: new Set<string>() };
+    p.phone ??= r.phone?.trim() || null;
+    p.designation ??= r.designation?.trim() || null;
+    p.contract ??= r.contract_type || null;
+    p.bio ??= r.bio?.trim() || null;
+    (r.campuses ?? "").split(",").map((x) => x.trim()).filter(Boolean).forEach((x) => p.campuses.add(x));
+    (r.expertise ?? "").split(",").map((x) => x.trim()).filter(Boolean).forEach((x) => p.expertise.add(x));
+    people.set(email, p);
+  }
+  const existing = await prisma.guestProfile.findMany({ where: { tenantId, OR: [{ source }, { email: { in: [...people.keys()] } }] } });
+  const bySource = new Map(existing.filter((g) => g.source === source && g.externalId).map((g) => [g.externalId!, g]));
+  const byEmail = new Map(existing.filter((g) => g.email).map((g) => [g.email!.toLowerCase(), g]));
+  for (const [email, p] of people) {
+    const g = bySource.get(email) ?? byEmail.get(email);
+    const synced = {
+      affiliation: "ALTA", source, externalId: email, active: true,
+      campuses: [...p.campuses].sort(), contractType: p.contract, expertise: [...p.expertise].slice(0, 20),
+    };
+    if (g) {
+      await prisma.guestProfile.update({
+        where: { id: g.id },
+        data: {
+          ...synced,
+          ...(!g.name && { name: p.name }), ...(!g.email && { email }), ...(!g.phone && p.phone && { phone: p.phone }),
+          ...(!g.designation && p.designation && { designation: p.designation }), ...(!g.organization && { organization: org }),
+          ...(!g.bio && p.bio && { bio: p.bio }),
+        },
+      });
+    } else {
+      await prisma.guestProfile.create({
+        data: { tenantId, ...synced, name: p.name, email, phone: p.phone, designation: p.designation, organization: org, bio: p.bio },
+      });
+    }
+  }
+  await prisma.guestProfile.updateMany({ where: { tenantId, source, externalId: { notIn: [...people.keys()] }, active: true }, data: { active: false } });
+  void now;
+  return people.size;
 }
