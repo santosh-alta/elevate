@@ -7,6 +7,7 @@ import { findEvent, isPlatformAdmin, requireEventManager, requireStaff, requireU
 import { badRequest, conflict } from "../lib/errors";
 import { buildOutcome } from "../lib/outcome";
 import { summariseOutcome } from "../lib/outcomeSummary";
+import { renderEventReportPdf } from "../lib/eventReport";
 import { withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { EVENT_FAMILIES, familyOf, type EventType } from "@elevate/shared";
 import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
@@ -42,6 +43,17 @@ export function reportRoutes(app: FastifyInstance) {
     const { cached } = z.object({ cached: z.coerce.boolean().optional() }).parse(req.query);
     if (cached && event.outcome) return event.outcome;
     return buildOutcome(event.id);
+  });
+
+  /** One-click event report as a branded PDF (numbers, results, feedback, photos, money, who did what). */
+  app.get<{ Params: { id: string } }>("/events/:id/report.pdf", async (req, reply) => {
+    const event = await requireEventManager(req, req.params.id);
+    const { pdf, filename } = await renderEventReportPdf(event.id);
+    return reply
+      .type("application/pdf")
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .header("Cache-Control", "no-store")
+      .send(Buffer.from(pdf));
   });
 
   /** AI leadership summary of the outcome (why, how, what next). Counts as one AI use. */

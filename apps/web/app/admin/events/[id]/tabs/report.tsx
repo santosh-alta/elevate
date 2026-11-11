@@ -1,11 +1,11 @@
-import { CheckCircle2, Circle, ExternalLink, MinusCircle } from "lucide-react";
+import { CheckCircle2, Circle, Download, ExternalLink, MinusCircle } from "lucide-react";
 import { WORK_TEAMS, WORK_TEAM_LABELS, type WorkTeam } from "@elevate/shared";
 import { apiGet, apiList } from "@/lib/api";
 import { eventLabel, fmtDate, fmtRange, humanize } from "@/lib/format";
 import type { ElevateEvent, Task, Tenant } from "@/lib/types";
 import { KeyValue, numericLeaves } from "@/components/kv";
 import { BrandLogo } from "@/components/brand-logo";
-import { Card, EmptyState, Stat } from "@/components/ui";
+import { Card, EmptyState, LinkButton, Stat } from "@/components/ui";
 import { PrintButton } from "@/components/client/misc";
 import { LeadershipSummary, type OutcomeSummary } from "@/components/admin/leadership-summary";
 
@@ -21,7 +21,11 @@ export async function ReportTab({ event, tenant }: { event: ElevateEvent; tenant
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end print:hidden"><PrintButton /></div>
+      <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
+        <span className="mr-auto text-sm text-muted">One branded PDF with everything about this event, ready to share with the founders.</span>
+        <LinkButton href={`/api/proxy/events/${event.id}/report.pdf`} external size="sm"><Download className="h-4 w-4" />Download report (PDF)</LinkButton>
+        <PrintButton />
+      </div>
       <Card className="p-8 print:border-0 print:shadow-none">
         <div className="flex items-start justify-between gap-4 border-b border-border pb-6">
           <div>

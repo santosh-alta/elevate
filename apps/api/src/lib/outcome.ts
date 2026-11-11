@@ -5,7 +5,7 @@ import { revenueFor } from "./payments";
 import { CATEGORY_SELECT, eventMeta } from "./tags";
 
 /** Builds the outcome report for an event and caches it in Event.outcome. */
-export async function buildOutcome(eventId: string) {
+export async function buildOutcome(eventId: string, opts: { save?: boolean } = {}) {
   const event = await prisma.event.findUniqueOrThrow({
     where: { id: eventId },
     include: { campuses: { include: { campus: true } }, category: CATEGORY_SELECT },
@@ -105,9 +105,11 @@ export async function buildOutcome(eventId: string) {
     },
   };
 
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { outcome: JSON.parse(JSON.stringify(outcome)) as Prisma.InputJsonValue },
-  });
+  if (opts.save !== false) {
+    await prisma.event.update({
+      where: { id: eventId },
+      data: { outcome: JSON.parse(JSON.stringify(outcome)) as Prisma.InputJsonValue },
+    });
+  }
   return outcome;
 }
