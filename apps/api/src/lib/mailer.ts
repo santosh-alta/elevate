@@ -8,6 +8,7 @@ export interface OutgoingEmail {
   html: string;
   replyTo?: string;
   cc?: string[];
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
 export type SendResult = { status: "SENT" } | { status: "SKIPPED"; reason: string };

@@ -20,8 +20,12 @@ export function filterFor(event: Event & { campuses?: { campusId: string }[] }):
 }
 
 export async function audience(f: AudienceFilter): Promise<Person[]> {
+  // Passed-out students are left out even if they're still in the student database (graduation assumed by July).
+  const now = new Date();
+  const lastBatchOut = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
   const where: Prisma.StudentWhereInput = {
     tenantId: f.tenantId, active: true, email: { not: null },
+    OR: [{ passingYear: null }, { passingYear: { gt: lastBatchOut } }],
     ...(f.campusIds && { campusId: { in: f.campusIds } }),
     ...(f.batches.length && { batch: { in: f.batches } }),
     ...(f.programs.length && { program: { in: f.programs, mode: "insensitive" } }),

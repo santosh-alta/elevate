@@ -254,18 +254,7 @@ export default async function MePage() {
                       <Download className="h-4 w-4" />Download photos (ZIP)
                     </a>
                   </div>
-                  <p className="text-sm font-medium">Tell us how it went</p>
-                  <ApiForm path={`/events/${r.eventId}/feedback`} className="space-y-3" successMessage="Thanks for your feedback!">
-                    <div className="grid grid-cols-2 gap-3">
-                      <Select name="rating:number" required defaultValue="">
-                        <option value="" disabled>Rating</option>
-                        {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{"★".repeat(n)} ({n})</option>)}
-                      </Select>
-                      <Input name="nps:number" type="number" min={0} max={10} placeholder="Recommend? 0–10" />
-                    </div>
-                    <Textarea name="comment" placeholder="What did you like? What could be better?" />
-                    <Button type="submit" size="sm">Send feedback</Button>
-                  </ApiForm>
+                  <LinkButton href={`/events/${r.event!.slug}/feedback`} size="sm">Give feedback</LinkButton>
                 </CardBody>
               </Card>
             ))}

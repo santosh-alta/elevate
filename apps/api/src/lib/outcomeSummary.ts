@@ -18,6 +18,8 @@ export type OutcomeSummary = {
   concerns: string[];
   why: string[];
   recommendations: string[];
+  /** What participants said, rewritten per area, e.g. "Content (4.5/5): …" */
+  feedbackPoints?: string[];
   generatedAt: string;
   model: string;
 };
@@ -37,7 +39,10 @@ export async function summariseOutcome(eventId: string): Promise<{ summary: Outc
   });
   const outcome = (await buildOutcome(eventId)) as unknown as Outcome;
   const [comments, tasks, similar] = await Promise.all([
-    prisma.feedback.findMany({ where: { eventId, comment: { not: null } }, select: { rating: true, comment: true }, orderBy: { createdAt: "desc" }, take: 60 }),
+    prisma.feedback.findMany({
+      where: { eventId, OR: [{ comment: { not: null } }, { liked: { not: null } }, { improve: { not: null } }] },
+      select: { rating: true, comment: true, liked: true, improve: true }, orderBy: { createdAt: "desc" }, take: 80,
+    }),
     prisma.eventTask.findMany({ where: { eventId }, select: { title: true, team: true, status: true, dueAt: true, completedAt: true, phase: true } }),
     prisma.event.findMany({
       where: { tenantId: event.tenantId, type: event.type, status: "COMPLETED", id: { not: eventId } },
@@ -73,7 +78,7 @@ export async function summariseOutcome(eventId: string): Promise<{ summary: Outc
     "", "## Checklist by team (done/total, and items not done or done late)",
     ...[...byTeam.entries()].map(([team, r]) => `- ${team}: ${r.done}/${r.total}${r.late.length ? `; ${r.late.slice(0, 8).join("; ")}` : ""}`),
     "", `## Feedback comments (${comments.length}, anonymous)`,
-    ...comments.map((c) => `- ${c.rating}/5: ${c.comment!.replace(/\s+/g, " ").slice(0, 240)}`),
+    ...comments.map((c) => `- ${c.rating}/5: ${[c.comment && `comment: ${c.comment}`, c.liked && `liked: ${c.liked}`, c.improve && `improve: ${c.improve}`].filter(Boolean).join(" | ").replace(/\s+/g, " ").slice(0, 400)}`),
     "", "## Similar past events of the same type", ...(comparables.length ? comparables : ["(none)"]),
   ].filter((l) => l !== "").join("\n");
 
@@ -87,8 +92,9 @@ export async function summariseOutcome(eventId: string): Promise<{ summary: Outc
       "Return JSON with exactly these keys:",
       '{"verdict": "strong" | "good" | "mixed" | "weak", "headline": "one line, max 15 words", "summary": "2–3 sentences",',
       '"highlights": ["what went well, with numbers"], "concerns": ["what fell short or is missing"], "why": ["likely reasons behind the results, grounded in the data"],',
-      '"recommendations": ["specific actions for the next edition"]}',
-      "Each list has 2–5 short items (one sentence each).",
+      '"recommendations": ["specific actions for the next edition"],',
+      '"feedbackPoints": ["what participants said, one item per area, e.g. \'Content (4.5/5): …\', \'Speakers (4.2/5): …\', \'Organisation (…)\', \'Venue (…)\', then \'Most liked: …\' and \'Asked to improve: …\'"]}',
+      "Each list has 2–6 short items (one sentence each). Base feedbackPoints only on the feedback given (ratings in outcome numbers → feedback.aspects, and the comments); if there was no feedback, return an empty list.",
     ].join("\n"),
     json: true,
     maxTokens: 2000,
@@ -105,6 +111,7 @@ export async function summariseOutcome(eventId: string): Promise<{ summary: Outc
     headline: String(parsed.headline ?? "").slice(0, 200),
     summary: String(parsed.summary ?? "").slice(0, 1200),
     highlights: list(parsed.highlights), concerns: list(parsed.concerns), why: list(parsed.why), recommendations: list(parsed.recommendations),
+    feedbackPoints: list(parsed.feedbackPoints),
     generatedAt: new Date().toISOString(),
     model: r.model,
   };

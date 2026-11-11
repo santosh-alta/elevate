@@ -8,6 +8,7 @@ import { badRequest } from "../lib/errors";
 import { studentSourceFor, syncStudents } from "../lib/studentSync";
 import { audience } from "../lib/audience";
 import { reminderHoursOf } from "../worker";
+import { reportSettingsOf } from "../lib/afterEvent";
 
 /** Student list (synced from the student database), event audiences and notification settings. */
 export function studentRoutes(app: FastifyInstance) {
@@ -104,7 +105,7 @@ export function studentRoutes(app: FastifyInstance) {
   app.get("/notification-settings", async (req) => {
     requireStaff(req);
     const s = (requireTenant(req).settings ?? {}) as { notifications?: { announceByDefault?: boolean } };
-    return { reminderHours: reminderHoursOf(s), announceByDefault: s.notifications?.announceByDefault === true };
+    return { reminderHours: reminderHoursOf(s), announceByDefault: s.notifications?.announceByDefault === true, report: reportSettingsOf(s) };
   });
 
   app.put("/notification-settings", async (req) => {
@@ -113,11 +114,15 @@ export function studentRoutes(app: FastifyInstance) {
     const body = z.object({
       reminderHours: z.array(z.number().positive().max(24 * 14)).max(6),
       announceByDefault: z.boolean(),
+      report: z.object({
+        to: z.array(z.string().trim().email()).max(10), cc: z.array(z.string().trim().email()).max(20), afterDays: z.number().int().min(1).max(30),
+      }).optional(),
     }).parse(req.body);
     const fresh = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id }, select: { settings: true } });
     const settings = { ...((fresh.settings ?? {}) as Record<string, unknown>) };
     settings.notifications = { ...((settings.notifications ?? {}) as object), reminderHours: [...new Set(body.reminderHours)].sort((a, b) => b - a), announceByDefault: body.announceByDefault };
+    if (body.report) settings.eventReport = { to: body.report.to.map((e) => e.toLowerCase()), cc: body.report.cc.map((e) => e.toLowerCase()), afterDays: body.report.afterDays };
     await prisma.tenant.update({ where: { id: tenant.id }, data: { settings: settings as Prisma.InputJsonValue } });
-    return { reminderHours: reminderHoursOf(settings), announceByDefault: body.announceByDefault };
+    return { reminderHours: reminderHoursOf(settings), announceByDefault: body.announceByDefault, report: reportSettingsOf(settings) };
   });
 }

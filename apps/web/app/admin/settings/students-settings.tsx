@@ -13,7 +13,7 @@ type Summary = {
   batches: { batch: number; students: number }[];
   programs: { program: string; students: number }[];
 };
-type Notif = { reminderHours: number[]; announceByDefault: boolean };
+type Notif = { reminderHours: number[]; announceByDefault: boolean; report: { to: string[]; cc: string[]; afterDays: number } };
 
 const REMINDER_OPTIONS = [
   { h: 168, label: "1 week" }, { h: 72, label: "3 days" }, { h: 24, label: "1 day" },
@@ -27,11 +27,16 @@ export function StudentsSettings({ campuses, canEdit }: { campuses: Pick<Campus,
   const [n, setN] = useState<Notif | null>(null);
   const [savedN, setSavedN] = useState<Notif | null>(null);
   const [nMsg, setNMsg] = useState<string | null>(null);
+  const [toText, setToText] = useState("");
+  const [ccText, setCcText] = useState("");
+  const emails = (t: string) => t.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
 
   const load = () => callApi<Summary>("GET", "/students/summary").then(setS).catch(() => setS(null));
   useEffect(() => {
     void load();
-    callApi<Notif>("GET", "/notification-settings").then((x) => { setN(x); setSavedN(x); }).catch(() => {});
+    callApi<Notif>("GET", "/notification-settings").then((x) => {
+      setN(x); setSavedN(x); setToText(x.report.to.join(", ")); setCcText(x.report.cc.join(", "));
+    }).catch(() => {});
   }, []);
 
   async function sync() {
@@ -59,8 +64,8 @@ export function StudentsSettings({ campuses, canEdit }: { campuses: Pick<Campus,
   async function saveN() {
     if (!n) return;
     try {
-      const r = await callApi<Notif>("PUT", "/notification-settings", n);
-      setN(r); setSavedN(r); setNMsg("Saved");
+      const r = await callApi<Notif>("PUT", "/notification-settings", { ...n, report: { ...n.report, to: emails(toText), cc: emails(ccText) } });
+      setN(r); setSavedN(r); setToText(r.report.to.join(", ")); setCcText(r.report.cc.join(", ")); setNMsg("Saved");
     } catch (e) {
       setNMsg(e instanceof Error ? e.message : "Couldn't save");
     }
@@ -145,13 +150,37 @@ export function StudentsSettings({ campuses, canEdit }: { campuses: Pick<Campus,
                 </div>
                 {!n.reminderHours.length && <p className="mt-2 text-xs text-amber-700">No reminders will be sent.</p>}
               </div>
+              <div className="space-y-3 rounded-xl border border-border p-4">
+                <p className="text-sm font-medium">After every event</p>
+                <p className="text-xs text-muted">About 2 hours after an event ends, participants get a feedback email. Then the outcome report (AI summary, numbers, feedback, social media links and the PDF) is emailed to:</p>
+                <label className="block text-sm">To
+                  <input
+                    disabled={!canEdit} value={toText}
+                    onChange={(e) => { setToText(e.target.value); setNMsg(null); }}
+                    className="mt-1 h-10 w-full rounded-brand border border-border bg-card px-3 text-sm" placeholder="ceo@example.com"
+                  />
+                </label>
+                <label className="block text-sm">CC
+                  <input
+                    disabled={!canEdit} value={ccText}
+                    onChange={(e) => { setCcText(e.target.value); setNMsg(null); }}
+                    className="mt-1 h-10 w-full rounded-brand border border-border bg-card px-3 text-sm" placeholder="team@example.com, lead@example.com"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm">Send the report
+                  <Select disabled={!canEdit} value={n.report.afterDays} onChange={(e) => setN({ ...n, report: { ...n.report, afterDays: Number(e.target.value) } })} className="h-9 w-40 text-sm">
+                    {[2, 3, 5, 7, 10, 14].map((d) => <option key={d} value={d}>{d} days</option>)}
+                  </Select>
+                  after the event ends
+                </label>
+              </div>
               <label className="flex items-start gap-3 text-sm">
                 <input type="checkbox" disabled={!canEdit} checked={n.announceByDefault} onChange={(e) => setN({ ...n, announceByDefault: e.target.checked })} className="mt-0.5 accent-[rgb(var(--primary))]" />
                 <span><span className="font-medium">New events email their audience by default</span><span className="block text-xs text-muted">The &ldquo;Email this audience when the event is announced&rdquo; box starts ticked. It can still be unticked per event.</span></span>
               </label>
               {canEdit && (
                 <div className="flex items-center gap-3">
-                  <Button size="sm" onClick={() => void saveN()} disabled={JSON.stringify(n) === JSON.stringify(savedN)}>Save</Button>
+                  <Button size="sm" onClick={() => void saveN()} disabled={JSON.stringify({ ...n, report: { ...n.report, to: emails(toText), cc: emails(ccText) } }) === JSON.stringify(savedN)}>Save</Button>
                   {nMsg && <span className="text-sm text-muted">{nMsg}</span>}
                 </div>
               )}

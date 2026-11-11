@@ -288,6 +288,10 @@ model Event {
   remindersEnabled     Boolean     @default(true)
   /// When the "new event" email went out (so it's sent once)
   announcedNotifiedAt  DateTime?
+  /// When the feedback request went out after the event (sent once)
+  feedbackRequestedAt  DateTime?
+  /// When the outcome report was emailed to leadership (sent once)
+  reportSentAt         DateTime?
   /// Extra page sections written in the rich-text editor: [{ id, title, html, icon? }] (rules, prizes, timeline, eligibility...)
   pageSections         Json        @default("[]")
   /// Registration fee in the smallest currency unit (paise). 0 or null = free
@@ -1015,6 +1019,10 @@ model Feedback {
   rating    Int // 1-5
   nps       Int? // 0-10
   comment   String?
+  /// Ratings 1–5 per area: { content, speakers, organisation, venue }
+  aspects   Json?
+  liked     String?
+  improve   String?
   createdAt DateTime @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)

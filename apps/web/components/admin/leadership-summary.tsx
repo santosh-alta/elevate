@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, HelpCircle, Lightbulb, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, HelpCircle, Lightbulb, Loader2, MessageSquareQuote, RefreshCw, Sparkles } from "lucide-react";
 import { useAiUsage, usageLabel } from "@/components/client/ai-assist";
 import { callApi } from "@/components/client/api";
 import { cn } from "@/components/ui/cn";
@@ -9,7 +9,7 @@ import { cn } from "@/components/ui/cn";
 export type OutcomeSummary = {
   verdict: "strong" | "good" | "mixed" | "weak";
   headline: string; summary: string;
-  highlights: string[]; concerns: string[]; why: string[]; recommendations: string[];
+  highlights: string[]; concerns: string[]; why: string[]; recommendations: string[]; feedbackPoints?: string[];
   generatedAt: string;
 };
 
@@ -75,6 +75,7 @@ export function LeadershipSummary({ eventId, initial }: { eventId: string; initi
             <Block icon={<HelpCircle className="h-4 w-4 text-sky-600" />} title="Why" items={data.why} />
             <Block icon={<Lightbulb className="h-4 w-4 text-primary" />} title="Next time" items={data.recommendations} />
           </div>
+          {!!data.feedbackPoints?.length && <Block icon={<MessageSquareQuote className="h-4 w-4 text-violet-600" />} title="What participants said" items={data.feedbackPoints} />}
           <p className="text-[11px] text-muted">Written by AI from this report's data on {new Date(data.generatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}. Check important numbers above.</p>
         </div>
       )}

@@ -8,6 +8,7 @@ import { badRequest, conflict } from "../lib/errors";
 import { buildOutcome } from "../lib/outcome";
 import { summariseOutcome } from "../lib/outcomeSummary";
 import { renderEventReportPdf } from "../lib/eventReport";
+import { reportSettingsOf, sendEventReport } from "../lib/afterEvent";
 import { withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { EVENT_FAMILIES, familyOf, type EventType } from "@elevate/shared";
 import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
@@ -21,15 +22,37 @@ export function reportRoutes(app: FastifyInstance) {
         rating: z.number().int().min(1).max(5),
         nps: z.number().int().min(0).max(10).optional(),
         comment: z.string().max(2000).optional(),
+        aspects: z.object({
+          content: z.number().int().min(1).max(5).optional(), speakers: z.number().int().min(1).max(5).optional(),
+          organisation: z.number().int().min(1).max(5).optional(), venue: z.number().int().min(1).max(5).optional(),
+        }).optional(),
+        liked: z.string().trim().max(2000).optional(),
+        improve: z.string().trim().max(2000).optional(),
       })
       .parse(req.body);
-    if (!["LIVE", "JUDGING", "COMPLETED"].includes(event.status)) throw badRequest("Feedback opens once the event has started");
+    const started = ["LIVE", "JUDGING", "COMPLETED", "ARCHIVED"].includes(event.status) || event.startsAt < new Date();
+    if (!started || event.status === "CANCELLED") throw badRequest("Feedback opens once the event has started");
     const reg = await prisma.registration.findUnique({ where: { eventId_userId: { eventId: event.id, userId: user.id } } });
     if (!reg) throw badRequest("Only participants can leave feedback");
     const existing = await prisma.feedback.findUnique({ where: { eventId_userId: { eventId: event.id, userId: user.id } } });
     if (existing) throw conflict("You've already shared feedback for this event");
     const fb = await prisma.feedback.create({ data: { ...body, eventId: event.id, userId: user.id } });
     return reply.status(201).send(fb);
+  });
+
+  /** The feedback page: event details, and whether this person can (or already did) give feedback. */
+  app.get<{ Params: { id: string } }>("/events/:id/feedback/mine", async (req) => {
+    const { user } = requireUser(req);
+    const event = await findEvent(req, req.params.id);
+    const [reg, existing] = await Promise.all([
+      prisma.registration.findUnique({ where: { eventId_userId: { eventId: event.id, userId: user.id } } }),
+      prisma.feedback.findUnique({ where: { eventId_userId: { eventId: event.id, userId: user.id } } }),
+    ]);
+    const started = ["LIVE", "JUDGING", "COMPLETED", "ARCHIVED"].includes(event.status) || event.startsAt < new Date();
+    return {
+      event: { id: event.id, slug: event.slug, title: event.title, startsAt: event.startsAt, mode: event.mode },
+      registered: !!reg, submitted: !!existing, open: started && event.status !== "CANCELLED",
+    };
   });
 
   app.get<{ Params: { id: string } }>("/events/:id/feedback", async (req) => {
@@ -54,6 +77,16 @@ export function reportRoutes(app: FastifyInstance) {
       .header("Content-Disposition", `attachment; filename="${filename}"`)
       .header("Cache-Control", "no-store")
       .send(Buffer.from(pdf));
+  });
+
+  /** Email the outcome report to the leadership recipients now (also happens automatically after the event). */
+  app.post<{ Params: { id: string } }>("/events/:id/report/send", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    const cfg = reportSettingsOf(requireTenant(req).settings);
+    if (!cfg.to.length) throw badRequest("Add report recipients in Settings → Students & notifications first");
+    const sent = await sendEventReport(event.id, cfg);
+    await prisma.event.update({ where: { id: event.id }, data: { reportSentAt: new Date() } });
+    return sent;
   });
 
   /** AI leadership summary of the outcome (why, how, what next). Counts as one AI use. */

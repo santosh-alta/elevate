@@ -1,4 +1,5 @@
 import { announceDueEvents } from "./lib/audience";
+import { requestFeedbackDue, sendReportsDue } from "./lib/afterEvent";
 import { syncStudentsIfDue } from "./lib/studentSync";
 import type { FastifyBaseLogger } from "fastify";
 import { prisma } from "./plugins/prisma";
@@ -115,6 +116,9 @@ export async function scheduleReminders(now = new Date()): Promise<void> {
 
   // "New event, register now" emails to each newly announced event's audience.
   await announceDueEvents(now);
+  // After the event: feedback request (~2 h after the end), then the outcome report to leadership.
+  await requestFeedbackDue(now);
+  await sendReportsDue(now);
   // Student list refresh from the student database (monthly).
   await syncStudentsIfDue();
 

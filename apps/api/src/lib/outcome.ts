@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
 import { computeLeaderboard, defaultRoundId } from "./judging";
 import { revenueFor } from "./payments";
@@ -73,6 +73,7 @@ export async function buildOutcome(eventId: string, opts: { save?: boolean } = {
       responses: feedback._count,
       avgRating: feedback._avg.rating ? Math.round(feedback._avg.rating * 10) / 10 : null,
       avgNps: feedback._avg.nps ? Math.round(feedback._avg.nps * 10) / 10 : null,
+      aspects: await aspectAverages(eventId),
     },
     media: {
       driveFolderUrl: event.driveFolderUrl,
@@ -112,4 +113,18 @@ export async function buildOutcome(eventId: string, opts: { save?: boolean } = {
     });
   }
   return outcome;
+}
+
+/** Average 1–5 rating per area (content, speakers, organisation, venue) from the feedback form. */
+async function aspectAverages(eventId: string): Promise<Record<string, number>> {
+  const rows = await prisma.feedback.findMany({ where: { eventId, aspects: { not: Prisma.AnyNull } }, select: { aspects: true } });
+  const sum: Record<string, { t: number; n: number }> = {};
+  for (const r of rows) {
+    for (const [k, v] of Object.entries((r.aspects ?? {}) as Record<string, unknown>)) {
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 1 || n > 5) continue;
+      sum[k] = { t: (sum[k]?.t ?? 0) + n, n: (sum[k]?.n ?? 0) + 1 };
+    }
+  }
+  return Object.fromEntries(Object.entries(sum).map(([k, v]) => [k, Math.round((v.t / v.n) * 10) / 10]));
 }

@@ -272,8 +272,10 @@ export async function notifyAudience(
   const e = await prisma.event.findUnique({ where: { id: eventId } });
   if (!e) return 0;
   const modules = (e.modules ?? {}) as Record<string, boolean>;
+  // Feedback goes to people who checked in; if attendance wasn't taken, to everyone registered.
+  const checkedIn = template === "feedback.request" ? await prisma.registration.count({ where: { eventId, status: "CHECKED_IN" } }) : 0;
   const statuses =
-    template === "feedback.request" ? (modules.checkin === false ? [...ACTIVE_REG] : ["CHECKED_IN"]) : [...ACTIVE_REG, "WAITLISTED"];
+    template === "feedback.request" ? (modules.checkin === false || !checkedIn ? [...ACTIVE_REG, "CHECKED_IN"] : ["CHECKED_IN"]) : [...ACTIVE_REG, "WAITLISTED"];
   const regs = await prisma.registration.findMany({
     where: { eventId, status: { in: statuses as never[] } },
     include: { user: { select: { id: true, name: true } } },
@@ -292,9 +294,9 @@ export async function notifyAudience(
       body = `Hi ${r.user.name},\n\nSome details of ${e.title} have changed:\n${(opts.changes ?? []).map((c) => `• ${c}`).join("\n")}\n\nWhen: ${fmtDate(e.startsAt)}\n${where(e)}`.trim();
     } else {
       subject = `How was ${e.title}?`;
-      body = `Hi ${r.user.name},\n\nThank you for attending ${e.title}. Tell us how it went — it takes under a minute and helps us make the next one better.`;
+      body = `Hi ${r.user.name.split(" ")[0]},\n\nThank you for being part of ${e.title}. How was it? Rate the content, speakers and organisation, and tell us what to improve. It takes under a minute and shapes the next one.`;
       ctaLabel = "Give feedback";
-      ctaUrl = `${links.me}#feedback`;
+      ctaUrl = `${links.page}/feedback`;
     }
     await enqueue({
       tenantId: e.tenantId, eventId: e.id, userId: r.user.id, channels: ["EMAIL", "IN_APP"], template, subject, body, ctaLabel, ctaUrl,

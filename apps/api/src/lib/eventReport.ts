@@ -33,7 +33,7 @@ type Outcome = {
   registrations: { registered: number; attended: number; attendanceRate: number; byStatus: Record<string, number>; byCampus: { campus: string; count: number }[] };
   teams: { total: number; participants: number; submitted: number; winners: { team: string; award: string | null; rank: number | null }[]; leaderboard: { team: { name: string; projectTitle: string | null }; total: number }[] };
   guests: { name: string; designation: string | null; organization: string | null; status: string }[];
-  feedback: { responses: number; avgRating: number | null; avgNps: number | null };
+  feedback: { responses: number; avgRating: number | null; avgNps: number | null; aspects?: Record<string, number> };
   media: { driveFolderUrl: string | null; items: number; byKind: Record<string, number> };
   social: { planned: number; posted: number; posts: { platform: string; status: string; url: string | null }[] };
   certificates: { issued: number; byType: Record<string, number> };
@@ -71,7 +71,10 @@ export async function renderEventReportPdf(eventId: string, opts: { save?: boole
   const outcome = (await buildOutcome(eventId, opts)) as unknown as Outcome;
   const [tasks, comments, photos, highlights] = await Promise.all([
     prisma.eventTask.findMany({ where: { eventId }, orderBy: [{ phase: "asc" }, { sortOrder: "asc" }], include: { assignee: { select: { name: true } } } }),
-    prisma.feedback.findMany({ where: { eventId, comment: { not: null } }, orderBy: { rating: "desc" }, take: 8, select: { rating: true, comment: true } }),
+    prisma.feedback.findMany({
+      where: { eventId, OR: [{ comment: { not: null } }, { liked: { not: null } }, { improve: { not: null } }] },
+      orderBy: { rating: "desc" }, take: 8, select: { rating: true, comment: true, liked: true, improve: true },
+    }),
     prisma.mediaAsset.findMany({ where: { eventId, kind: "PHOTO" }, orderBy: [{ isHighlight: "desc" }, { createdAt: "asc" }], take: 6, select: { url: true } }),
     prisma.socialPost.count({ where: { eventId, featured: true } }),
   ]);
@@ -170,8 +173,8 @@ export async function renderEventReportPdf(eventId: string, opts: { save?: boole
       y -= lines.length * 13 + 3;
     }
   };
-  const bars = (rows: { label: string; value: number }[], color: RGB, max = W - 2 * M) => {
-    const top = Math.max(1, ...rows.map((r) => r.value));
+  const bars = (rows: { label: string; value: number; display?: string }[], color: RGB, max = W - 2 * M, scale?: number) => {
+    const top = scale ?? Math.max(1, ...rows.map((r) => r.value));
     const labelW = 150;
     for (const r of rows) {
       need(18);
@@ -179,7 +182,7 @@ export async function renderEventReportPdf(eventId: string, opts: { save?: boole
       const bw = Math.max(2, ((max - labelW - 50) * r.value) / top);
       page.drawRectangle({ x: M + labelW, y: y - 2, width: max - labelW - 50, height: 10, color: soft });
       page.drawRectangle({ x: M + labelW, y: y - 2, width: bw, height: 10, color });
-      text(r.value.toLocaleString("en-IN"), M + labelW + bw + 6, y, 9, fonts.sansSemi, ink);
+      text(r.display ?? r.value.toLocaleString("en-IN"), M + labelW + bw + 6, y, 9, fonts.sansSemi, ink);
       y -= 17;
     }
   };
@@ -343,8 +346,19 @@ export async function renderEventReportPdf(eventId: string, opts: { save?: boole
   if (outcome.feedback.responses) {
     para(`Average rating ${outcome.feedback.avgRating ?? "–"}/5${outcome.feedback.avgNps != null ? `   ·   Recommend score ${outcome.feedback.avgNps}/10` : ""}`, 10.5, ink, fonts.sansSemi);
     y -= 4;
+    const names: Record<string, string> = { content: "Content", speakers: "Speakers & mentors", organisation: "Organisation", venue: "Venue / online" };
+    const aspectRows = Object.entries(outcome.feedback.aspects ?? {}).map(([k, v]) => ({ label: names[k] ?? k, value: v, display: `${v}/5` }));
+    if (aspectRows.length) { bars(aspectRows, accent, W - 2 * M, 5); y -= 4; }
+    if (s?.feedbackPoints?.length) {
+      need(30);
+      text("What participants said", M, y, 10.5, fonts.sansBold, ink);
+      y -= 15;
+      bullets(s.feedbackPoints, accent);
+      y -= 4;
+    }
     for (const fb of comments) {
-      const lines = wrap(`“${fb.comment!.replace(/\s+/g, " ").trim().slice(0, 400)}”`, fonts.sans, 9.5, W - 2 * M - 40);
+      const said = [fb.comment, fb.liked && `Liked: ${fb.liked}`, fb.improve && `Improve: ${fb.improve}`].filter(Boolean).join("  ·  ");
+      const lines = wrap(`“${said.replace(/\s+/g, " ").trim().slice(0, 400)}”`, fonts.sans, 9.5, W - 2 * M - 40);
       need(lines.length * 13 + 10);
       page.drawRectangle({ x: M, y: y - lines.length * 13 + 8, width: 2.5, height: lines.length * 13 + 2, color: accent });
       text(`${fb.rating}/5`, M + 10, y, 8, fonts.sansBold, muted);
