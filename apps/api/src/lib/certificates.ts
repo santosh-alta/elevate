@@ -1,10 +1,11 @@
 import { PDFDocument, rgb, type RGB } from "pdf-lib";
+import { drawCustomCertificate, resolveDesign } from "./certificateDesign";
 import QRCode from "qrcode";
 import type { Certificate, CertificateType, Event, RegistrationStatus, Tenant } from "@prisma/client";
 import { prisma } from "../plugins/prisma";
 import { brandBaseUrl, settingsOf, themeOf, verifyUrl, type Signatory } from "./brand";
 import { embedBrandImage, embedFonts, hexToRgb, shade, type PdfFont } from "./brandAssets";
-import { certificateSerial } from "./codes";
+import { brandCode, certificateSerial } from "./codes";
 import { notifyCertificate, safely } from "./notify";
 
 const TITLES: Record<CertificateType, string> = {
@@ -56,7 +57,8 @@ interface Recipient {
  * keeps its serial; only name/detail are refreshed.
  */
 export async function generateCertificates(eventId: string): Promise<{ created: number; total: number }> {
-  const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
+  const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: { tenant: { select: { name: true } } } });
+  const prefix = brandCode(event.tenant.name);
   const modules = (event.modules ?? {}) as Record<string, boolean>;
   const recipients: Recipient[] = [];
 
@@ -155,7 +157,7 @@ export async function generateCertificates(eventId: string): Promise<{ created: 
     const cert = await prisma.certificate.create({
       data: {
         eventId, userId: r.userId ?? null, guestId: r.guestId ?? null, type: r.type,
-        recipientName: r.name, detail: r.detail, serial: certificateSerial(),
+        recipientName: r.name, detail: r.detail, serial: certificateSerial(prefix),
       },
     });
     safely("certificate.ready", () => notifyCertificate(cert.id));
@@ -239,7 +241,7 @@ function wording(cert: Certificate, eventTitle: string, dates: string) {
     default:
       body = `for participating in ${eventTitle}`;
   }
-  return { kicker, body, sub: [detail, dates].filter(Boolean).join("  ·  ") };
+  return { kicker, body, detail, sub: [detail, dates].filter(Boolean).join("  ·  ") };
 }
 
 /** Small deterministic PRNG so a brand's panel pattern is stable between renders. */
@@ -307,6 +309,24 @@ export async function renderCertificatePdf(cert: CertificateWithRelations): Prom
   doc.setCreator(tenant.name);
   doc.setProducer(tenant.name);
   const page = doc.addPage([841.89, 595.28]); // A4 landscape
+
+  // "Our own design": the uploaded artwork with the person's details printed on top.
+  const custom = resolveDesign(cert.event.config, tenant.settings, cert.type);
+  if (custom) {
+    const dates = eventDates(cert.event.startsAt, cert.event.endsAt);
+    const w = wording(cert, cert.event.title, dates);
+    const award = cert.type === "PARTICIPATION" ? undefined : [w.kicker, w.detail].filter(Boolean).join("  ·  ") || undefined;
+    const ok = await drawCustomCertificate(doc, page, custom, {
+      name: cert.recipientName,
+      award,
+      full: `${w.body}  ·  ${dates}`,
+      serial: cert.serial,
+      verifyUrl: verifyUrl(await brandBaseUrl(tenant.id), cert.serial),
+      issued: cert.issuedAt.toLocaleDateString("en-IN", { timeZone: DISPLAY_TZ, day: "numeric", month: "short", year: "numeric" }),
+    });
+    if (ok) return doc.save();
+    // Background couldn't be loaded: fall through to the standard design rather than issue a blank certificate.
+  }
   const { width: W, height: H } = page.getSize();
   const fonts = await embedFonts(doc);
 

@@ -10,7 +10,7 @@ import { notifyRegistration, notifyTeamAdded, safely } from "../lib/notify";
 import { registerInputSchema } from "@elevate/shared";
 import type { Payment, RegistrationStatus } from "@prisma/client";
 import { conflict } from "../lib/errors";
-import { teamInviteCode } from "../lib/codes";
+import { brandCode, teamInviteCode } from "../lib/codes";
 import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 import { findOrCreateMember, promoteWaitlist, seatsLeft } from "../lib/seats";
 import {
@@ -165,7 +165,7 @@ export function registrationRoutes(app: FastifyInstance) {
     const payConfig = getPaymentConfig(tenant);
     const finalAmount = coupon?.finalAmount ?? 0;
     if (paid && finalAmount > 0 && payConfig.mode === "NONE") throw badRequest("Online payments aren't set up for this brand yet — please contact the organisers");
-    const receiptNo = paid ? await newReceiptNo() : null;
+    const receiptNo = paid ? await newReceiptNo(brandCode(tenant.name, "RCPT")) : null;
 
     // ───── Write everything at once ─────
     const involved = [user.id, ...memberUsers.map((u) => u.id)];

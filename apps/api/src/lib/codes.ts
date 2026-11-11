@@ -9,9 +9,15 @@ export function secureCode(len = 8): string {
   return out;
 }
 
-/** e.g. "ELV-7KQ2-M9XP" */
-export function certificateSerial(): string {
-  return `ELV-${secureCode(4)}-${secureCode(4)}`;
+/** Short brand prefix for printed codes, from the brand's name: "ALTA School of Technology" → "ALTA". */
+export function brandCode(name: string | null | undefined, fallback = "CERT"): string {
+  const first = (name ?? "").trim().split(/\s+/)[0]?.toUpperCase().replace(/[^A-Z0-9]/g, "") ?? "";
+  return first.slice(0, 6) || fallback;
+}
+
+/** e.g. "ALTA-7KQ2-M9XP" (the brand's prefix, so no platform name appears on certificates) */
+export function certificateSerial(prefix = "CERT"): string {
+  return `${prefix}-${secureCode(4)}-${secureCode(4)}`;
 }
 
 export function teamInviteCode(): string {

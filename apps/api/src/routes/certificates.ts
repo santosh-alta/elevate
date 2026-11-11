@@ -2,7 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { assertManageable, requireEventManager, requireUser } from "../lib/permissions";
+import { assertManageable, requireBrandAdmin, requireEventManager, requireStaff, requireUser } from "../lib/permissions";
+import { brandDesigns, designSchema, designerTemplatePdf, eventDesigns } from "../lib/certificateDesign";
+import type { Prisma } from "@prisma/client";
 import { badRequest, forbidden, HttpError, notFound } from "../lib/errors";
 import { CERTIFICATE_TITLES, certificateLinks, generateCertificates, renderCertificatePdf } from "../lib/certificates";
 import { POST_STYLES, aiLinkedInPost, draftContextFor, generateLinkedInDrafts, shareUrl, type PostStyle } from "../lib/linkedin";
@@ -77,7 +79,7 @@ export function certificateRoutes(app: FastifyInstance) {
     );
   });
 
-  /** Public PDF: GET /v1/certificates/ELV-XXXX-XXXX.pdf */
+  /** Public PDF: GET /v1/certificates/ALTA-XXXX-XXXX.pdf */
   app.get<{ Params: { file: string } }>("/certificates/:file", async (req, reply) => {
     if (!req.params.file.endsWith(".pdf")) throw notFound("Certificate");
     const serial = req.params.file.slice(0, -4).toUpperCase();
@@ -146,6 +148,72 @@ export function certificateRoutes(app: FastifyInstance) {
       include: { event: { select: { id: true, slug: true, title: true, startsAt: true } } },
     });
     return posts.map((p) => ({ ...p, shareUrl: shareUrl(p.draft) }));
+  });
+
+  // ── Certificate designs: the standard design, or our own artwork with the details printed on top ──
+
+  const designBody = z.object({
+    type: z.enum(["ALL", "PARTICIPATION", "FINALIST", "WINNER", "RUNNER_UP", "SPECIAL_MENTION", "JUDGE", "SPEAKER", "VOLUNTEER", "MENTOR"]),
+    design: designSchema.nullable(),
+  });
+
+  /** One-page guide for designers: size, export settings and the areas to keep empty. */
+  app.get("/certificate-designs/guide.pdf", async (req, reply) => {
+    const tenant = requireTenant(req);
+    const pdf = await designerTemplatePdf(tenant.name);
+    return reply.type("application/pdf").header("Content-Disposition", 'attachment; filename="certificate-design-template.pdf"').send(Buffer.from(pdf));
+  });
+
+  app.get("/certificate-designs", async (req) => {
+    requireStaff(req);
+    return brandDesigns(requireTenant(req).settings);
+  });
+
+  app.put("/certificate-designs", async (req) => {
+    requireBrandAdmin(req);
+    const tenant = requireTenant(req);
+    const { type, design } = designBody.parse(req.body);
+    const fresh = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id }, select: { settings: true } });
+    const settings = (fresh.settings ?? {}) as Record<string, unknown>;
+    const designs = { ...brandDesigns(settings) };
+    if (design) designs[type] = design; else delete designs[type];
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { settings: { ...settings, certificateDesigns: designs } as Prisma.InputJsonValue } });
+    return designs;
+  });
+
+  app.get<{ Params: { id: string } }>("/events/:id/certificate-designs", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    return { event: eventDesigns(event.config), brand: brandDesigns(requireTenant(req).settings) };
+  });
+
+  app.put<{ Params: { id: string } }>("/events/:id/certificate-designs", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    const { type, design } = designBody.parse(req.body);
+    const config = (event.config ?? {}) as Record<string, unknown>;
+    const designs = { ...eventDesigns(config) };
+    if (design) designs[type] = design; else delete designs[type];
+    await prisma.event.update({ where: { id: event.id }, data: { config: { ...config, certificateDesigns: designs } as Prisma.InputJsonValue } });
+    await logActivity(event.id, req.auth!.user.id, "certificates.design", { type, custom: !!design });
+    return designs;
+  });
+
+  /** A sample certificate (made-up name) with the saved design, for an event or for the brand. Nothing is stored. */
+  app.get("/certificate-designs/preview.pdf", async (req, reply) => {
+    requireStaff(req);
+    const tenant = requireTenant(req);
+    const q = z.object({ type: designBody.shape.type.exclude(["ALL"]).default("PARTICIPATION"), eventId: z.string().optional() }).parse(req.query);
+    const event = q.eventId
+      ? await requireEventManager(req, q.eventId)
+      : ({ id: "sample", tenantId: tenant.id, title: "Sample Event 2026", startsAt: new Date(), endsAt: new Date(), config: {} } as never);
+    const winnerish = ["WINNER", "RUNNER_UP", "SPECIAL_MENTION", "FINALIST"].includes(q.type);
+    const cert = {
+      id: "preview", serial: "SAMPLE-0001", type: q.type, recipientName: "Aarav Sharma",
+      detail: winnerish ? `${q.type === "FINALIST" ? "Finalist" : q.type === "WINNER" ? "First place" : q.type === "RUNNER_UP" ? "1st runner-up" : "Special mention"} — Team Byte Brigade` : null,
+      issuedAt: new Date(), revokedAt: null, userId: null, guestId: null, pdfUrl: null, eventId: event.id,
+      event: { ...event, tenant: await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id } }) },
+    };
+    const pdf = await renderCertificatePdf(cert as never);
+    return reply.type("application/pdf").header("Content-Disposition", 'inline; filename="certificate-preview.pdf"').header("Cache-Control", "no-store").send(Buffer.from(pdf));
   });
 
   /** The participant asks AI for a fresh, engaging version of their post. Counts toward their daily AI uses. */

@@ -1,12 +1,16 @@
 import { Download } from "lucide-react";
-import { apiList } from "@/lib/api";
+import { apiGet, apiList } from "@/lib/api";
+import { CertificateDesignEditor, type DesignMap } from "@/components/admin/certificate-design-editor";
 import { fmtDate, humanize } from "@/lib/format";
 import type { Certificate, ElevateEvent } from "@/lib/types";
-import { Badge, Card, CardHeader, EmptyState, LinkButton, Stat, Table, Td, Th } from "@/components/ui";
+import { Badge, Card, CardBody, CardHeader, EmptyState, LinkButton, Stat, Table, Td, Th } from "@/components/ui";
 import { ApiButton } from "@/components/client/api-button";
 
 export async function CertificatesTab({ event }: { event: ElevateEvent }) {
-  const certs = await apiList<Certificate>(`/events/${event.id}/certificates`);
+  const [certs, designs] = await Promise.all([
+    apiList<Certificate>(`/events/${event.id}/certificates`),
+    apiGet<{ event: DesignMap; brand: DesignMap }>(`/events/${event.id}/certificate-designs`),
+  ]);
   const byType = certs.reduce<Record<string, number>>((m, c) => ((m[c.type] = (m[c.type] ?? 0) + 1), m), {});
   const ready = ["COMPLETED", "ARCHIVED", "JUDGING", "LIVE"].includes(event.status);
   return (
@@ -37,6 +41,10 @@ export async function CertificatesTab({ event }: { event: ElevateEvent }) {
             </tbody>
           </Table>
         ) : <div className="p-5"><EmptyState title="No certificates yet" description="They're generated automatically when the event is marked Completed, or click Generate." /></div>}
+      </Card>
+      <Card>
+        <CardHeader title="Certificate design" description="Use the standard design, or upload this event's own artwork. We print the name, QR code, certificate ID and issue date on it." />
+        <CardBody><CertificateDesignEditor eventId={event.id} initial={designs?.event ?? {}} inherited={designs?.brand ?? {}} /></CardBody>
       </Card>
     </div>
   );

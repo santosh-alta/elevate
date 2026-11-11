@@ -2,7 +2,7 @@ import { CheckCircle2, Clock } from "lucide-react";
 import { ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from "@elevate/shared";
 import { ApiSelect } from "@/components/client/api-select";
 import { TeamToggles } from "@/components/admin/team-toggles";
-import { apiList } from "@/lib/api";
+import { apiGet, apiList } from "@/lib/api";
 import { isBrandAdmin, requireStaffPage } from "@/lib/auth";
 import { requireTenant } from "@/lib/tenant";
 import { fmtDateTime, humanize } from "@/lib/format";
@@ -12,6 +12,7 @@ import { ApiButton } from "@/components/client/api-button";
 import { ApiForm } from "@/components/client/api-form";
 import { CopyButton } from "@/components/client/misc";
 import { ThemeEditor } from "./theme-editor";
+import { CertificateDesignEditor, type DesignMap } from "@/components/admin/certificate-design-editor";
 import { EventTypesManager } from "./event-types-manager";
 import { getEventTypes, getTags } from "@/lib/catalog";
 import { EventIcon } from "@/components/event-icon";
@@ -43,7 +44,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {!isBrandAdmin(me) && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Only brand admins can change these settings.</p>}
       <Tabs tabs={TABS} active={active} baseHref="/admin/settings" />
       {active === "theme" && <ThemeEditor tenant={tenant} />}
-      {active === "contact" && <ContactSettings settings={tenant.settings as Record<string, unknown>} />}
+      {active === "contact" && (
+        <div className="space-y-6">
+          <ContactSettings settings={tenant.settings as Record<string, unknown>} />
+          <Card>
+            <CardHeader title="Certificate design" description="The look for every event's certificates. An event can still use its own design (event → Certificates)." />
+            <CardBody>
+              <CertificateDesignEditor initial={(await apiGet<DesignMap>("/certificate-designs")) ?? {}} canEdit={isBrandAdmin(me)} />
+            </CardBody>
+          </Card>
+        </div>
+      )}
       {active === "types" && <EventTypes canEdit={isBrandAdmin(me)} />}
       {active === "campuses" && <Campuses />}
       {active === "members" && <Members campuses={tenant.campuses} />}

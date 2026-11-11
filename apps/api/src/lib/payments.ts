@@ -151,14 +151,14 @@ export async function evaluateCoupon(eventId: string, code: string | undefined |
   return { valid: true, coupon, discount, finalAmount: gross - discount, message: `${coupon.code} applied` };
 }
 
-/** Human-friendly unique receipt number, e.g. ELV-2026-004821. */
-export async function newReceiptNo(db: Db = prisma): Promise<string> {
+/** Human-friendly unique receipt number with the brand's prefix, e.g. ALTA-2026-004821. */
+export async function newReceiptNo(prefix = "RCPT", db: Db = prisma): Promise<string> {
   const year = new Date().getFullYear();
   for (let i = 0; i < 8; i++) {
-    const candidate = `ELV-${year}-${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
+    const candidate = `${prefix}-${year}-${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
     if (!(await db.payment.findUnique({ where: { receiptNo: candidate }, select: { id: true } }))) return candidate;
   }
-  return `ELV-${year}-${secureCode(8)}`;
+  return `${prefix}-${year}-${secureCode(8)}`;
 }
 
 // ───────── Orders & checkout ─────────

@@ -5,7 +5,7 @@ import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
 import { canManageEvent, findEvent, requireUser } from "../lib/permissions";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
-import { teamInviteCode } from "../lib/codes";
+import { brandCode, teamInviteCode } from "../lib/codes";
 import { logActivity } from "../lib/activity";
 import type { FastifyRequest } from "fastify";
 import type { Payment, Prisma, RegistrationStatus } from "@prisma/client";
@@ -285,7 +285,7 @@ export function teamRoutes(app: FastifyInstance) {
     const payConfig = getPaymentConfig(tenant);
     const perPerson = paid && event.feeType === "PER_PERSON";
     if (perPerson && payConfig.mode === "NONE") throw badRequest("Online payments aren't set up for this brand yet");
-    const receiptNo = perPerson ? await newReceiptNo() : null;
+    const receiptNo = perPerson ? await newReceiptNo(brandCode(tenant.name, "RCPT")) : null;
 
     const { member, registration, payment } = await prisma.$transaction(async (tx) => {
       const member = await findOrCreateMember(tx, event.tenantId, input);
