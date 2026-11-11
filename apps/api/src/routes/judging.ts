@@ -9,7 +9,7 @@ import { badRequest, conflict, forbidden, notFound } from "../lib/errors";
 import { computeLeaderboard, criteriaForRound, defaultRoundId, judgeTeamIds, judgesPerTeam, roundTeamIds } from "../lib/judging";
 import { logActivity } from "../lib/activity";
 import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
-import { notifyResults, notifyRoundOpened, safely } from "../lib/notify";
+import { notifyResults, notifyRoundOpened, safely, enqueue, eventLinks, fmtDate } from "../lib/notify";
 
 const AWARDS = ["WINNER", "RUNNER_UP", "SECOND_RUNNER_UP", "SPECIAL_MENTION"] as const;
 
@@ -389,6 +389,15 @@ export function judgingRoutes(app: FastifyInstance) {
       }
     }
     await logActivity(event.id, req.auth!.user.id, "judge.added", { userId: user.id, name: user.name });
+    // Invitation with a link to the scoring page (once per judge per event).
+    const links = await eventLinks(event);
+    await enqueue({
+      tenantId: event.tenantId, eventId: event.id, userId: user.id, channels: ["EMAIL", "IN_APP"], template: "judge.invited",
+      subject: `You're a judge for ${event.title}`,
+      body: `Hi ${user.name.split(" ")[0]},\n\nYou've been added as a judge for ${event.title} (${fmtDate(event.startsAt)}).\n\nOn the day, open the judging page, sign in with this email (${user.email}), pick a team and give marks for each question. You can save as you go and submit when you're done.`,
+      ctaLabel: "Open judging", ctaUrl: `${links.base}/judge/${event.slug}`,
+      dedupKey: `judge.invited:${event.id}:${user.id}`,
+    }).catch(() => {});
     const assignments = await prisma.judgeAssignment.findMany({ where: { eventId: event.id, userId: user.id } });
     return reply.status(201).send({ user, assignments });
   });

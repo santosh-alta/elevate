@@ -23,13 +23,14 @@ export default async function MePage() {
   const tenant = await requireTenant();
   const host = await getHost();
   const origin = `${/^(localhost|127\.|[a-z0-9-]+\.localhost)/.test(host) ? "http" : "https"}://${host}`;
-  const [regs, teams, certs, posts, notifications, myPayments] = await Promise.all([
+  const [regs, teams, certs, posts, notifications, myPayments, judging] = await Promise.all([
     apiList<Registration>("/me/registrations"),
     apiList<Team>("/me/teams"),
     apiList<Certificate>("/me/certificates"),
     apiList<LinkedInPost>("/me/linkedin"),
     apiList<AppNotification>("/me/notifications"),
     apiList<Payment>("/me/payments"),
+    apiList<{ id: string; slug: string; title: string; assignedTeams: number; submittedTeams: number }>("/judge/events"),
   ]);
   // Payments: /me/payments when available, otherwise the payments attached to my registrations.
   const paymentMap = new Map<string, Payment>();
@@ -112,6 +113,17 @@ export default async function MePage() {
               })}
             </ul>
           </Card>
+        </section>
+      )}
+
+      {judging.length > 0 && (
+        <section className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
+          <SectionTitle title="You're judging" />
+          <div className="flex flex-wrap gap-2">
+            {judging.map((j) => (
+              <LinkButton key={j.id} href={`/judge/${j.slug}`} size="sm">{j.title} · {j.submittedTeams}/{j.assignedTeams} scored</LinkButton>
+            ))}
+          </div>
         </section>
       )}
 

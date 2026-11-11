@@ -56,6 +56,11 @@ export async function JudgingTab({ event, roundId }: { event: ElevateEvent; roun
         <Stat label="Results" value={event.resultsPublishedAt ? "Published" : "Not yet"} hint={event.resultsPublishedAt ? fmtDateTime(event.resultsPublishedAt) : undefined} />
       </div>
 
+      <p className="rounded-xl bg-primary/5 px-4 py-3 text-sm">
+        Judges score on <a href={`/judge/${event.slug}`} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">the judging page ↗</a> (phone or laptop).
+        Adding a judge emails them the link. Judges without specific teams can score any team; they pick it themselves.
+      </p>
+
       <Card>
         <CardHeader title="Judging checks" description="Rounds judges score in — e.g. First cut, Second check, Final. Advance the best teams from one check to the next." />
         <RoundsManager eventId={event.id} rounds={rounds} teams={teams} progress={progress} boards={boards} shortlists={shortlists} />
