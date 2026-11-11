@@ -6,6 +6,8 @@ import { requireTenant } from "../plugins/tenant";
 import { findEvent, isPlatformAdmin, requireEventManager, requireStaff, requireUser, roleOf } from "../lib/permissions";
 import { badRequest, conflict } from "../lib/errors";
 import { buildOutcome } from "../lib/outcome";
+import { summariseOutcome } from "../lib/outcomeSummary";
+import { withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { EVENT_FAMILIES, familyOf, type EventType } from "@elevate/shared";
 import { CATEGORY_SELECT, eventMeta } from "../lib/tags";
 
@@ -40,6 +42,19 @@ export function reportRoutes(app: FastifyInstance) {
     const { cached } = z.object({ cached: z.coerce.boolean().optional() }).parse(req.query);
     if (cached && event.outcome) return event.outcome;
     return buildOutcome(event.id);
+  });
+
+  /** AI leadership summary of the outcome (why, how, what next). Counts as one AI use. */
+  app.post<{ Params: { id: string } }>("/events/:id/outcome/summary", async (req) => {
+    const event = await requireEventManager(req, req.params.id);
+    const tenant = requireTenant(req);
+    const limit = writeLimitFor(req);
+    const { summary } = await withAllowance(
+      { id: req.auth!.user.id, tenantId: tenant.id }, "write", limit,
+      () => summariseOutcome(event.id),
+      `You've used all ${limit} AI uses for today. They reset at midnight.`,
+    );
+    return summary;
   });
 
   /** Brand-level dashboard. Campus admins see their campus's events plus central events. */

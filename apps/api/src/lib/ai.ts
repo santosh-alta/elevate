@@ -21,7 +21,7 @@ export function aiEnabled(): boolean {
 export type ChatMessage = { role: "user" | "assistant"; text: string };
 export type AiResult = { text: string; tokens: number; model: string };
 type Opts = { system: string; prompt?: string; messages?: ChatMessage[]; json?: boolean; maxTokens?: number; temperature?: number;
-  /** Per-provider wait before moving on to the next one (default 40s) */
+  /** Per-provider wait before moving on to the next one (default 20s; Gemini sometimes hangs when overloaded) */
   timeoutMs?: number };
 
 /** One attempt: the answer, or null to move on to the next provider (with the reason logged). */
@@ -46,7 +46,7 @@ function gemini(model: string): Attempt {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
         body: JSON.stringify({ ...body, generationConfig: { ...config, ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) } }),
-        signal: AbortSignal.timeout(o.timeoutMs ?? 40_000),
+        signal: AbortSignal.timeout(o.timeoutMs ?? 20_000),
       });
       const data = (await res.json().catch(() => ({}))) as GeminiResponse;
       if (res.status === 400 && noThinking) continue;
@@ -75,7 +75,7 @@ function groq(model: string): Attempt {
         reasoning_effort: "low",
         ...(o.json ? { response_format: { type: "json_object" } } : {}),
       }),
-      signal: AbortSignal.timeout(o.timeoutMs ?? 40_000),
+      signal: AbortSignal.timeout(o.timeoutMs ?? 20_000),
     });
     const data = (await res.json().catch(() => ({}))) as GroqResponse;
     if (res.status !== 200) return `groq ${model}: HTTP ${res.status} ${data.error?.message ?? ""}`;

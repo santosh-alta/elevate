@@ -1,6 +1,13 @@
 import { prisma } from "../plugins/prisma";
 import { HttpError } from "./errors";
+import type { FastifyRequest } from "fastify";
 import { aiEnabled } from "./ai";
+import { hasRole } from "./permissions";
+
+/** AI writing uses per day: brand admins get more because they edit many events. */
+export function writeLimitFor(req: FastifyRequest): number {
+  return hasRole(req, ["BRAND_ADMIN"]) ? Number(process.env.AI_ADMIN_DAILY_LIMIT) || 30 : Number(process.env.AI_DAILY_LIMIT) || 5;
+}
 
 /** Daily AI allowance per person (India date). "write" = editor help, "chat" = the assistant. */
 export type AiKind = "write" | "chat";

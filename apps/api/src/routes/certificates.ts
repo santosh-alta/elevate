@@ -5,7 +5,8 @@ import { requireTenant } from "../plugins/tenant";
 import { assertManageable, requireEventManager, requireUser } from "../lib/permissions";
 import { badRequest, forbidden, HttpError, notFound } from "../lib/errors";
 import { CERTIFICATE_TITLES, certificateLinks, generateCertificates, renderCertificatePdf } from "../lib/certificates";
-import { generateLinkedInDrafts, shareUrl } from "../lib/linkedin";
+import { POST_STYLES, aiLinkedInPost, draftContextFor, generateLinkedInDrafts, shareUrl, type PostStyle } from "../lib/linkedin";
+import { usageOf, withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { logActivity } from "../lib/activity";
 import { themeOf } from "../lib/brand";
 
@@ -125,6 +126,28 @@ export function certificateRoutes(app: FastifyInstance) {
       include: { event: { select: { id: true, slug: true, title: true, startsAt: true } } },
     });
     return posts.map((p) => ({ ...p, shareUrl: shareUrl(p.draft) }));
+  });
+
+  /** The participant asks AI for a fresh, engaging version of their post. Counts toward their daily AI uses. */
+  app.post<{ Params: { postId: string } }>("/linkedin/:postId/ai", async (req) => {
+    const { user } = requireUser(req);
+    const tenant = requireTenant(req);
+    const post = await prisma.linkedInPost.findUnique({ where: { id: req.params.postId }, include: { event: true } });
+    if (!post || post.event.tenantId !== tenant.id) throw notFound("LinkedIn draft");
+    if (post.userId !== user.id) throw forbidden();
+    const { style } = z.object({ style: z.enum(Object.keys(POST_STYLES) as [PostStyle, ...PostStyle[]]).default("story") }).parse(req.body ?? {});
+    const ctx = await draftContextFor(post.eventId, user.id);
+    const limit = writeLimitFor(req);
+    const out = await withAllowance(
+      { id: user.id, tenantId: tenant.id }, "write", limit,
+      () => aiLinkedInPost(ctx, style),
+      `You've used all ${limit} AI uses for today. They reset at midnight.`,
+    );
+    const updated = await prisma.linkedInPost.update({
+      where: { id: post.id },
+      data: { draft: out.text.slice(0, 3000), generatedBy: "ai", ...(post.status === "SKIPPED" && { status: "SUGGESTED" }) },
+    });
+    return { ...updated, shareUrl: shareUrl(updated.draft), usage: await usageOf(user.id, "write", limit) };
   });
 
   app.patch<{ Params: { postId: string } }>("/linkedin/:postId", async (req) => {

@@ -231,7 +231,7 @@ export default async function MePage() {
         <section>
           <SectionTitle icon={<Linkedin className="h-5 w-5" />} title="Share your achievement on LinkedIn" />
           <p className="-mt-2 mb-4 text-sm text-muted">We drafted a post for you. Edit it, share it, then paste your post link so we can celebrate you.</p>
-          <div className="space-y-4">{posts.map((p) => <LinkedInDraft key={p.id} post={p} />)}</div>
+          <div className="space-y-4">{posts.map((p) => <LinkedInDraft key={p.id} post={p} brand={tenant.name} />)}</div>
         </section>
       )}
 

@@ -7,10 +7,13 @@ import { KeyValue, numericLeaves } from "@/components/kv";
 import { BrandLogo } from "@/components/brand-logo";
 import { Card, EmptyState, Stat } from "@/components/ui";
 import { PrintButton } from "@/components/client/misc";
+import { LeadershipSummary, type OutcomeSummary } from "@/components/admin/leadership-summary";
 
 export async function ReportTab({ event, tenant }: { event: ElevateEvent; tenant: Tenant }) {
   const [fresh, tasks] = await Promise.all([apiGet<Record<string, unknown>>(`/events/${event.id}/outcome`), apiList<Task>(`/events/${event.id}/tasks`)]);
-  const outcome = fresh ?? event.outcome ?? null;
+  const full = fresh ?? event.outcome ?? null;
+  const { aiSummary, ...rest } = (full ?? {}) as Record<string, unknown> & { aiSummary?: OutcomeSummary };
+  const outcome = full ? rest : null;
   if (!outcome) return <EmptyState title="Report not available" description="The outcome report is built from registrations, attendance, judging, media and posts. Try again once the event has data." />;
   const headline = numericLeaves(outcome).slice(0, 8);
   const sections = Object.entries(outcome).filter(([, v]) => v !== null && typeof v === "object");
@@ -29,6 +32,7 @@ export async function ReportTab({ event, tenant }: { event: ElevateEvent; tenant
           </div>
           <BrandLogo tenant={tenant} size={40} />
         </div>
+        <LeadershipSummary eventId={event.id} initial={aiSummary ?? null} />
         {headline.length > 0 && (
           <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
             {headline.map((h) => <Stat key={h.label} label={h.label} value={Number.isInteger(h.value) ? h.value : h.value.toFixed(1)} />)}

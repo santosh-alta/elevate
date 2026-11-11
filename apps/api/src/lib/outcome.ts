@@ -43,8 +43,11 @@ export async function buildOutcome(eventId: string) {
   const winners = teams.filter((t) => t.award).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map((t) => ({ team: t.name, award: t.award, rank: t.rank }));
 
   const meta = eventMeta(event);
+  // Keep the AI leadership summary when the numbers are rebuilt.
+  const aiSummary = (event.outcome as { aiSummary?: unknown } | null)?.aiSummary;
   const outcome = {
     generatedAt: new Date().toISOString(),
+    ...(aiSummary ? { aiSummary } : {}),
     ...meta,
     event: {
       id: event.id, title: event.title, type: event.type, status: event.status, mode: event.mode, scope: event.scope,

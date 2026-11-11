@@ -219,3 +219,81 @@ export async function generateLinkedInDrafts(eventId: string): Promise<{ created
   const total = await prisma.linkedInPost.count({ where: { eventId } });
   return { created, total, generatedBy: useAi ? "ai" : "template" };
 }
+
+export const POST_STYLES = {
+  story: "Storytelling: open with a moment from the day, then what it taught you",
+  punchy: "Short and punchy: 60–100 words, very short lines, high energy",
+  proud: "Proud milestone: celebrate the achievement and the people who helped",
+  professional: "Professional: polished, skills-focused, good for recruiters",
+} as const;
+export type PostStyle = keyof typeof POST_STYLES;
+
+const ROLE_PHRASE: Record<DraftContext["role"], string> = {
+  PARTICIPANT: "took part in", WINNER: "won", RUNNER_UP: "was a runner-up at", SPECIAL_MENTION: "got a special mention at",
+  FINALIST: "was a finalist at", JUDGE: "was a judge at", SPEAKER: "was a speaker at", VOLUNTEER: "volunteered at", MENTOR: "mentored at",
+};
+
+/**
+ * Engaging, ready-to-post LinkedIn text written by Gemini (Groq as backup) for one person.
+ * Only event facts go to the AI, not the person's name or contact details.
+ */
+export async function aiLinkedInPost(ctx: DraftContext, style: PostStyle): Promise<{ text: string; tokens: number }> {
+  const { generate } = await import("./ai");
+  const facts = [
+    `What I did: ${ROLE_PHRASE[ctx.role]} the ${TYPE_WORD[ctx.eventType] ?? "event"} "${ctx.eventTitle}"`,
+    `Organised by: ${ctx.brandName}`,
+    `When: ${ctx.eventDate.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}`,
+    ctx.teamName && `My team: ${ctx.teamName}`,
+    ctx.projectTitle && `Our project: ${ctx.projectTitle}`,
+    ctx.awardLabel && `Award: ${ctx.awardLabel}`,
+  ].filter(Boolean).join("\n");
+  const r = await generate({
+    system:
+      "You write LinkedIn posts that college students in India publish about events they took part in. The posts feel personal and genuine, " +
+      "get engagement, and never sound like a template or like AI wrote them. Indian English. Output only the post text.",
+    prompt: [
+      `Write a first-person LinkedIn post. Style: ${POST_STYLES[style]}.`,
+      "Rules:",
+      "- Line 1 is a scroll-stopping hook of at most 12 words (no hashtags, no 'I am excited to share').",
+      "- Short lines with blank lines between small paragraphs, so it reads well on a phone.",
+      `- Name the organiser exactly as "${ctx.brandName}" and the event exactly as "${ctx.eventTitle}".`,
+      "- Include 2–3 takeaways as short bullet lines starting with ✅ or →. Where a specific detail isn't given, use a short placeholder in square brackets, e.g. [one thing you learned], for the student to fill in.",
+      "- Thank the organisers, mentors or teammates. End with a short question that invites comments.",
+      "- At most 3 emojis in total besides the bullet marks. Never invent numbers, names, prizes, companies, times of day or specific scenes.",
+      "- Plain text only: LinkedIn shows no formatting, so no **bold**, no markdown, no headings.",
+      style === "punchy" ? "- 60–100 words before the hashtags." : "- 120–200 words before the hashtags.",
+      ctx.certificateUrl ? `- After the question, add a line: "Certificate: ${ctx.certificateUrl}"` : "",
+      `- The very last line is exactly: ${tags(ctx)}`,
+      "", "Facts:", facts,
+    ].filter(Boolean).join("\n"),
+    maxTokens: 1200,
+    temperature: 0.9,
+  });
+  const text = r.text.trim().replace(/^```[a-z]*\n?|\n?```$/g, "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1").replace(/[ \t]+$/gm, "");
+  return { text, tokens: r.tokens };
+}
+
+/** Everything needed to write one person's post: their best certificate, team, project and award. */
+export async function draftContextFor(eventId: string, userId: string): Promise<DraftContext> {
+  const event = (await prisma.event.findUniqueOrThrow({ where: { id: eventId }, include: { tenant: true } })) as Event & { tenant: Tenant };
+  const [certs, member] = await Promise.all([
+    prisma.certificate.findMany({ where: { eventId, userId, revokedAt: null } }),
+    prisma.teamMember.findFirst({ where: { userId, team: { eventId } }, include: { team: true } }),
+  ]);
+  const best = certs.sort((a, b) => ROLE_PRIORITY.indexOf(a.type) - ROLE_PRIORITY.indexOf(b.type))[0];
+  const base = await brandBaseUrl(event.tenantId);
+  const team = member?.team;
+  return {
+    name: "",
+    role: !best || best.type === "PARTICIPATION" ? "PARTICIPANT" : (best.type as DraftContext["role"]),
+    teamName: team?.name,
+    projectTitle: team?.projectTitle ?? undefined,
+    awardLabel: team?.award ? AWARD_LABEL[team.award] : undefined,
+    eventTitle: event.title,
+    eventType: event.type,
+    eventDate: event.startsAt,
+    brandName: event.tenant.name,
+    hashtags: settingsOf(event.tenant).hashtags ?? [],
+    certificateUrl: best ? verifyUrl(base, best.serial) : undefined,
+  };
+}

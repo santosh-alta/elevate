@@ -3,10 +3,10 @@ import { z } from "zod";
 import { EVENT_TYPE_LABELS } from "@elevate/shared";
 import { prisma } from "../plugins/prisma";
 import { requireTenant } from "../plugins/tenant";
-import { hasRole, requireEventCreator, requireEventManager } from "../lib/permissions";
+import { requireEventCreator, requireEventManager, requireUser } from "../lib/permissions";
 import { HttpError, badRequest } from "../lib/errors";
 import { aiEnabled, generate, stripFences } from "../lib/ai";
-import { usageOf, withAllowance } from "../lib/aiUsage";
+import { usageOf, withAllowance, writeLimitFor } from "../lib/aiUsage";
 import { sanitizeHtml } from "../lib/html";
 
 /**
@@ -14,12 +14,7 @@ import { sanitizeHtml } from "../lib/html";
  * Who: anyone who can create events (staff and organizers). Limit: per person per day (India date);
  * brand admins get a bigger allowance. Failed calls don't count.
  */
-const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 5;
-const ADMIN_DAILY_LIMIT = Number(process.env.AI_ADMIN_DAILY_LIMIT) || 30;
-
-function limitFor(req: FastifyRequest): number {
-  return hasRole(req, ["BRAND_ADMIN"]) ? ADMIN_DAILY_LIMIT : DAILY_LIMIT;
-}
+const limitFor = writeLimitFor;
 
 const usage = (req: FastifyRequest) => usageOf(req.auth!.user.id, "write", limitFor(req));
 
@@ -108,8 +103,9 @@ function system(brand: string) {
 const HTML_RULES = "Return HTML only, using just <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em> and <a>. No <html>, <body>, inline styles, markdown or code fences.";
 
 export function aiRoutes(app: FastifyInstance) {
+  // Any signed-in person: students use AI for their LinkedIn posts; the editor buttons only appear in admin.
   app.get("/ai/usage", async (req) => {
-    requireEventCreator(req);
+    requireUser(req);
     return usage(req);
   });
 
