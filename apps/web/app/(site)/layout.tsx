@@ -1,3 +1,5 @@
+import { SiteTour } from "@/components/client/site-tour";
+import { PUBLIC_TOUR_PATHS, publicTour } from "@/lib/tours";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
@@ -27,6 +29,7 @@ export default async function SiteLayout({ children }: { children: ReactNode }) 
       <SiteFooter tenant={tenant} />
       <ScrollEffects />
       <ChatWidget />
+      <SiteTour id="public" autoStartOn={PUBLIC_TOUR_PATHS} steps={publicTour(tenant.name.split(" ")[0])} />
     </BrandRoot>
   );
 }

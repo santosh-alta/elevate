@@ -29,6 +29,7 @@ export function AdminNav(who: Who) {
         return (
           <Link
             key={href}
+            data-tour={`admin-${href.replace(/^\/admin\/?/, "").replace(/\//g, "-") || "dashboard"}`}
             aria-current={active ? "page" : undefined}
             href={href}
             className={cn(

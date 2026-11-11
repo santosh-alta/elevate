@@ -55,12 +55,12 @@ export default async function HomePage({ params }: { params: Promise<{ host: str
             {headline.before}<span className="text-gradient-brand">{headline.word}</span>{headline.after}
           </h1>
           <p className="mt-6 max-w-xl animate-fade-up text-lg text-hero-fg/85 [animation-delay:160ms] sm:text-xl">{subline}</p>
-          <div className="mt-9 flex animate-fade-up flex-wrap gap-3 [animation-delay:240ms]">
+          <div data-tour="home-cta" className="mt-9 flex animate-fade-up flex-wrap gap-3 [animation-delay:240ms]">
             <LinkButton href="/events" size="lg" variant="cta">Explore events <ArrowRight className="h-4 w-4" /></LinkButton>
             <LinkButton href="/me" size="lg" variant="ghost" className="glass text-hero-fg hover:bg-hero-fg/15">My tickets &amp; certificates</LinkButton>
           </div>
           {past.length > 0 && (
-            <dl className="mt-14 grid max-w-2xl animate-fade-up grid-cols-3 gap-3 [animation-delay:320ms] sm:gap-4">
+            <dl data-tour="home-stats" className="mt-14 grid max-w-2xl animate-fade-up grid-cols-3 gap-3 [animation-delay:320ms] sm:gap-4">
               <HeroStat icon={<CalendarDays className="h-4 w-4" />} value={past.length} label="Events held" />
               <HeroStat icon={<Users className="h-4 w-4" />} value={totalParticipants} label="Participants" />
               <HeroStat icon={<Award className="h-4 w-4" />} value={tenant.campuses.length} label="Campuses" />
@@ -71,7 +71,7 @@ export default async function HomePage({ params }: { params: Promise<{ host: str
       </section>
 
       {tenant.campuses.length > 1 && (
-        <div className="marquee overflow-hidden border-b border-border bg-card py-4">
+        <div data-tour="home-campuses" className="marquee overflow-hidden border-b border-border bg-card py-4">
           <div className="flex w-max animate-marquee gap-3 pr-3">
             {[...tenant.campuses, ...tenant.campuses].map((c, i) => (
               <Link
@@ -95,7 +95,7 @@ export default async function HomePage({ params }: { params: Promise<{ host: str
             <Grid events={live} />
           </Section>
         )}
-        <Section eyebrow="Explore" title="Browse by type">
+        <Section eyebrow="Explore" title="Browse by type" tour="home-types">
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {EVENT_FAMILIES.map((f) => {
               const n = upcoming.filter((e) => eventFamily(e) === f.key).length;
@@ -119,7 +119,7 @@ export default async function HomePage({ params }: { params: Promise<{ host: str
             })}
           </ul>
         </Section>
-        <Section eyebrow="Coming up" title="Upcoming events" action={<ViewAll href="/events" />}>
+        <Section eyebrow="Coming up" title="Upcoming events" action={<ViewAll href="/events" />} tour="home-upcoming">
           {next.length ? <Grid events={next.slice(0, 6)} /> : (
             <div className="bg-dots rounded-brand border border-dashed border-border p-10 text-center">
               <span className="mx-auto flex h-14 w-14 animate-float items-center justify-center rounded-2xl bg-hero-bg text-hero-accent"><CalendarDays className="h-7 w-7" /></span>
@@ -161,9 +161,9 @@ function ViewAll({ href }: { href: string }) {
   );
 }
 
-function Section({ eyebrow, title, action, children }: { eyebrow?: string; title: string; action?: React.ReactNode; children: React.ReactNode }) {
+function Section({ eyebrow, title, action, children, tour }: { eyebrow?: string; title: string; action?: React.ReactNode; children: React.ReactNode; tour?: string }) {
   return (
-    <section>
+    <section data-tour={tour}>
       <div className="mb-7 flex items-end justify-between gap-4">
         <div>
           {eyebrow && <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">{eyebrow}</p>}

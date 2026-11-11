@@ -9,6 +9,7 @@ import { NotificationBell } from "./client/notification-bell";
 import { HeaderUser } from "./client/header-user";
 import { SiteNav } from "./client/site-nav";
 import { ThemeToggle } from "./client/theme-toggle";
+import { TourButton } from "./client/site-tour";
 import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
@@ -42,8 +43,9 @@ export async function SiteHeader({ tenant: given, clientUser = false }: { tenant
           )}
         </Link>
         <nav className="flex items-center gap-1.5 text-sm">
-          <SiteNav showCampuses={tenant.campuses.length > 1} />
-          <ThemeToggle />
+          <div data-tour="site-nav" className="flex items-center"><SiteNav showCampuses={tenant.campuses.length > 1} /></div>
+          <div data-tour="theme" className="flex items-center"><ThemeToggle /></div>
+          <div data-tour="account" className="flex items-center gap-1.5">
           {clientUser ? <HeaderUser /> : me ? (
             <>
               <NotificationBell initialUnread={unread} />
@@ -58,6 +60,7 @@ export async function SiteHeader({ tenant: given, clientUser = false }: { tenant
           ) : (
             <Link href="/login" className={buttonClass("primary", "sm", "px-4")}>Sign in</Link>
           )}
+          </div>
         </nav>
       </div>
     </header>
@@ -119,6 +122,7 @@ export async function SiteFooter({ tenant: given }: { tenant?: Tenant } = {}) {
             <li><Link href="/winners" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">Winners hall of fame</Link></li>
             <li><Link href="/me" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">My tickets &amp; certificates</Link></li>
             <li><Link href="/feedback" className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">Share feedback</Link></li>
+            <li><TourButton className="text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline">Take a quick tour</TourButton></li>
           </ul>
         </nav>
         {(email || website || linkedin || phone || address) && (

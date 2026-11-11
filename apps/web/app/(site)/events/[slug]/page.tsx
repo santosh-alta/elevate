@@ -156,9 +156,11 @@ export default async function EventPage({ params, searchParams }: Params) {
             <div className="mt-5 h-1.5 w-20 animate-fade-up rounded-full bg-brand-gradient [animation-delay:160ms]" aria-hidden />
             <div className="mt-6 flex animate-fade-up flex-wrap items-center gap-4 [animation-delay:200ms]">
               {event.status === "REGISTRATION_OPEN" && !registration && (
-                <LinkButton href={me ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} size="lg" variant="cta">
-                  {isTeamEvent ? "Register your team" : "Register now"} <ArrowRight className="h-4 w-4" />
-                </LinkButton>
+                <span data-tour="event-register" className="inline-flex rounded-full">
+                  <LinkButton href={me ? registerHref : `/login?next=${encodeURIComponent(registerHref)}`} size="lg" variant="cta">
+                    {isTeamEvent ? "Register your team" : "Register now"} <ArrowRight className="h-4 w-4" />
+                  </LinkButton>
+                </span>
               )}
               {registration?.status === "PENDING_PAYMENT" && <LinkButton href={registerHref} size="lg" variant="cta"><CreditCard className="h-4 w-4" />Complete payment</LinkButton>}
               {registration && registration.status !== "PENDING_PAYMENT" && (
@@ -217,17 +219,17 @@ export default async function EventPage({ params, searchParams }: Params) {
             </div>
           )}
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
-            <div className="flex flex-wrap gap-2">
+            <div data-tour="event-calendar" className="flex flex-wrap gap-2">
               {myTeam && <LinkButton href={`/events/${event.slug}/team`} size="sm" variant="secondary"><Users className="h-4 w-4" />My team</LinkButton>}
               {event.livestreamUrl && <LinkButton href={event.livestreamUrl} external size="sm" variant="secondary"><Radio className="h-4 w-4" />Watch livestream</LinkButton>}
               {event.meetingUrl && event.mode !== "OFFLINE" && registration && registration.status !== "PENDING_PAYMENT" && <LinkButton href={event.meetingUrl} external size="sm" variant="secondary"><Video className="h-4 w-4" />Join online</LinkButton>}
               <AddToCalendar icsUrl={`/api/proxy/events/${event.slug}/calendar.ics`} googleUrl={googleCalendarUrl(event, pageUrl)} />
             </div>
-            {!isPreview && <ShareButtons url={pageUrl} title={event.title} />}
+            {!isPreview && <div data-tour="event-share"><ShareButtons url={pageUrl} title={event.title} /></div>}
           </div>
         </div>
 
-        <SectionNav items={nav} />
+        <div data-tour="event-sections"><SectionNav items={nav} /></div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-3">
           <div className="min-w-0 space-y-12 lg:col-span-2">

@@ -84,6 +84,7 @@ export function ChatWidget() {
     <div className="print:hidden">
       <button
         type="button"
+        data-tour="assistant"
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close assistant" : "Ask the assistant"}
         aria-expanded={open}
