@@ -6,15 +6,20 @@ import { canUseAdmin, getMe } from "@/lib/auth";
 import { ROLE_LABELS } from "@elevate/shared";
 import { AccountMenu } from "./client/account-menu";
 import { NotificationBell } from "./client/notification-bell";
+import { HeaderUser } from "./client/header-user";
 import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
 import { BrandLogo } from "./brand-logo";
 import { buttonClass } from "./ui/button";
 
-export async function SiteHeader() {
-  const tenant = await requireTenant();
-  const me = await getMe();
+/**
+ * Site header. `clientUser` loads the signed-in part in the browser, so the page itself can be pre-built
+ * and shared; otherwise it is rendered on the server for this visitor.
+ */
+export async function SiteHeader({ tenant: given, clientUser = false }: { tenant?: Tenant; clientUser?: boolean } = {}) {
+  const tenant = given ?? (await requireTenant());
+  const me = clientUser ? null : await getMe();
   const theme = resolveTheme(tenant.theme);
   const unread = me ? (await apiList<AppNotification>("/me/notifications?unread=1")).filter((n) => !n.readAt).length : 0;
   return (
@@ -38,7 +43,7 @@ export async function SiteHeader() {
           <Link href="/events" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Events</Link>
           {tenant.campuses.length > 1 && <Link href="/campuses" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Campuses</Link>}
           <Link href="/winners" className={buttonClass("ghost", "sm", "hidden sm:inline-flex")}>Winners</Link>
-          {me ? (
+          {clientUser ? <HeaderUser /> : me ? (
             <>
               <NotificationBell initialUnread={unread} />
               <AccountMenu
@@ -68,8 +73,8 @@ function siteLinks(tenant: Tenant) {
   return { email: s.supportEmail, website, linkedin, phone, address, instagram: social.instagram, youtube: social.youtube };
 }
 
-export async function SiteFooter() {
-  const tenant = await requireTenant();
+export async function SiteFooter({ tenant: given }: { tenant?: Tenant } = {}) {
+  const tenant = given ?? (await requireTenant());
   const theme = resolveTheme(tenant.theme);
   const { email, website, linkedin, phone, address, instagram, youtube } = siteLinks(tenant);
   const linkCls = "inline-flex items-center gap-2 text-hero-fg/90 underline-offset-4 hover:text-hero-fg hover:underline";

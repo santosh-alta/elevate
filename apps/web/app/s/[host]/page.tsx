@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, Award, CalendarDays, Users } from "lucide-react";
 import { EVENT_FAMILIES, resolveTheme } from "@elevate/shared";
-import { apiListPublic } from "@/lib/api";
-import { requireTenant } from "@/lib/tenant";
+import { apiListPublicFor } from "@/lib/api";
+import { notFound } from "next/navigation";
+import { tenantForHost } from "@/lib/tenant";
 import { eventFamily, participantCount } from "@/lib/format";
 import { EventIcon } from "@/components/event-icon";
 import type { ElevateEvent } from "@/lib/types";
@@ -10,12 +11,15 @@ import { EventCard } from "@/components/event-card";
 import { EmptyState, LinkButton } from "@/components/ui";
 import { HeroVideo } from "@/components/hero-video";
 
-export default async function HomePage() {
-  const [tenant, upcoming, past] = await Promise.all([
-    requireTenant(),
-    apiListPublic<ElevateEvent>("/events?upcoming=1"),
-    apiListPublic<ElevateEvent>("/events?status=COMPLETED"),
+export default async function HomePage({ params }: { params: Promise<{ host: string }> }) {
+  const host = decodeURIComponent((await params).host);
+  const [found, upcoming, past] = await Promise.all([
+    tenantForHost(host),
+    apiListPublicFor<ElevateEvent>(host, "/events?upcoming=1"),
+    apiListPublicFor<ElevateEvent>(host, "/events?status=COMPLETED"),
   ]);
+  if (!found) notFound();
+  const tenant = found;
   const live = upcoming.filter((e) => e.status === "LIVE");
   const next = upcoming.filter((e) => e.status !== "LIVE");
   const totalParticipants = past.reduce((s, e) => s + participantCount(e), 0);

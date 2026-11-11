@@ -2,38 +2,46 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Award, BadgeCheck, CalendarDays, ExternalLink, GraduationCap, Images, MapPin, Trophy, Users } from "lucide-react";
-import { apiListPublic, apiPublic } from "@/lib/api";
-import { requireTenant } from "@/lib/tenant";
+import { apiListPublicFor, apiPublicFor } from "@/lib/api";
+import { tenantForHost } from "@/lib/tenant";
 import { campusHref, campusTitle } from "@/lib/format";
 import type { CampusProfile, CampusSummary, ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
 import { Card, EmptyState, LinkButton } from "@/components/ui";
 
-type Props = { params: Promise<{ code: string }> };
+type Props = { params: Promise<{ host: string; code: string }> };
+
+// Pre-built on first visit per campus, refreshed every minute.
+export const revalidate = 60;
+export function generateStaticParams() {
+  return [];
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { code } = await params;
-  const [c, tenant] = await Promise.all([apiPublic<CampusProfile>(`/campuses/${encodeURIComponent(code)}`), requireTenant()]);
-  if (!c) return { title: "Campus" };
+  const { code, host: h } = await params;
+  const host = decodeURIComponent(h);
+  const [c, tenant] = await Promise.all([apiPublicFor<CampusProfile>(host, `/campuses/${encodeURIComponent(code)}`), tenantForHost(host)]);
+  if (!c || !tenant) return { title: "Campus" };
   const title = campusTitle(c, tenant.name.split(" ")[0]);
   return { title, description: c.details?.about ?? `Events at ${c.name}`, openGraph: c.photoUrl ? { images: [{ url: c.photoUrl }] } : undefined };
 }
 
 /** One campus: who they are, what's coming up there, what's open to every campus, what they've run, and photos. */
 export default async function CampusPage({ params }: Props) {
-  const { code } = await params;
+  const { code, host: h } = await params;
+  const host = decodeURIComponent(h);
   const [tenant, campus, central, all] = await Promise.all([
-    requireTenant(),
-    apiPublic<CampusProfile>(`/campuses/${encodeURIComponent(code)}`),
-    apiListPublic<ElevateEvent>(`/events?upcoming=1`),
-    apiListPublic<CampusSummary>("/campuses", 60),
+    tenantForHost(host),
+    apiPublicFor<CampusProfile>(host, `/campuses/${encodeURIComponent(code)}`),
+    apiListPublicFor<ElevateEvent>(host, `/events?upcoming=1`),
+    apiListPublicFor<CampusSummary>(host, "/campuses", 60),
   ]);
-  if (!campus) notFound();
+  if (!campus || !tenant) notFound();
   const short = tenant.name.split(" ")[0];
   const title = campusTitle(campus, short);
   const [upcoming, past] = await Promise.all([
-    apiListPublic<ElevateEvent>(`/events?campusId=${campus.id}&campusOnly=true&upcoming=1`),
-    apiListPublic<ElevateEvent>(`/events?campusId=${campus.id}&campusOnly=true&past=1`),
+    apiListPublicFor<ElevateEvent>(host, `/events?campusId=${campus.id}&campusOnly=true&upcoming=1`),
+    apiListPublicFor<ElevateEvent>(host, `/events?campusId=${campus.id}&campusOnly=true&past=1`),
   ]);
   const openToAll = central.filter((e) => e.scope === "CENTRAL" && e.status !== "CANCELLED").slice(0, 6);
   const d = campus.details ?? {};

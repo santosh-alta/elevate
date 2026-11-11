@@ -10,9 +10,8 @@ export const getHost = cache(async (): Promise<string> => {
   return h.get("x-elevate-host") ?? h.get("x-forwarded-host") ?? h.get("host") ?? "";
 });
 
-/** Headers that tell the API which brand this request belongs to. */
-export async function tenantHeaders(): Promise<Record<string, string>> {
-  const host = await getHost();
+/** Headers that tell the API which brand a host belongs to (no request needed, so pages can be pre-built). */
+export function hostHeaders(host: string): Record<string, string> {
   const out: Record<string, string> = { "X-Forwarded-Host": host };
   const hostname = host.split(":")[0];
   const local = hostname.match(/^([a-z0-9-]+)\.localhost$/i);
@@ -20,6 +19,23 @@ export async function tenantHeaders(): Promise<Record<string, string>> {
   else if (local) out["X-Tenant"] = local[1];
   return out;
 }
+
+/** Headers that tell the API which brand this request belongs to. */
+export async function tenantHeaders(): Promise<Record<string, string>> {
+  return hostHeaders(await getHost());
+}
+
+/** Brand for a host, kept for a minute. Used by pre-built pages, which know their host from the URL. */
+export const tenantForHost = cache(async (host: string): Promise<Tenant | null> => {
+  try {
+    const res = await fetch(`${API_BASE}/tenant`, { headers: hostHeaders(host), next: { revalidate: 60 } });
+    if (!res.ok) return null;
+    const t = (await res.json()) as Tenant;
+    return { ...t, theme: t.theme ?? {}, settings: t.settings ?? {}, campuses: t.campuses ?? [] };
+  } catch {
+    return null;
+  }
+});
 
 /** Current brand, or null when the domain is unknown or the API is unreachable. Cached per request. */
 export const getTenant = cache(async (): Promise<Tenant | null> => {

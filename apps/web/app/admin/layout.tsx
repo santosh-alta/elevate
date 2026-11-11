@@ -4,16 +4,26 @@ import type { ReactNode } from "react";
 import { resolveTheme } from "@elevate/shared";
 import { canUseAdmin, getMe, isBrandAdmin, isReviewer, isStaff, requireUser } from "@/lib/auth";
 import { ROLE_LABELS } from "@elevate/shared";
-import { requireTenant } from "@/lib/tenant";
+import { getOrigin, getTenant, requireTenant } from "@/lib/tenant";
+import { BrandRoot } from "@/components/brand-root";
+import { brandMetadata } from "@/lib/brand-meta";
 import { BrandLogo } from "@/components/brand-logo";
 import { AdminNav } from "./admin-nav";
 import { AccountMenu } from "@/components/client/account-menu";
 import { Avatar } from "@/components/avatar";
 import { LinkButton } from "@/components/ui";
 
-export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin" } };
+export async function generateMetadata(): Promise<Metadata> {
+  const [tenant, origin] = await Promise.all([getTenant(), getOrigin()]);
+  return { ...brandMetadata(tenant, origin), title: { default: "Admin", template: "%s · Admin" } };
+}
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const tenant = await requireTenant();
+  return <BrandRoot tenant={tenant}><AdminShell>{children}</AdminShell></BrandRoot>;
+}
+
+async function AdminShell({ children }: { children: ReactNode }) {
   const tenant = await requireTenant();
   const theme = resolveTheme(tenant.theme);
   await requireUser("/admin");

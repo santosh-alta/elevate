@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
-import { apiListPublic } from "@/lib/api";
-import { requireTenant } from "@/lib/tenant";
+import { apiListPublicFor } from "@/lib/api";
+import { notFound } from "next/navigation";
+import { tenantForHost } from "@/lib/tenant";
 import { campusHref, campusTitle } from "@/lib/format";
 import type { CampusSummary } from "@/lib/types";
 import { PageHero } from "@/components/page-hero";
@@ -11,8 +12,11 @@ import { EmptyState } from "@/components/ui";
 export const metadata: Metadata = { title: "Campuses" };
 
 /** Every campus, with its photo and what is coming up there. */
-export default async function CampusesPage() {
-  const [tenant, campuses] = await Promise.all([requireTenant(), apiListPublic<CampusSummary>("/campuses", 60)]);
+export default async function CampusesPage({ params }: { params: Promise<{ host: string }> }) {
+  const host = decodeURIComponent((await params).host);
+  const [found, campuses] = await Promise.all([tenantForHost(host), apiListPublicFor<CampusSummary>(host, "/campuses", 60)]);
+  if (!found) notFound();
+  const tenant = found;
   const short = tenant.name.split(" ")[0];
   return (
     <>

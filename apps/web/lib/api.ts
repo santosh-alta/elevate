@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { API_BASE, TOKEN_COOKIE } from "./config";
-import { tenantHeaders } from "./tenant";
+import { hostHeaders, tenantHeaders } from "./tenant";
 
 export interface ApiResult<T> { ok: boolean; status: number; data: T | null; error?: string }
 
@@ -70,6 +70,29 @@ export async function apiPublic<T>(path: string, revalidate = 30): Promise<T | n
 /** List version of apiPublic; tolerates `{ items: [] }` wrappers. */
 export async function apiListPublic<T>(path: string, revalidate = 30): Promise<T[]> {
   const d = await apiPublic<unknown>(path, revalidate);
+  if (Array.isArray(d)) return d as T[];
+  if (d && typeof d === "object") {
+    for (const k of ["items", "data", "results"]) {
+      const v = (d as Record<string, unknown>)[k];
+      if (Array.isArray(v)) return v as T[];
+    }
+  }
+  return [];
+}
+
+/** Public data for a known host (pre-built pages): no request headers or cookies involved. */
+export async function apiPublicFor<T>(host: string, path: string, revalidate = 60): Promise<T | null> {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { headers: hostHeaders(host), next: { revalidate } });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function apiListPublicFor<T>(host: string, path: string, revalidate = 60): Promise<T[]> {
+  const d = await apiPublicFor<unknown>(host, path, revalidate);
   if (Array.isArray(d)) return d as T[];
   if (d && typeof d === "object") {
     for (const k of ["items", "data", "results"]) {
