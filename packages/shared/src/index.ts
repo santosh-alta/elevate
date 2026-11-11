@@ -411,7 +411,7 @@ export const ALTA_THEME: ThemeInput = {
 /** Alta School of Technology contact details, footer links and certificate signatory. */
 export const ALTA_SETTINGS = {
   website: "https://www.altaschool.tech",
-  supportEmail: "connect@altaschool.tech",
+  supportEmail: "event@altaschool.tech",
   phone: "+91-7065333888",
   address: "SCO 27, AIHP (Highway Side), Institutional Area, Sector 32, Gurugram, Haryana 122001",
   linkedinOrgUrl: "https://www.linkedin.com/company/alta-school-of-technology",

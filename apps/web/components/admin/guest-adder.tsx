@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Search, UserPlus } from "lucide-react";
+import { GuestAvatar } from "@/components/guest-avatar";
 import { GUEST_ROLES } from "@elevate/shared";
 import { callApi } from "@/components/client/api";
 import { Button, Card, CardBody, CardHeader, Field, Input, Select } from "@/components/ui";
@@ -70,10 +71,7 @@ export function GuestAdder({ eventId, staff }: { eventId: string; staff: { id: s
             <ul className="max-h-80 space-y-1 overflow-y-auto">
               {results.map((p) => (
                 <li key={p.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-bg">
-                  {p.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.photoUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
-                  ) : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{p.name.slice(0, 1)}</div>}
+                  <GuestAvatar guest={p} size="h-9 w-9" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{p.name}</p>
                     <p className="truncate text-xs text-muted">{p.affiliation === "ALTA" ? "ALTA faculty · " : "External · "}{[p.designation, p.organization].filter(Boolean).join(", ")}{typeof p.appearances === "number" ? ` · ${p.appearances} events` : ""}</p>
