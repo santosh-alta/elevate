@@ -4,7 +4,8 @@ import { Search, X } from "lucide-react";
 import { EVENT_FAMILIES, EVENT_MODES } from "@elevate/shared";
 import { apiListPublic } from "@/lib/api";
 import { getTags } from "@/lib/catalog";
-import { requireTenant } from "@/lib/tenant";
+import { getOrigin, getTenant, requireTenant } from "@/lib/tenant";
+import { sharePreview } from "@/lib/brand-meta";
 import { eventFamily, familyLabel, humanize, isFamily, typeLabel } from "@/lib/format";
 import type { ElevateEvent } from "@/lib/types";
 import { PageHero } from "@/components/page-hero";
@@ -13,7 +14,11 @@ import { EventIcon } from "@/components/event-icon";
 import { FilterChip, hrefWith } from "@/components/filter-chips";
 import { Button, EmptyState, Input, Select } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Events" };
+export async function generateMetadata(): Promise<Metadata> {
+  const [tenant, origin] = await Promise.all([getTenant(), getOrigin()]);
+  const short = tenant?.name.split(" ")[0] ?? "";
+  return { title: "Events", ...sharePreview(tenant, origin, "events", `Upcoming events at ${short}`, undefined, "/events") };
+}
 
 const KEYS = ["q", "family", "tag", "type", "campusId", "mode", "when"] as const;
 

@@ -4,12 +4,17 @@ import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
 import { apiListPublicFor } from "@/lib/api";
 import { notFound } from "next/navigation";
 import { tenantForHost } from "@/lib/tenant";
+import { originFor, sharePreview } from "@/lib/brand-meta";
 import { campusHref, campusTitle } from "@/lib/format";
 import type { CampusSummary } from "@/lib/types";
 import { PageHero } from "@/components/page-hero";
 import { EmptyState } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Campuses" };
+export async function generateMetadata({ params }: { params: Promise<{ host: string }> }): Promise<Metadata> {
+  const host = decodeURIComponent((await params).host);
+  const tenant = await tenantForHost(host);
+  return { title: "Campuses", ...sharePreview(tenant, originFor(host), "campuses", `Campuses · ${tenant?.name ?? ""}`, undefined, "/campuses") };
+}
 
 /** Every campus, with its photo and what is coming up there. */
 export default async function CampusesPage({ params }: { params: Promise<{ host: string }> }) {

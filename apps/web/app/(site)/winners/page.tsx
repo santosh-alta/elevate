@@ -3,14 +3,19 @@ import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { EVENT_FAMILIES } from "@elevate/shared";
 import { apiPublic } from "@/lib/api";
-import { requireTenant } from "@/lib/tenant";
+import { getOrigin, getTenant, requireTenant } from "@/lib/tenant";
+import { sharePreview } from "@/lib/brand-meta";
 import { eventFamily, eventLabel, fmtDate, isFamily, typeLabel } from "@/lib/format";
 import type { ElevateEvent, Winner } from "@/lib/types";
 import { Badge, Button, EmptyState, Select } from "@/components/ui";
 import { PageHero } from "@/components/page-hero";
 import { WinnersPodium } from "@/components/event-extras";
 
-export const metadata: Metadata = { title: "Winners hall of fame" };
+export async function generateMetadata(): Promise<Metadata> {
+  const [tenant, origin] = await Promise.all([getTenant(), getOrigin()]);
+  const short = tenant?.name.split(" ")[0] ?? "";
+  return { title: "Winners hall of fame", ...sharePreview(tenant, origin, "winners", `Winners hall of fame · ${short}`, undefined, "/winners") };
+}
 
 interface HallEntry { event: Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt" | "coverImageUrl" | "category" | "family">; winners: Winner[] }
 

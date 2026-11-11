@@ -3,9 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Globe, Linkedin } from "lucide-react";
 import { apiGet } from "@/lib/api";
-import { resolveTheme } from "@elevate/shared";
 import { getOrigin, getTenant } from "@/lib/tenant";
-import { absoluteUrl } from "@/lib/theme";
+import { sharePreview } from "@/lib/brand-meta";
 import { eventLabel, fmtDate, fmtDateTime, humanize } from "@/lib/format";
 import type { ElevateEvent, Guest } from "@/lib/types";
 import { Badge, Card, LinkButton } from "@/components/ui";
@@ -38,13 +37,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const s = await loadSpeaker(id);
   if (!s) return { title: "Speaker" };
   const [origin, tenant] = await Promise.all([getOrigin(), getTenant()]);
-  const theme = resolveTheme(tenant?.theme);
-  const image = absoluteUrl(s.g.photoUrl ?? theme.ogImageUrl, origin);
   const description = [s.g.designation, s.g.organization].filter(Boolean).join(", ") || s.g.bio?.slice(0, 160);
   return {
     title: s.g.name,
     description: description || undefined,
-    openGraph: { title: s.g.name, description: description || undefined, images: image ? [{ url: image }] : undefined, url: `${origin}/speakers/${id}` },
+    ...sharePreview(tenant, origin, `speaker/${encodeURIComponent(id)}`, s.g.name, description || undefined, `/speakers/${id}`),
   };
 }
 

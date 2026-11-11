@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { sharePreview } from "@/lib/brand-meta";
 import Link from "next/link";
 import {
   ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Sparkles, Star, Ticket, Trophy, Users, Video,
@@ -36,18 +37,12 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   if (!e) return { title: "Event" };
   const description = e.tagline ?? (htmlToText(e.description).slice(0, 180) || `${eventLabel(e)} by ${tenant?.name ?? "us"}`);
   const url = `${origin}/events/${e.slug}`;
-  const theme = resolveTheme(tenant?.theme);
-  const cover = absoluteUrl(e.coverImageUrl, origin);
-  const fallback = absoluteUrl(theme.ogImageUrl ?? theme.logoUrl, origin);
-  const images = cover ? [{ url: cover, alt: e.title }] : fallback ? [{ url: fallback, alt: tenant?.name ?? e.title }] : undefined;
-  const large = !!cover || !!theme.ogImageUrl;
   return {
     title: e.title,
     description,
     alternates: { canonical: url },
     robots: preview ? { index: false, follow: false } : undefined,
-    openGraph: { type: "website", title: e.title, description, url, siteName: tenant ? `${tenant.name} Events` : undefined, images },
-    twitter: { card: large ? "summary_large_image" : "summary", title: e.title, description, images: images?.map((i) => i.url) },
+    ...sharePreview(tenant, origin, `event/${encodeURIComponent(e.slug)}`, e.title, description, `/events/${e.slug}`),
   };
 }
 

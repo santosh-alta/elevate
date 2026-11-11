@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Award, BadgeCheck, CalendarDays, ExternalLink, GraduationCap, Images, MapPin, Trophy, Users } from "lucide-react";
 import { apiListPublicFor, apiPublicFor } from "@/lib/api";
 import { tenantForHost } from "@/lib/tenant";
+import { originFor, sharePreview } from "@/lib/brand-meta";
 import { campusHref, campusTitle } from "@/lib/format";
 import type { CampusProfile, CampusSummary, ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
@@ -24,7 +25,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const [c, tenant] = await Promise.all([apiPublicFor<CampusProfile>(host, `/campuses/${encodeURIComponent(code)}`), tenantForHost(host)]);
   if (!c || !tenant) return { title: "Campus" };
   const title = campusTitle(c, tenant.name.split(" ")[0]);
-  return { title, description: c.details?.about ?? `Events at ${c.name}`, openGraph: c.photoUrl ? { images: [{ url: c.photoUrl }] } : undefined };
+  const description = c.details?.about ?? `Events at ${c.name}`;
+  return { title, description, ...sharePreview(tenant, originFor(host), `campus/${encodeURIComponent(code)}`, title, description, `/campuses/${code}`) };
 }
 
 /** One campus: who they are, what's coming up there, what's open to every campus, what they've run, and photos. */

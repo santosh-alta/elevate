@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
+import { getOrigin, getTenant } from "@/lib/tenant";
+import { sharePreview } from "@/lib/brand-meta";
 import { BadgeCheck, ShieldX } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { fmtDate, humanize } from "@/lib/format";
 import type { VerifyResult } from "@/lib/types";
 import { Card, LinkButton } from "@/components/ui";
 
-export const metadata: Metadata = { title: "Verify certificate" };
+export async function generateMetadata(): Promise<Metadata> {
+  const [tenant, origin] = await Promise.all([getTenant(), getOrigin()]);
+  const short = tenant?.name.split(" ")[0] ?? "";
+  return { title: "Verify certificate", ...sharePreview(tenant, origin, "verify", `Verify a certificate · ${short}`) };
+}
 
 export default async function VerifyPage({ params }: { params: Promise<{ serial: string }> }) {
   const { serial } = await params;
