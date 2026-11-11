@@ -101,7 +101,7 @@ type Card = {
   cta?: string;
 };
 
-function render(t: Tenant, host: string, logo: string | undefined, c: Card, fonts: Fonts) {
+function render(t: Tenant, host: string, logo: string | undefined, c: Card, fonts: Fonts, cacheControl: string) {
   const th = resolveTheme(t.theme);
   const { heroBg, heroFg, accent } = th.colors;
   const cta = th.colors.secondary ?? accent;
@@ -179,7 +179,7 @@ function render(t: Tenant, host: string, logo: string | undefined, c: Card, font
         <div style={{ display: "flex", height: 12, backgroundImage: `linear-gradient(90deg, ${g1}, ${g2})` }} />
       </div>
     ),
-    { width: W, height: H, fonts: fonts.length ? fonts : undefined, headers: { "Cache-Control": "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400" } },
+    { width: W, height: H, fonts: fonts.length ? fonts : undefined, headers: { "Cache-Control": cacheControl } },
   );
 }
 
@@ -272,5 +272,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ key: st
     loadFonts(th.headingFont ?? th.font ?? "Inter"),
   ]);
   const fallback: Card = { eyebrow: `${t.name.split(" ")[0]} Events`, title: `Events at ${t.name}`, subtitle: "Hackathons, workshops, talks and more.", cta: "Explore events" };
-  return render(t, host, logo, card ?? fallback, fonts);
+  // A stand-in card (page not found, or the API briefly unreachable) is kept only a minute so the real one replaces it.
+  const cache = card ? "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400" : "public, max-age=60, s-maxage=60";
+  return render(t, host, logo, card ?? fallback, fonts, cache);
 }
