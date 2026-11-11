@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { BrandRoot } from "@/components/brand-root";
-import { getTenant } from "@/lib/tenant";
 
-export default async function NotFound() {
-  const tenant = await getTenant();
+/**
+ * Last-resort 404 for addresses outside the site areas. It must not read the request: Next.js prepares it
+ * alongside every page, and reading headers here would stop the public pages from being pre-built.
+ */
+export default function NotFound() {
   return (
-    <BrandRoot tenant={tenant}>
+    <BrandRoot tenant={null}>
       <main className="flex min-h-[70vh] items-center justify-center px-4">
         <div className="text-center">
           <p className="text-sm font-semibold text-primary">404</p>
