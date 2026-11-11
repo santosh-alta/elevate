@@ -46,7 +46,6 @@ export default async function CampusPage({ params }: Props) {
   ]);
   const openToAll = central.filter((e) => e.scope === "CENTRAL" && e.status !== "CANCELLED").slice(0, 6);
   const d = campus.details ?? {};
-  const gallery = d.gallery ?? [];
   const others = all.filter((c) => c.id !== campus.id);
 
   return (
@@ -161,21 +160,6 @@ export default async function CampusPage({ params }: Props) {
                   <img src={m.url} alt={m.caption ?? m.eventTitle} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">{m.eventTitle}</span>
                 </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Campus gallery */}
-        {gallery.length > 0 && (
-          <section>
-            <h2 className="font-heading text-2xl font-bold tracking-tight">Around the campus</h2>
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {gallery.map((g) => (
-                <a key={g.url} href={g.url} target="_blank" rel="noreferrer" className="group relative aspect-[4/3] overflow-hidden rounded-brand bg-hero-bg">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={g.url} alt={g.caption ?? ""} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                </a>
               ))}
             </div>
           </section>
