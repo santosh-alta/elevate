@@ -10,7 +10,7 @@ export type ExternalItem = {
   id: string; source: string; sourceLabel: string; title: string; organizer?: string | null; url: string;
   imageUrl?: string | null; coverUrl?: string | null; summary?: string | null; teamSize?: string | null;
   startsAt: string; endsAt: string; registrationEndsAt?: string | null; mode: string; location?: string | null;
-  prize?: string | null; participants?: number | null; tags: string[]; major: boolean;
+  prize?: string | null; participants?: number | null; tags: string[]; major: boolean; kind?: string;
 };
 
 const OPEN = "ext-preview:open";
@@ -76,9 +76,23 @@ export function ExternalPreview({ items, brand }: { items: ExternalItem[]; brand
   const sameDay = fmt(e.startsAt) === fmt(e.endsAt);
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const shareText = `${e.title}${e.prize ? ` · ${e.prize}` : ""} · apply by ${fmt(deadline)}\n${shareUrl}`;
-  const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Deadline: ${e.title}`)}&dates=${new Date(deadline).toISOString().replace(/[-:]|\.\d{3}/g, "")}/${new Date(new Date(deadline).getTime() + 30 * 60_000).toISOString().replace(/[-:]|\.\d{3}/g, "")}&details=${encodeURIComponent(`Register: ${e.url}`)}`;
+  const gstamp = (d: Date) => d.toISOString().replace(/[-:]|\.\d{3}/g, "");
+  const gcal = e.kind === "CONTEST"
+    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(e.title)}&dates=${gstamp(new Date(e.startsAt))}/${gstamp(new Date(e.endsAt))}&details=${encodeURIComponent(`Join: ${e.url}`)}`
+    : `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Deadline: ${e.title}`)}&dates=${gstamp(new Date(deadline))}/${gstamp(new Date(new Date(deadline).getTime() + 30 * 60_000))}&details=${encodeURIComponent(`Register: ${e.url}`)}`;
 
-  const stats: { icon: ReactNode; label: string; value: string; sub?: string; accent?: boolean }[] = [
+  const isContest = e.kind === "CONTEST";
+  const minutes = Math.round((new Date(e.endsAt).getTime() - new Date(e.startsAt).getTime()) / 60_000);
+  const startTime = new Date(e.startsAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: TZ });
+  const startsIn = daysLeft(e.startsAt);
+  const contestStats: { icon: ReactNode; label: string; value: string; sub?: string; accent?: boolean }[] = [
+    { icon: <CalendarDays className="h-4 w-4" />, label: "Date", value: fmt(e.startsAt, { weekday: "short", day: "numeric", month: "short" }), sub: startsIn.text === "Closed" ? "Started" : startsIn.text === "Closes today" ? "Today" : startsIn.text.replace("left", "to go"), accent: startsIn.urgent },
+    { icon: <CalendarClock className="h-4 w-4" />, label: "Starts", value: startTime, sub: "India time" },
+    { icon: <Users className="h-4 w-4" />, label: "Duration", value: minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m` },
+    { icon: <Globe className="h-4 w-4" />, label: "Where", value: "Online", sub: "Free to join" },
+    ...(e.tags.length ? [{ icon: <Trophy className="h-4 w-4" />, label: "Type", value: e.tags.join(" · ") }] : []),
+  ];
+  const stats: { icon: ReactNode; label: string; value: string; sub?: string; accent?: boolean }[] = isContest ? contestStats : [
     { icon: <Trophy className="h-4 w-4" />, label: "Prize pool", value: e.prize?.replace(/ in prizes$/, "") ?? "Certificates & goodies", accent: !!e.prize },
     { icon: <Users className="h-4 w-4" />, label: "Registered", value: e.participants ? e.participants.toLocaleString("en-IN") : "Open", sub: e.participants ? "students so far" : undefined },
     { icon: <CalendarClock className="h-4 w-4" />, label: e.registrationEndsAt ? "Apply by" : "Deadline", value: fmt(deadline), sub: left.text, accent: left.urgent },
@@ -113,13 +127,13 @@ export function ExternalPreview({ items, brand }: { items: ExternalItem[]; brand
           ) : <span className="absolute bottom-4 left-4 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-white bg-amber-50 text-amber-600 shadow-lift"><Trophy className="h-7 w-7" /></span>}
           <div className="absolute inset-x-0 bottom-0 h-1 bg-brand-gradient" aria-hidden />
           <button ref={closeRef} type="button" onClick={() => open(null)} aria-label="Close" className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur hover:bg-black/60"><X className="h-5 w-5" /></button>
-          <span className="absolute left-4 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900 shadow-soft">External · {e.sourceLabel}</span>
+          <span className="absolute left-4 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-900 shadow-soft">{isContest ? "Coding contest" : "External"} · {e.sourceLabel}</span>
         </div>
 
         <div className="overflow-y-auto px-5 pb-5 sm:px-6">
           <div className="mt-4 flex flex-wrap gap-1.5">
             {e.major && <span className="inline-flex items-center gap-1 rounded-full bg-highlight px-2.5 py-0.5 text-xs font-bold text-highlight-fg"><Trophy className="h-3 w-3" />Major</span>}
-            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", left.urgent ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700")}>{left.text}</span>
+            {!isContest && <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", left.urgent ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700")}>{left.text}</span>}
           </div>
 
           <h2 className="mt-2 font-heading text-2xl font-extrabold leading-tight tracking-tight">{e.title}</h2>
@@ -141,13 +155,15 @@ export function ExternalPreview({ items, brand }: { items: ExternalItem[]; brand
           )}
 
           <p className="mt-5 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-fg/80">
-            Organised by {e.organizer ?? "another organiser"} on {e.sourceLabel}, not by {brand}. We list it so you don&apos;t miss it; check the rules and dates on their page before you register.
+            {isContest
+              ? <>Runs on {e.sourceLabel}, not by {brand}. Regular contests are great practice for placements and build your rating on the coding profile you added to {brand}.</>
+              : <>Organised by {e.organizer ?? "another organiser"} on {e.sourceLabel}, not by {brand}. We list it so you don&apos;t miss it; check the rules and dates on their page before you register.</>}
           </p>
         </div>
 
         <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row sm:items-center sm:px-6">
           <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-fg shadow-soft transition hover:opacity-90">
-            View &amp; register on {e.sourceLabel}<ArrowUpRight className="h-4 w-4" />
+            {isContest ? `Open on ${e.sourceLabel}` : <>View &amp; register on {e.sourceLabel}</>}<ArrowUpRight className="h-4 w-4" />
           </a>
           <div className="flex justify-center gap-2">
             <a href={gcal} target="_blank" rel="noopener noreferrer" title="Add the deadline to Google Calendar" aria-label="Add the deadline to Google Calendar" className="flex h-11 w-11 items-center justify-center rounded-full border border-border hover:border-primary/50"><CalendarPlus className="h-5 w-5" /></a>

@@ -178,7 +178,7 @@ function buildServer(ctx: Ctx, who: string) {
   }, async (a) => out(await api(ctx, "GET", "/calendar", { query: a })));
 
   tool("outside_events", {
-    title: "Outside hackathons", description: "Hackathons from Unstop, Devfolio, MLH, Devpost and ones the team added (staff).",
+    title: "Outside hackathons and contests", description: "Hackathons from Unstop, Devfolio, MLH, Devpost, coding contests from LeetCode, Codeforces, CodeChef, and ones the team added (staff).",
     inputSchema: { status: z.enum(["SUGGESTED", "APPROVED", "HIDDEN"]).optional(), addedByTeam: z.boolean().optional() }, annotations: READ,
   }, async ({ status, addedByTeam }) => out(await api(ctx, "GET", "/admin/external-events", { query: { status, source: addedByTeam ? "manual" : undefined } })));
 
@@ -191,6 +191,7 @@ function buildServer(ctx: Ctx, who: string) {
       mode: z.enum(["ONLINE", "OFFLINE", "HYBRID"]).default("ONLINE"), location: z.string().optional(),
       prize: z.string().optional(), teamSize: z.string().optional(), participants: z.number().int().optional(),
       tags: z.array(z.string()).optional(), imageUrl: z.string().url().optional(), major: z.boolean().optional(),
+      kind: z.enum(["HACKATHON", "CONTEST"]).optional().describe("CONTEST for a timed coding contest"),
     },
     annotations: WRITE,
   }, async (a) => out(await api(ctx, "POST", "/admin/external-events", { body: a })));

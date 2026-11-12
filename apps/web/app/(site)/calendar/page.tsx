@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Globe, MapPin, Trophy, Users } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Code2, ChevronLeft, ChevronRight, Globe, MapPin, Trophy, Users } from "lucide-react";
 import { apiPublic } from "@/lib/api";
 import { getOrigin, getTenant, requireTenant } from "@/lib/tenant";
 import { sharePreview } from "@/lib/brand-meta";
@@ -23,7 +23,8 @@ type OwnEvent = Pick<ElevateEvent, "id" | "slug" | "title" | "type" | "startsAt"
 type External = ExternalItem;
 type Entry =
   | { kind: "own"; e: OwnEvent; note?: string }
-  | { kind: "ext"; e: External; note: string };
+  | { kind: "ext"; e: External; note: string }
+  | { kind: "contest"; e: External };
 
 const TZ = "Asia/Kolkata";
 const dayKey = (d: Date | string) => new Date(d).toLocaleDateString("en-CA", { timeZone: TZ });
@@ -35,7 +36,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const tenant = await requireTenant();
   const brand = tenant.name.split(" ")[0];
   const sp = await searchParams;
-  const show = sp.show === "ours" || sp.show === "external" ? sp.show : undefined;
+  const show = sp.show === "ours" || sp.show === "external" || sp.show === "contests" ? sp.show : undefined;
   const today = new Date();
   const [y, m] = (sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : dayKey(today).slice(0, 7)).split("-").map(Number);
   const monthPrefix = `${y}-${String(m).padStart(2, "0")}`;
@@ -47,8 +48,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const to = new Date(days[41].getTime() + 864e5).toISOString();
 
   const data = (await apiPublic<{ events: OwnEvent[]; external: External[] }>(`/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, 300)) ?? { events: [], external: [] };
-  const own = show === "external" ? [] : data.events;
-  const ext = show === "ours" ? [] : data.external;
+  const isContest = (e: External) => e.kind === "CONTEST";
+  const own = !show || show === "ours" ? data.events : [];
+  const ext = !show || show === "external" ? data.external.filter((e) => !isContest(e)) : [];
+  const contests = !show || show === "contests" ? data.external.filter(isContest) : [];
 
   // Our events fill every day they run. Outside ones mark only their key dates (start, and the deadline),
   // because many run for weeks and would cover the whole month.
@@ -68,7 +71,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     if (new Date(e.startsAt) >= today || startK === deadK) add(startK, { kind: "ext", e, note: startK === deadK ? "Deadline" : "Starts" });
     if (deadK !== startK) add(deadK, { kind: "ext", e, note: e.registrationEndsAt ? "Apply by" : "Ends" });
   }
-  for (const list of byDay.values()) list.sort((a, b) => (a.kind === b.kind ? (a.kind === "ext" && b.kind === "ext" ? Number(b.e.major) - Number(a.e.major) : 0) : a.kind === "own" ? -1 : 1));
+  // Coding contests: a fixed time slot on one day.
+  for (const e of contests) add(dayKey(e.startsAt), { kind: "contest", e });
+  const order = { own: 0, ext: 1, contest: 2 } as const;
+  for (const list of byDay.values()) list.sort((a, b) => order[a.kind] - order[b.kind] || (a.kind === "contest" && b.kind === "contest" ? a.e.startsAt.localeCompare(b.e.startsAt) : a.kind === "ext" && b.kind === "ext" ? Number(b.e.major) - Number(a.e.major) : 0));
 
   const shift = (d: number) => {
     const dt = new Date(Date.UTC(y, m - 1 + d, 1));
@@ -79,11 +85,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const current = { month: sp.month, show };
   const agenda = [...byDay.entries()].filter(([k]) => k.startsWith(monthPrefix) && k >= (monthPrefix === todayKey.slice(0, 7) ? todayKey : "")).sort(([a], [b]) => a.localeCompare(b));
   const ownCount = new Set(data.events.filter((e) => dayKey(e.startsAt).startsWith(monthPrefix) || dayKey(e.endsAt).startsWith(monthPrefix)).map((e) => e.id)).size;
-  const extCount = data.external.length;
+  const extCount = data.external.filter((e) => !isContest(e)).length;
+  const contestCount = data.external.filter((e) => isContest(e) && dayKey(e.startsAt).startsWith(monthPrefix)).length;
 
   return (
     <>
-      <PageHero eyebrow="Calendar" title="What's on" description={`${brand} events, plus major hackathons and competitions on other platforms that students can join.`} className="pb-10" />
+      <PageHero eyebrow="Calendar" title="What's on" description={`${brand} events, major hackathons students can join, and coding contests on LeetCode, Codeforces and CodeChef.`} className="pb-10" />
       <div className="mx-auto max-w-6xl px-4 pb-16">
         <div className="relative -mt-10 flex animate-fade-up flex-wrap items-center justify-between gap-3 rounded-brand border border-border/70 bg-card p-4 shadow-lift">
           <div className="flex items-center gap-2">
@@ -96,12 +103,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <FilterChip href={hrefWith("/calendar", current, { show: undefined })} active={!show}>All</FilterChip>
             <FilterChip href={hrefWith("/calendar", current, { show: "ours" })} active={show === "ours"}><span className="h-2.5 w-2.5 rounded-full bg-primary" aria-hidden />{brand} events · {ownCount}</FilterChip>
             <FilterChip href={hrefWith("/calendar", current, { show: "external" })} active={show === "external"}><span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-amber-500" aria-hidden />Outside hackathons · {extCount}</FilterChip>
+            <FilterChip href={hrefWith("/calendar", current, { show: "contests" })} active={show === "contests"}><span className="h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden />Coding contests · {contestCount}</FilterChip>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted">
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded bg-primary" aria-hidden />{brand} event: register here</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-dashed border-amber-500 bg-amber-500/10" aria-hidden />External: run by another organiser. Tap for details</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-violet-500/70 bg-violet-500/10" aria-hidden />Coding contest: LeetCode, Codeforces, CodeChef</span>
           <span className="inline-flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-amber-500" />Major: big prizes or thousands taking part</span>
         </div>
 
@@ -123,6 +132,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           <Link href={`/events/${x.e.slug}`} title={`${x.e.title} · ${eventLabel(x.e)}`} className="block truncate rounded-md bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-primary-fg hover:opacity-90">
                             {dayKey(x.e.startsAt) === k && <span className="mr-1 font-normal opacity-80">{time(x.e.startsAt)}</span>}{x.e.title}
                           </Link>
+                        ) : x.kind === "contest" ? (
+                          <ExternalTrigger id={x.e.id} title={`Coding contest · ${x.e.sourceLabel} · ${time(x.e.startsAt)}: ${x.e.title}`} className="flex w-full items-center gap-1 truncate rounded-md border border-violet-500/60 bg-violet-500/10 px-1.5 py-0.5 text-[11px] font-medium text-fg hover:bg-violet-500/20">
+                            <Code2 className="h-3 w-3 shrink-0 text-violet-500" />
+                            <span className="shrink-0 opacity-75">{time(x.e.startsAt)}</span><span className="truncate">{x.e.title}</span>
+                          </ExternalTrigger>
                         ) : (
                           <ExternalTrigger id={x.e.id} title={`External · ${x.e.sourceLabel} · ${x.note}: ${x.e.title}`} className="flex w-full items-center gap-1 truncate rounded-md border border-dashed border-amber-500/80 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-fg hover:bg-amber-500/20">
                             {x.e.major && <Trophy className="h-3 w-3 shrink-0 text-amber-500" />}
@@ -155,7 +169,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   <p className="text-xs uppercase tracking-wide text-muted">{k === todayKey ? "Today" : new Date(`${k}T12:00:00Z`).toLocaleDateString("en-IN", { weekday: "long", timeZone: "UTC" })}</p>
                 </div>
                 <ul className="min-w-0 space-y-2.5">
-                  {list.map((x) => <li key={`${x.kind}-${x.e.id}`}>{x.kind === "own" ? <OwnRow e={x.e} brand={brand} day={k} /> : <ExtRow e={x.e} note={x.note} />}</li>)}
+                  {list.map((x) => <li key={`${x.kind}-${x.e.id}`}>{x.kind === "own" ? <OwnRow e={x.e} brand={brand} day={k} /> : x.kind === "contest" ? <ContestRow e={x.e} /> : <ExtRow e={x.e} note={x.note} />}</li>)}
                 </ul>
               </li>
             ))}
@@ -164,7 +178,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
         <ExternalPreview items={data.external} brand={brand} />
         <p className="mt-10 rounded-xl bg-bg px-4 py-3 text-xs text-muted">
-          External events are organised by others and listed so students don&apos;t miss good opportunities. Dates, prizes and rules can change, so check the organiser&apos;s page before registering. Listings come from Unstop, Devfolio, MLH and Devpost, and are refreshed daily.
+          External events are organised by others and listed so students don&apos;t miss good opportunities. Dates, prizes and rules can change, so check the organiser&apos;s page before registering. Hackathons come from Unstop, Devfolio, MLH and Devpost; coding contests from LeetCode, Codeforces and CodeChef. Refreshed daily.
         </p>
       </div>
     </>
@@ -189,6 +203,25 @@ function OwnRow({ e, brand, day }: { e: OwnEvent; brand: string; day: string }) 
       </div>
       <span className="hidden text-sm font-semibold text-primary sm:block">View →</span>
     </Link>
+  );
+}
+
+function ContestRow({ e }: { e: External }) {
+  const minutes = Math.round((new Date(e.endsAt).getTime() - new Date(e.startsAt).getTime()) / 60_000);
+  const dur = minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m`;
+  return (
+    <ExternalTrigger id={e.id} className="group flex w-full min-w-0 items-center gap-3 rounded-brand border border-violet-500/40 bg-card px-4 py-3 transition hover:-translate-y-0.5 hover:border-violet-500 hover:shadow-soft">
+      <span className="w-16 shrink-0 font-heading text-sm font-bold tabular-nums">{time(e.startsAt)}</span>
+      {e.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={e.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-lg border border-border bg-white object-contain p-1" />
+      ) : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600"><Code2 className="h-4 w-4" /></span>}
+      <span className="block min-w-0 flex-1">
+        <span className="block truncate font-semibold">{e.title}</span>
+        <span className="block text-xs text-muted">Coding contest · {e.sourceLabel} · {dur}{e.tags.includes("Rated") ? " · Rated" : ""}</span>
+      </span>
+      <span className="hidden text-sm font-semibold text-violet-600 sm:block">Details</span>
+    </ExternalTrigger>
   );
 }
 

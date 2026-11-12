@@ -14,7 +14,7 @@ type Item = {
   id: string; source: string; sourceLabel: string; title: string; organizer?: string | null; url: string; imageUrl?: string | null;
   startsAt: string; endsAt: string; registrationEndsAt?: string | null; mode: string; location?: string | null; prize?: string | null;
   participants?: number | null; tags: string[]; major: boolean; status: "SUGGESTED" | "APPROVED" | "HIDDEN"; reviewedAt?: string | null;
-  summary?: string | null; coverUrl?: string | null; teamSize?: string | null;
+  summary?: string | null; coverUrl?: string | null; teamSize?: string | null; kind?: string;
 };
 type Payload = {
   items: Item[]; counts: Partial<Record<Item["status"] | "MANUAL", number>>;
@@ -82,6 +82,7 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
                   {e.major && <Badge tone="highlight"><Trophy className="h-3 w-3" />Major</Badge>}
                   {e.status === "APPROVED" && !e.reviewedAt && <span className="text-xs text-muted">shown automatically</span>}
                   {e.source === "manual" && <Badge tone="primary">Added by team</Badge>}
+                  {e.kind === "CONTEST" && <Badge tone="purple">Coding contest</Badge>}
                   {status === "MANUAL" && e.status === "HIDDEN" && <Badge>Hidden</Badge>}
                 </div>
                 <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 inline-flex items-center gap-1 font-semibold hover:text-primary">{e.title}<ArrowUpRight className="h-3.5 w-3.5" /></a>

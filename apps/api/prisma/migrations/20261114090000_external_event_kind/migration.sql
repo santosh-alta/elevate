@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "ExternalEvent" ADD COLUMN "kind" TEXT NOT NULL DEFAULT 'HACKATHON';

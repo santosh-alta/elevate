@@ -1233,6 +1233,8 @@ model ExternalEvent {
   startsAt           DateTime
   endsAt             DateTime
   registrationEndsAt DateTime?
+  /// "HACKATHON" (hackathons, challenges) | "CONTEST" (timed coding contests: LeetCode, Codeforces, CodeChef)
+  kind               String    @default("HACKATHON")
   /// "ONLINE" | "OFFLINE" | "HYBRID"
   mode               String    @default("ONLINE")
   location           String?

@@ -233,7 +233,7 @@ export interface ExternalEvent {
   id: string; source: string; sourceLabel: string; title: string; organizer?: string | null; url: string;
   imageUrl?: string | null; coverUrl?: string | null; summary?: string | null; teamSize?: string | null;
   startsAt: string; endsAt: string; registrationEndsAt?: string | null; mode: string; location?: string | null;
-  prize?: string | null; participants?: number | null; tags: string[]; major: boolean;
+  prize?: string | null; participants?: number | null; tags: string[]; major: boolean; kind?: string;
 }
 export interface CalendarEvent {
   id: string; slug: string; title: string; type: string; startsAt: string; endsAt: string; mode: string; status: string;

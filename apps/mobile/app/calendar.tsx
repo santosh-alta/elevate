@@ -17,8 +17,13 @@ const dayKey = (d: Date | string) => new Date(d).toLocaleDateString("en-CA", { t
 const fmt = (d: string, o: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }) => new Date(d).toLocaleDateString("en-IN", { timeZone: TZ, ...o });
 const time = (d: string) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: TZ });
 
-type Entry = { kind: "own"; e: CalendarEvent } | { kind: "ext"; e: ExternalEvent; note: string };
-type Show = "all" | "ours" | "external";
+type Entry = { kind: "own"; e: CalendarEvent } | { kind: "ext"; e: ExternalEvent; note: string } | { kind: "contest"; e: ExternalEvent };
+type Show = "all" | "ours" | "external" | "contests";
+const VIOLET = "#7c3aed";
+const duration = (e: ExternalEvent) => {
+  const m = Math.round((new Date(e.endsAt).getTime() - new Date(e.startsAt).getTime()) / 60_000);
+  return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`;
+};
 
 function daysLeft(d: string) {
   const ms = new Date(d).getTime() - Date.now();
@@ -49,14 +54,18 @@ export default function CalendarScreen() {
   const days = useMemo(() => {
     const map = new Map<string, Entry[]>();
     const add = (k: string, x: Entry) => k.startsWith(prefix) && map.set(k, [...(map.get(k) ?? []), x]);
-    if (show !== "external") for (const e of data?.events ?? []) {
+    if (show === "all" || show === "ours") for (const e of data?.events ?? []) {
       for (let t = new Date(e.startsAt).getTime(), n = 0; t <= new Date(e.endsAt).getTime() && n < 40; t += 864e5, n++) add(dayKey(new Date(t)), { kind: "own", e });
     }
-    if (show !== "ours") for (const e of data?.external ?? []) {
+    if (show === "all" || show === "contests") for (const e of data?.external ?? []) if (e.kind === "CONTEST") add(dayKey(e.startsAt), { kind: "contest", e });
+    if (show === "all" || show === "external") for (const e of data?.external ?? []) {
+      if (e.kind === "CONTEST") continue;
       const s = dayKey(e.startsAt), dl = dayKey(e.registrationEndsAt ?? e.endsAt);
       if (new Date(e.startsAt) >= new Date() || s === dl) add(s, { kind: "ext", e, note: s === dl ? "Deadline" : "Starts" });
       if (dl !== s) add(dl, { kind: "ext", e, note: e.registrationEndsAt ? "Apply by" : "Ends" });
     }
+    const order = { own: 0, ext: 1, contest: 2 };
+    for (const list of map.values()) list.sort((a, b) => order[a.kind] - order[b.kind] || a.e.startsAt.localeCompare(b.e.startsAt));
     return [...map.entries()].filter(([k]) => prefix !== today.slice(0, 7) || k >= today).sort(([a], [b]) => a.localeCompare(b));
   }, [data, show, prefix, today]);
 
@@ -77,7 +86,7 @@ export default function CalendarScreen() {
         <Pressable onPress={() => setOffset((o) => o + 1)} hitSlop={10} style={{ padding: 8 }} accessibilityLabel="Next month"><Ionicons name="chevron-forward" size={22} color={theme.colors.fg} /></Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 8 }} contentContainerStyle={{ gap: 8 }}>
-        {chip("all", "All")}{chip("ours", `${short} events`)}{chip("external", "Outside hackathons")}
+        {chip("all", "All")}{chip("ours", `${short} events`)}{chip("external", "Outside hackathons")}{chip("contests", "Coding contests")}
       </ScrollView>
       <Muted style={{ fontSize: 12, marginBottom: 12 }}>Solid = {short} event, register here · Dashed = run by another organiser, tap for details</Muted>
 
@@ -102,6 +111,15 @@ export default function CalendarScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} style={{ alignSelf: "center" }} />
             </Pressable>
+          ) : x.kind === "contest" ? (
+            <Pressable key={`c${x.e.id}`} onPress={() => setOpen(x.e)} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8, borderRadius: theme.radius ?? 12, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: withAlpha(VIOLET, 0.45), opacity: pressed ? 0.85 : 1 })}>
+              <Text style={{ width: 62, fontWeight: "800", color: theme.colors.fg }}>{time(x.e.startsAt)}</Text>
+              {x.e.imageUrl ? <Image source={{ uri: x.e.imageUrl }} style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: "#fff" }} resizeMode="contain" /> : <Ionicons name="code-slash" size={20} color={VIOLET} />}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: "700", color: theme.colors.fg }} numberOfLines={1}>{x.e.title}</Text>
+                <Muted style={{ fontSize: 12 }}>Coding contest · {x.e.sourceLabel} · {duration(x.e)}</Muted>
+              </View>
+            </Pressable>
           ) : (
             <Pressable key={`x${x.e.id}${x.note}`} onPress={() => setOpen(x.e)} style={({ pressed }) => ({ flexDirection: "row", gap: 12, padding: 14, marginBottom: 8, borderRadius: theme.radius ?? 12, backgroundColor: theme.colors.card, borderWidth: 1, borderStyle: "dashed", borderColor: "#f59e0b", opacity: pressed ? 0.85 : 1 })}>
               {x.e.imageUrl ? <Image source={{ uri: x.e.imageUrl }} style={{ width: 46, height: 46, borderRadius: 12, backgroundColor: "#fff" }} resizeMode="contain" /> : (
@@ -116,7 +134,7 @@ export default function CalendarScreen() {
           ))}
         </View>
       ))}
-      <Muted style={{ fontSize: 12, marginTop: 8 }}>Outside events come from Unstop, Devfolio, MLH, Devpost and the {short} team. Check details on the organiser's page before registering.</Muted>
+      <Muted style={{ fontSize: 12, marginTop: 8 }}>Hackathons come from Unstop, Devfolio, MLH, Devpost and the {short} team; coding contests from LeetCode, Codeforces and CodeChef. Check details on the organiser's page before registering.</Muted>
 
       <ExternalSheet item={open} brand={short} onClose={() => setOpen(null)} />
     </Screen>
@@ -129,7 +147,15 @@ function ExternalSheet({ item, brand: short, onClose }: { item: ExternalEvent | 
   const e = item;
   const deadline = e.registrationEndsAt ?? e.endsAt;
   const left = daysLeft(deadline);
-  const stats: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; value: string; sub?: string; red?: boolean }[] = [
+  const isContest = e.kind === "CONTEST";
+  type Stat = { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; value: string; sub?: string; red?: boolean };
+  const contestStats: Stat[] = [
+    { icon: "calendar-outline", label: "Date", value: fmt(e.startsAt, { weekday: "short", day: "numeric", month: "short" }) },
+    { icon: "time-outline", label: "Starts", value: time(e.startsAt), sub: "India time" },
+    { icon: "hourglass-outline", label: "Duration", value: duration(e) },
+    { icon: "globe-outline", label: "Where", value: "Online", sub: "Free to join" },
+  ];
+  const stats: Stat[] = isContest ? contestStats : [
     { icon: "trophy-outline", label: "Prize pool", value: e.prize?.replace(/ in prizes$/, "") ?? "Certificates" },
     { icon: "people-outline", label: "Registered", value: e.participants ? e.participants.toLocaleString("en-IN") : "Open" },
     { icon: "alarm-outline", label: e.registrationEndsAt ? "Apply by" : "Deadline", value: fmt(deadline), sub: left.text, red: left.urgent },
@@ -148,7 +174,7 @@ function ExternalSheet({ item, brand: short, onClose }: { item: ExternalEvent | 
         <View style={{ height: 120, backgroundColor: theme.colors.heroBg, justifyContent: "flex-end", padding: 16 }}>
           {e.coverUrl ? <Image source={{ uri: e.coverUrl }} style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} resizeMode="cover" /> : null}
           <View style={{ position: "absolute", top: 14, left: 16, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 }}>
-            <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 1, color: "#0f172a" }}>EXTERNAL · {e.sourceLabel.toUpperCase()}</Text>
+            <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 1, color: "#0f172a" }}>{isContest ? "CODING CONTEST" : "EXTERNAL"} · {e.sourceLabel.toUpperCase()}</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close" style={{ position: "absolute", top: 10, right: 12, width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="close" size={20} color="#fff" />
@@ -159,7 +185,7 @@ function ExternalSheet({ item, brand: short, onClose }: { item: ExternalEvent | 
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
           <View style={{ flexDirection: "row", gap: 6 }}>
             {e.major ? <Text style={{ backgroundColor: theme.colors.highlight, color: "#1f2937", fontWeight: "800", fontSize: 12, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, overflow: "hidden" }}>🏆 Major</Text> : null}
-            <Text style={{ backgroundColor: left.urgent ? STATUS_COLORS.dangerBg : STATUS_COLORS.successBg, color: left.urgent ? STATUS_COLORS.danger : STATUS_COLORS.success, fontWeight: "700", fontSize: 12, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, overflow: "hidden" }}>{left.text}</Text>
+            {isContest ? null : <Text style={{ backgroundColor: left.urgent ? STATUS_COLORS.dangerBg : STATUS_COLORS.successBg, color: left.urgent ? STATUS_COLORS.danger : STATUS_COLORS.success, fontWeight: "700", fontSize: 12, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999, overflow: "hidden" }}>{left.text}</Text>}
           </View>
           <View>
             <Text style={{ fontSize: 22, fontWeight: "800", color: theme.colors.fg }}>{e.title}</Text>
@@ -180,11 +206,13 @@ function ExternalSheet({ item, brand: short, onClose }: { item: ExternalEvent | 
           {e.summary ? <Text style={{ color: theme.colors.fg, lineHeight: 21 }}>{e.summary}</Text> : null}
           {e.tags.length ? <Muted style={{ fontSize: 13 }}>{e.tags.join(" · ")}</Muted> : null}
           <Text style={{ fontSize: 12, color: theme.colors.muted, backgroundColor: withAlpha("#f59e0b", 0.12), padding: 10, borderRadius: 10, overflow: "hidden" }}>
-            Organised by {e.organizer ?? "another organiser"} on {e.sourceLabel}, not by {short}. Check the rules and dates on their page before you register.
+            {isContest
+              ? `Runs on ${e.sourceLabel}, not by ${short}. Regular contests are great placement practice and build the rating on your coding profile.`
+              : `Organised by ${e.organizer ?? "another organiser"} on ${e.sourceLabel}, not by ${short}. Check the rules and dates on their page before you register.`}
           </Text>
         </ScrollView>
         <View style={{ flexDirection: "row", gap: 8, padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
-          <Button title={`View & register on ${e.sourceLabel}`} icon="open-outline" onPress={() => Linking.openURL(e.url)} style={{ flex: 1 }} />
+          <Button title={isContest ? `Open on ${e.sourceLabel}` : `View & register on ${e.sourceLabel}`} icon="open-outline" onPress={() => Linking.openURL(e.url)} style={{ flex: 1 }} />
           <Button title="" icon="share-social" variant="ghost" onPress={share} style={{ paddingHorizontal: 14 }} />
         </View>
       </SafeAreaView>

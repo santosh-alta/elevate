@@ -11,8 +11,10 @@ import { prisma } from "../plugins/prisma";
  */
 
 export type ExternalSettings = { enabled: boolean; autoApproveMajor: boolean; sources: string[]; lastSyncAt?: string; lastResult?: Record<string, number | string> };
-export const EXTERNAL_SOURCES = ["unstop", "devfolio", "mlh", "devpost"] as const;
-export const SOURCE_LABELS: Record<string, string> = { unstop: "Unstop", devfolio: "Devfolio", mlh: "MLH", devpost: "Devpost", manual: "Added by team" };
+export const EXTERNAL_SOURCES = ["unstop", "devfolio", "mlh", "devpost", "leetcode", "codeforces", "codechef"] as const;
+/** Timed coding contests: shown automatically (official platforms), as "Coding contests" on the calendar. */
+export const CONTEST_SOURCES = ["leetcode", "codeforces", "codechef"];
+export const SOURCE_LABELS: Record<string, string> = { unstop: "Unstop", devfolio: "Devfolio", mlh: "MLH", devpost: "Devpost", leetcode: "LeetCode", codeforces: "Codeforces", codechef: "CodeChef", manual: "Added by team" };
 
 const PLATFORMS: [RegExp, string][] = [
   [/unstop\.com$/, "Unstop"], [/devfolio\.co$/, "Devfolio"], [/devpost\.com$/, "Devpost"], [/mlh\.(io|com)$/, "MLH"],
@@ -54,6 +56,7 @@ type Item = {
   coverUrl?: string | null; summary?: string | null; teamSize?: string | null;
   startsAt: Date; endsAt: Date; registrationEndsAt?: Date | null; mode: "ONLINE" | "OFFLINE" | "HYBRID";
   location?: string | null; prize?: string | null; participants?: number | null; tags: string[]; score: number; major: boolean;
+  kind?: "HACKATHON" | "CONTEST";
 };
 
 const UA = "Mozilla/5.0 (compatible; CampusEventsCalendar/1.0)";
@@ -246,7 +249,58 @@ async function fromDevpost(): Promise<Item[]> {
   return out;
 }
 
-export const FETCHERS: Record<string, () => Promise<Item[]>> = { unstop: fromUnstop, devfolio: fromDevfolio, mlh: fromMlh, devpost: fromDevpost };
+// ---------- Coding contests (next 30 days) ----------
+const CONTEST_WINDOW = 30 * 86_400_000;
+const favicon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+const mins = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`);
+function contest(source: string, id: string, title: string, url: string, start: Date, minutes: number, summary: string, tags: string[]): Item {
+  return {
+    source, sourceId: id, title, organizer: SOURCE_LABELS[source], url, imageUrl: favicon(new URL(url).hostname),
+    startsAt: start, endsAt: new Date(start.getTime() + minutes * 60_000), registrationEndsAt: null, mode: "ONLINE",
+    location: null, prize: null, participants: null, tags, score: 0, major: false, kind: "CONTEST",
+    summary: `${summary} ${mins(minutes)}, online and free. Sign in on ${SOURCE_LABELS[source]} and register before it starts.`,
+  };
+}
+
+async function fromLeetcode(): Promise<Item[]> {
+  const d = await getJson<{ data?: { upcomingContests?: { title: string; titleSlug: string; startTime: number; duration: number }[] } }>("https://leetcode.com/graphql", {
+    method: "POST", headers: { "Content-Type": "application/json", Referer: "https://leetcode.com" },
+    body: JSON.stringify({ query: "{ upcomingContests { title titleSlug startTime duration } }" }),
+  });
+  return (d.data?.upcomingContests ?? []).map((c) => contest(
+    "leetcode", c.titleSlug, c.title, `https://leetcode.com/contest/${c.titleSlug}`, new Date(c.startTime * 1000), Math.round(c.duration / 60),
+    /biweekly/i.test(c.title) ? "LeetCode Biweekly Contest: 4 problems." : "LeetCode Weekly Contest: 4 problems.", ["DSA", "Rated"],
+  ));
+}
+
+async function fromCodeforces(): Promise<Item[]> {
+  const d = await getJson<{ result: { id: number; name: string; phase: string; durationSeconds: number; startTimeSeconds?: number }[] }>("https://codeforces.com/api/contest.list?gym=false");
+  const now = Date.now();
+  return d.result
+    .filter((c) => c.phase === "BEFORE" && c.startTimeSeconds && c.startTimeSeconds * 1000 - now < CONTEST_WINDOW && c.durationSeconds <= 12 * 3600 && !/practice/i.test(c.name))
+    .map((c) => {
+      const div = c.name.match(/Div\.\s*\d(?:\s*\+\s*\d)?/i)?.[0];
+      return contest("codeforces", String(c.id), c.name, `https://codeforces.com/contests/${c.id}`, new Date(c.startTimeSeconds! * 1000), Math.round(c.durationSeconds / 60),
+        div ? `Codeforces round, ${div.replace(/\s+/g, " ")}.` : "Codeforces round.", ["Competitive programming", ...(div ? [div.replace(/\s+/g, " ")] : [])]);
+    });
+}
+
+async function fromCodechef(): Promise<Item[]> {
+  const d = await getJson<{ future_contests?: { contest_code: string; contest_name: string; contest_start_date_iso: string; contest_duration: string }[] }>(
+    "https://www.codechef.com/api/list/contests/all?sort_by=START&sorting_order=asc&offset=0&mode=all",
+  );
+  const now = Date.now();
+  return (d.future_contests ?? [])
+    .map((c) => ({ c, start: new Date(c.contest_start_date_iso) }))
+    .filter(({ start }) => valid(start) && start.getTime() - now < CONTEST_WINDOW)
+    .map(({ c, start }) => contest("codechef", c.contest_code, c.contest_name, `https://www.codechef.com/${c.contest_code}`, start, Number(c.contest_duration) || 120,
+      /starters/i.test(c.contest_name) ? "CodeChef Starters: rated weekly contest." : "CodeChef contest.", ["DSA", ...(/rated/i.test(c.contest_name) ? ["Rated"] : [])]));
+}
+
+export const FETCHERS: Record<string, () => Promise<Item[]>> = {
+  unstop: fromUnstop, devfolio: fromDevfolio, mlh: fromMlh, devpost: fromDevpost,
+  leetcode: fromLeetcode, codeforces: fromCodeforces, codechef: fromCodechef,
+};
 
 /** Pulls every enabled source for one brand and saves new or changed listings. */
 export async function syncExternalEvents(tenantId: string): Promise<Record<string, number | string>> {
@@ -268,10 +322,10 @@ export async function syncExternalEvents(tenantId: string): Promise<Record<strin
         const existing = await prisma.externalEvent.findUnique({ where: { tenantId_source_sourceId: { tenantId, source: i.source, sourceId: i.sourceId } }, select: { id: true, reviewedAt: true, status: true } });
         if (existing) {
           // Refresh the details; leave an admin's decision alone, and only auto-show if nobody reviewed it.
-          const status = !existing.reviewedAt && cfg.autoApproveMajor && isMajor(i) && existing.status === "SUGGESTED" ? "APPROVED" : undefined;
+          const status = !existing.reviewedAt && (i.kind === "CONTEST" || (cfg.autoApproveMajor && isMajor(i))) && existing.status === "SUGGESTED" ? "APPROVED" : undefined;
           await prisma.externalEvent.update({ where: { id: existing.id }, data: { ...data, ...(status && { status }) } });
         } else {
-          await prisma.externalEvent.create({ data: { ...data, tenantId, status: cfg.autoApproveMajor && data.major ? "APPROVED" : "SUGGESTED" } });
+          await prisma.externalEvent.create({ data: { ...data, tenantId, status: i.kind === "CONTEST" || (cfg.autoApproveMajor && data.major) ? "APPROVED" : "SUGGESTED" } });
         }
       }
       result[source] = seen.size;

@@ -9,7 +9,7 @@ import { readLinkPreview } from "../lib/linkPreview";
 import { EXTERNAL_SOURCES, externalSettingsOf, labelFor, platformFor, syncExternalEvents } from "../lib/externalEvents";
 
 const PUBLIC_EXTERNAL = {
-  id: true, source: true, title: true, organizer: true, url: true, imageUrl: true, coverUrl: true, summary: true, teamSize: true, startsAt: true, endsAt: true,
+  id: true, source: true, kind: true, title: true, organizer: true, url: true, imageUrl: true, coverUrl: true, summary: true, teamSize: true, startsAt: true, endsAt: true,
   registrationEndsAt: true, mode: true, location: true, prize: true, participants: true, tags: true, major: true,
 } as const;
 
@@ -29,6 +29,7 @@ const MANUAL = z.object({
   teamSize: z.string().trim().max(40).nullish(),
   tags: z.union([z.array(z.string()), z.string()]).transform((t) => (Array.isArray(t) ? t : t.split(",")).map((x) => x.trim()).filter(Boolean).slice(0, 8)).default([]),
   major: z.coerce.boolean().default(false),
+  kind: z.enum(["HACKATHON", "CONTEST"]).default("HACKATHON"),
 }).refine((x) => x.endsAt >= x.startsAt, { message: "End date must be on or after the start", path: ["endsAt"] });
 
 const range = z.object({ from: z.coerce.date(), to: z.coerce.date() }).refine((r) => r.to > r.from && r.to.getTime() - r.from.getTime() <= 400 * 86_400_000, "Range too long");
