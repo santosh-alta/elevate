@@ -35,6 +35,7 @@ import { studentRoutes } from "./routes/students";
 import { insightRoutes } from "./routes/insights";
 import { externalEventRoutes } from "./routes/externalEvents";
 import { oauthRoutes } from "./routes/oauth";
+import { accountRoutes } from "./routes/account";
 import { collectRoute, mcpRoutes } from "./routes/mcp";
 import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
@@ -132,6 +133,7 @@ export async function buildApp() {
       studentRoutes(v1);
       insightRoutes(v1);
       externalEventRoutes(v1);
+      accountRoutes(v1);
       devRoutes(v1); // non-production only
     },
     { prefix: "/v1" },

@@ -1,29 +1,66 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "base": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "22.13.0"
     },
     "altaschool": {
       "extends": "base",
-      "env": { "BRAND": "altaschool", "EXPO_PUBLIC_API_URL": "https://api.elevate.app" }
+      "env": {
+        "BRAND": "altaschool"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "altaschool-apk": {
+      "extends": "base",
+      "distribution": "internal",
+      "env": {
+        "BRAND": "altaschool"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "sunstone": {
       "extends": "base",
-      "env": { "BRAND": "sunstone", "EXPO_PUBLIC_API_URL": "https://api.elevate.app" }
+      "env": {
+        "BRAND": "sunstone"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
     },
     "mirai": {
       "extends": "base",
-      "env": { "BRAND": "mirai", "EXPO_PUBLIC_API_URL": "https://api.elevate.app" }
+      "env": {
+        "BRAND": "mirai"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
     },
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": { "BRAND": "altaschool" }
+      "env": {
+        "BRAND": "altaschool"
+      }
     }
   },
   "submit": {
-    "altaschool": {},
+    "altaschool": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft",
+        "serviceAccountKeyPath": "./play-service-account.json"
+      }
+    },
     "sunstone": {},
     "mirai": {}
   }

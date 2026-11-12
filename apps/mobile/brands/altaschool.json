@@ -1,11 +1,11 @@
 {
   "slug": "altaschool",
-  "appName": "Alta Events",
+  "appName": "ALTA Events",
   "bundleId": "tech.altaschool.events",
   "scheme": "altaevents",
   "iconColor": "#191445",
-  "apiUrl": "http://localhost:4000",
-  "webUrl": "http://altaschool.localhost:3000",
+  "apiUrl": "https://events-api-f4od.onrender.com",
+  "webUrl": "https://event.altaschool.tech",
   "theme": {
     "colors": {
       "primary": "#191445",
@@ -29,5 +29,6 @@
       "#08C191"
     ],
     "tagline": "Creating Builders for an AI World"
-  }
+  },
+  "webHost": "event.altaschool.tech"
 }

@@ -18,10 +18,14 @@ export interface BrandConfig {
   apiUrl: string;
   /** Public website for this brand (event pages, share links). */
   webUrl?: string;
+  /** Website host whose /events and /attend links open in the app (Android App Links). */
+  webHost?: string;
+  /** EAS project id (from `eas init`); needed for push notifications. EAS_PROJECT_ID overrides it. */
+  easProjectId?: string;
   /** Built-in theme (same shape as the tenant theme) used before /v1/tenant loads. */
   theme?: { colors?: Record<string, string>; [k: string]: unknown };
   /** App icon / splash files, relative to apps/mobile. Defaults to assets/brands/<slug>/{icon,adaptive-icon,splash-icon|splash}.png when present. */
-  assets?: { icon?: string; adaptiveIcon?: string; splash?: string };
+  assets?: { icon?: string; adaptiveIcon?: string; splash?: string; notificationIcon?: string };
   /** Splash background; defaults to theme.colors.heroBg, then iconColor. */
   splashColor?: string;
 }
@@ -55,9 +59,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     name: brand.appName,
-    slug: `elevate-${brand.slug}`,
+    slug: `${brand.slug}-events`,
     scheme: brand.scheme,
-    version: "0.1.0",
+    version: "1.0.0",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     ...(icon && { icon }),
@@ -68,6 +72,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       package: brand.bundleId,
       adaptiveIcon: { backgroundColor: brand.iconColor, ...(adaptiveIcon && { foregroundImage: adaptiveIcon }) },
+      // Firebase config for push notifications on Android: an EAS file variable GOOGLE_SERVICES_JSON on build servers,
+      // or a local google-services.<brand>.json (git-ignored).
+      ...(process.env.GOOGLE_SERVICES_JSON
+        ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+        : fs.existsSync(path.resolve(__dirname, `google-services.${brand.slug}.json`)) && { googleServicesFile: `./google-services.${brand.slug}.json` }),
+      // Only what the app uses: camera (tickets, venue QR), location while checking in, notifications.
+      blockedPermissions: ["android.permission.RECORD_AUDIO", "android.permission.ACCESS_BACKGROUND_LOCATION", "android.permission.SYSTEM_ALERT_WINDOW"],
+      // Event and venue check-in links on the website open in the app (verified via /.well-known/assetlinks.json).
+      ...(brand.webHost && {
+        intentFilters: [{
+          action: "VIEW", autoVerify: true, category: ["BROWSABLE", "DEFAULT"],
+          data: [{ scheme: "https", host: brand.webHost, pathPrefix: "/events/" }, { scheme: "https", host: brand.webHost, pathPrefix: "/attend/" }],
+        }],
+      }),
     },
     web: { bundler: "metro", output: "single" },
     plugins: [
@@ -89,6 +107,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
       ],
       [
+        "expo-location",
+        {
+          locationWhenInUsePermission: `Allow ${brand.appName} to confirm you're at the venue when you check yourself in.`,
+          isAndroidBackgroundLocationEnabled: false,
+        },
+      ],
+      [
+        "expo-notifications",
+        {
+          color: brand.theme?.colors?.accent ?? brand.iconColor,
+          ...(brandAsset(brand, "notificationIcon", "notification-icon.png") && { icon: brandAsset(brand, "notificationIcon", "notification-icon.png") }),
+        },
+      ],
+      [
         "expo-image-picker",
         {
           photosPermission: `Allow ${brand.appName} to pick event photos from your library.`,
@@ -99,6 +131,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     experiments: { typedRoutes: false },
     extra: {
       brand: { ...brand, apiUrl, webUrl },
+      ...((process.env.EAS_PROJECT_ID ?? brand.easProjectId) && { eas: { projectId: process.env.EAS_PROJECT_ID ?? brand.easProjectId } }),
     },
   };
 };

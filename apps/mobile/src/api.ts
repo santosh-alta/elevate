@@ -214,7 +214,36 @@ export interface User {
   phone?: string | null;
   avatarUrl?: string | null;
   linkedinUrl?: string | null;
+  githubUrl?: string | null;
+  portfolioUrl?: string | null;
+  leetcodeUrl?: string | null;
+  gfgUrl?: string | null;
+  codechefUrl?: string | null;
+  hackerrankUrl?: string | null;
+  codeforcesUrl?: string | null;
+  college?: string | null;
+  degree?: string | null;
+  graduationYear?: number | null;
+  city?: string | null;
   isPlatformAdmin?: boolean;
+}
+
+/** An outside hackathon on the calendar (Unstop, Devfolio, MLH, Devpost or added by the team). */
+export interface ExternalEvent {
+  id: string; source: string; sourceLabel: string; title: string; organizer?: string | null; url: string;
+  imageUrl?: string | null; coverUrl?: string | null; summary?: string | null; teamSize?: string | null;
+  startsAt: string; endsAt: string; registrationEndsAt?: string | null; mode: string; location?: string | null;
+  prize?: string | null; participants?: number | null; tags: string[]; major: boolean;
+}
+export interface CalendarEvent {
+  id: string; slug: string; title: string; type: string; startsAt: string; endsAt: string; mode: string; status: string;
+  venue?: string | null; category?: EventCategoryRef | null; campuses?: { campus: { name: string; city?: string | null } }[];
+}
+export interface AttendResult { status: "checked_in" | "already" | string; name?: string; checkedInAt?: string; event?: { title: string; slug?: string } }
+export interface ChatInfo { enabled: boolean; signedIn: boolean; brand: string; suggestions: string[]; usage: { used: number; limit: number; remaining: number } | null }
+export interface FeedbackInput {
+  rating: number; nps?: number; comment?: string; liked?: string; improve?: string;
+  aspects?: { content?: number; speakers?: number; organisation?: number; venue?: number };
 }
 
 export interface Membership {
@@ -923,6 +952,25 @@ export const Api = {
   verifyOtp: (email: string, code: string) =>
     api<{ token: string; user: User }>("/auth/otp/verify", { method: "POST", body: { email, code }, auth: false }),
   me: () => api<{ user: User; membership: Membership | null }>("/me"),
+  updateMe: (fields: Partial<User>) => api<User>("/me", { method: "PATCH", body: fields }),
+  /** Delete my account (personal details erased; past participation kept as anonymous numbers). */
+  deleteAccount: () => api("/me", { method: "DELETE", body: { confirm: "DELETE" } }),
+  registerPushToken: (token: string, platform: "android" | "ios") => api("/me/push-tokens", { method: "POST", body: { token, platform } }),
+  unregisterPushToken: (token: string) => api("/me/push-tokens", { method: "DELETE", body: { token } }),
+  /** Our events plus approved outside hackathons between two dates. */
+  calendar: (from: Date, to: Date) =>
+    api<{ events: CalendarEvent[]; external: ExternalEvent[] }>(`/calendar?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`),
+  /** Swaps the short-lived code from the venue QR for a 10-minute pass. */
+  attendStart: (event: string, t: string) =>
+    api<{ event: { title: string; slug: string }; pass: string; needsLocation: boolean }>(`/events/${encodeURIComponent(event)}/attend/start?t=${encodeURIComponent(t)}`),
+  /** Self check-in with the QR on the venue screen. */
+  attend: (event: string, pass: string, coords?: { lat: number; lng: number; accuracy?: number }) =>
+    api<AttendResult>(`/events/${encodeURIComponent(event)}/attend`, { method: "POST", body: { pass, ...coords } }),
+  myFeedback: (eventId: string) => api<any>(`/events/${encodeURIComponent(eventId)}/feedback/mine`),
+  sendFeedback: (eventId: string, body: FeedbackInput) => api(`/events/${encodeURIComponent(eventId)}/feedback`, { method: "POST", body }),
+  chatInfo: () => api<ChatInfo>("/ai/chat/info"),
+  chat: (messages: { role: "user" | "assistant"; text: string }[]) =>
+    api<{ reply: string; usage: ChatInfo["usage"] }>("/ai/chat", { method: "POST", body: { messages } }),
 
   // Events
   events: async (query = "upcoming=1") => list<EventSummary>(await api(`/events?${query}`), "events"),

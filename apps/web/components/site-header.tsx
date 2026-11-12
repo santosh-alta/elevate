@@ -148,7 +148,11 @@ export async function SiteFooter({ tenant: given }: { tenant?: Tenant } = {}) {
       <div className="border-t border-hero-fg/15">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-5 text-xs text-hero-fg/80 sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} {tenant.name}. All rights reserved.</span>
-          <a href="#top" className="hover:text-hero-fg hover:underline">Back to top ↑</a>
+          <span className="flex flex-wrap gap-x-4 gap-y-1">
+            <Link href="/privacy" className="hover:text-hero-fg hover:underline">Privacy</Link>
+            <Link href="/account/delete" className="hover:text-hero-fg hover:underline">Delete account</Link>
+            <a href="#top" className="hover:text-hero-fg hover:underline">Back to top ↑</a>
+          </span>
         </div>
       </div>
     </footer>

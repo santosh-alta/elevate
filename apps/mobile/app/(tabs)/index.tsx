@@ -88,6 +88,24 @@ export default function EventsScreen() {
         <NotificationBell />
       </View>
 
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
+        {([
+          ["calendar", "Calendar", "/calendar"],
+          ["scan", "Check in", "/attend"],
+          ["sparkles", "Ask", "/assistant"],
+        ] as const).map(([icon, label, href]) => (
+          <Pressable
+            key={href}
+            onPress={() => router.push(href)}
+            accessibilityRole="button"
+            style={({ pressed }) => ({ flex: 1, alignItems: "center", gap: 6, paddingVertical: 12, borderRadius: theme.radius ?? 12, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, opacity: pressed ? 0.8 : 1 })}
+          >
+            <Ionicons name={icon} size={22} color={theme.colors.accent} />
+            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.fg }}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, flexGrow: 0 }} contentContainerStyle={{ gap: 8 }}>
         {FAMILY_FILTERS.map((f) => {
           const active = f.key === family;

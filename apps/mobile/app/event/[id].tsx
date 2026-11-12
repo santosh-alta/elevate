@@ -400,7 +400,13 @@ export default function EventDetailScreen() {
                 onPress={() => openReceipt(paidPayment.id)}
               />
             ) : null}
-            {mine.status !== "CHECKED_IN" ? (
+            {mine.status !== "CHECKED_IN" && new Date(event.startsAt).getTime() - Date.now() < 6 * 3600_000 && new Date(event.endsAt) > new Date() && event.mode !== "ONLINE" ? (
+              <Button title="Scan the venue QR to check in" icon="scan" variant="cta" onPress={() => router.push("/attend")} />
+            ) : null}
+            {new Date(event.startsAt) <= new Date() && event.status !== "CANCELLED" ? (
+              <Button title="Give feedback" icon="chatbubble-ellipses-outline" variant="secondary" onPress={() => router.push(`/feedback/${event.id}`)} />
+            ) : null}
+            {mine.status !== "CHECKED_IN" && new Date(event.startsAt) > new Date() ? (
               <Button title="Cancel registration" variant="ghost" onPress={cancel} disabled={busy} />
             ) : null}
           </Card>

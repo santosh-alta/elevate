@@ -1290,3 +1290,16 @@ model OAuthGrant {
   @@index([userId, kind])
   @@index([connectionId])
 }
+
+/// A phone that receives push notifications (Expo push token from the mobile app).
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String
+  tenantId   String
+  token      String   @unique
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+}

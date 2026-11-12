@@ -6,6 +6,7 @@ import { formatMoney } from "@elevate/shared";
 import { apiBaseUrl, brandBaseUrl, settingsOf, themeOf, verifyUrl } from "./brand";
 import { receiptUrl as receiptLink } from "./receipt";
 import { absoluteAssetUrl } from "./brandAssets";
+import { sendPush } from "./push";
 
 /**
  * Notification outbox. Every message is a Notification row; src/worker.ts sends due EMAIL rows.
@@ -64,6 +65,14 @@ export async function enqueue(input: EnqueueInput): Promise<Notification[]> {
           },
         }),
       );
+      // Every in-app notification also goes to the person's phone (if they use the app).
+      if (inApp && input.userId && (!input.scheduledFor || input.scheduledFor <= new Date())) {
+        const n = created[created.length - 1];
+        safely("push", () => sendPush(input.userId!, input.tenantId, {
+          title: input.subject, body: input.body,
+          data: { notificationId: n.id, eventId: input.eventId ?? null, url: input.ctaUrl ?? null, template: input.template },
+        }));
+      }
     } catch (err) {
       // Duplicate dedupKey = already queued earlier; anything else is a real error.
       if (!(err instanceof P.PrismaClientKnownRequestError && err.code === "P2002")) throw err;

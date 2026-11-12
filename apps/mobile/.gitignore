@@ -10,3 +10,7 @@ android/
 *.key
 *.mobileprovision
 expo-env.d.ts
+
+# Store and Firebase credentials (repo is public): use EAS secrets / file env vars instead
+google-services*.json
+play-service-account*.json
