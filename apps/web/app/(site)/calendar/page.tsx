@@ -134,7 +134,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           </Link>
                         ) : x.kind === "contest" ? (
                           <ExternalTrigger id={x.e.id} title={`Coding contest · ${x.e.sourceLabel} · ${time(x.e.startsAt)}: ${x.e.title}`} className="flex w-full items-center gap-1 truncate rounded-md border border-violet-500/60 bg-violet-500/10 px-1.5 py-0.5 text-[11px] font-medium text-fg hover:bg-violet-500/20">
-                            <Code2 className="h-3 w-3 shrink-0 text-violet-500" />
+                            {x.e.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={x.e.imageUrl} alt={x.e.sourceLabel} referrerPolicy="no-referrer" className="h-3.5 w-3.5 shrink-0 rounded-sm bg-white object-contain" />
+                            ) : <Code2 className="h-3 w-3 shrink-0 text-violet-500" />}
                             <span className="shrink-0 opacity-75">{time(x.e.startsAt)}</span><span className="truncate">{x.e.title}</span>
                           </ExternalTrigger>
                         ) : (
