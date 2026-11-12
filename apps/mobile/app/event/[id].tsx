@@ -173,6 +173,13 @@ export default function EventDetailScreen() {
     }
   }
   const registrations = event.counts?.registrations ?? event._count?.registrations;
+  // Older events: turnout recorded by the team (same as the website).
+  const recordedParticipants = Number((event.config as Record<string, unknown> | undefined)?.participants ?? 0);
+  const recordedRegistered = Number((event.config as Record<string, unknown> | undefined)?.registered ?? 0);
+  const turnout = registrations
+    ? `${registrations.toLocaleString("en-IN")} registered`
+    : recordedParticipants ? `${recordedParticipants.toLocaleString("en-IN")} participants`
+    : recordedRegistered ? `${recordedRegistered.toLocaleString("en-IN")} registered` : registrations !== undefined ? "Be the first to register" : null;
 
   async function register() {
     setBusy(true);
@@ -293,11 +300,11 @@ export default function EventDetailScreen() {
             <Ionicons name={event.mode === "ONLINE" ? "videocam-outline" : "location-outline"} size={18} color={theme.colors.accent} />
             <Body style={{ flex: 1 }}>{modeLabel(event)}</Body>
           </Row>
-          {registrations !== undefined ? (
+          {turnout ? (
             <Row>
               <Ionicons name="people-outline" size={18} color={theme.colors.accent} />
               <Body>
-                {registrations} registered{event.capacity ? ` · ${event.capacity} seats` : ""}
+                {turnout}{event.capacity ? ` · ${event.capacity} seats` : ""}
               </Body>
             </Row>
           ) : null}
