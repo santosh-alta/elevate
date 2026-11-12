@@ -252,10 +252,11 @@ async function fromDevpost(): Promise<Item[]> {
 // ---------- Coding contests (next 30 days) ----------
 const CONTEST_WINDOW = 30 * 86_400_000;
 const favicon = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+const CONTEST_ICONS: Record<string, string> = { leetcode: "https://assets.leetcode.com/static_assets/public/icons/favicon-192x192.png" };
 const mins = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`);
 function contest(source: string, id: string, title: string, url: string, start: Date, minutes: number, summary: string, tags: string[]): Item {
   return {
-    source, sourceId: id, title, organizer: SOURCE_LABELS[source], url, imageUrl: favicon(new URL(url).hostname),
+    source, sourceId: id, title, organizer: SOURCE_LABELS[source], url, imageUrl: CONTEST_ICONS[source] ?? favicon(new URL(url).hostname),
     startsAt: start, endsAt: new Date(start.getTime() + minutes * 60_000), registrationEndsAt: null, mode: "ONLINE",
     location: null, prize: null, participants: null, tags, score: 0, major: false, kind: "CONTEST",
     summary: `${summary} ${mins(minutes)}, online and free. Sign in on ${SOURCE_LABELS[source]} and register before it starts.`,

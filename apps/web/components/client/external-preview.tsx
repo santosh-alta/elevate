@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, CalendarClock, CalendarDays, CalendarPlus, Check, Globe, Link2, MapPin, Share2, Trophy, Users, UsersRound, X } from "lucide-react";
+import { ArrowUpRight, Hourglass, CalendarClock, CalendarDays, CalendarPlus, Check, Globe, Link2, MapPin, Share2, Trophy, Users, UsersRound, X } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
 /** An outside hackathon as the calendar receives it. */
@@ -88,7 +88,7 @@ export function ExternalPreview({ items, brand }: { items: ExternalItem[]; brand
   const contestStats: { icon: ReactNode; label: string; value: string; sub?: string; accent?: boolean }[] = [
     { icon: <CalendarDays className="h-4 w-4" />, label: "Date", value: fmt(e.startsAt, { weekday: "short", day: "numeric", month: "short" }), sub: startsIn.text === "Closed" ? "Started" : startsIn.text === "Closes today" ? "Today" : startsIn.text.replace("left", "to go"), accent: startsIn.urgent },
     { icon: <CalendarClock className="h-4 w-4" />, label: "Starts", value: startTime, sub: "India time" },
-    { icon: <Users className="h-4 w-4" />, label: "Duration", value: minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m` },
+    { icon: <Hourglass className="h-4 w-4" />, label: "Duration", value: minutes >= 60 ? `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` : `${minutes}m` },
     { icon: <Globe className="h-4 w-4" />, label: "Where", value: "Online", sub: "Free to join" },
     ...(e.tags.length ? [{ icon: <Trophy className="h-4 w-4" />, label: "Type", value: e.tags.join(" · ") }] : []),
   ];
