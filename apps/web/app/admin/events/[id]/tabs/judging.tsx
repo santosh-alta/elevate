@@ -194,8 +194,27 @@ export async function JudgingTab({ event, roundId }: { event: ElevateEvent; roun
         <CardHeader title="Publish results" description={`Awards and finalists${lastRound ? ` — ranked by “${lastRound.name}”` : ""}. Winners appear on the public page and get winner certificates.`} />
         <CardBody>
           <PublishResults eventId={event.id} teams={teams} ranking={finalBoard.map((r) => ({ teamId: r.team.id, total: r.total }))} finalists={finalists} published={!!event.resultsPublishedAt} />
+          <LeaderboardSettings eventId={event.id} config={(event.config ?? {}) as Record<string, unknown>} />
         </CardBody>
       </Card>
+    </div>
+  );
+}
+
+/** Public leaderboard on the event page (after results are published): on/off, and whether judges' scores show. */
+function LeaderboardSettings({ eventId, config }: { eventId: string; config: Record<string, unknown> }) {
+  const lb = (config.leaderboard ?? {}) as { hidden?: boolean; showScores?: boolean };
+  const row = (label: string, hint: string, on: boolean, next: { hidden?: boolean; showScores?: boolean }) => (
+    <div className="flex items-start justify-between gap-3">
+      <div><p className="text-sm font-medium">{label}</p><p className="text-xs text-muted">{hint}</p></div>
+      <ApiButton method="PATCH" path={`/events/${eventId}`} body={{ config: { leaderboard: { ...lb, ...next } } }} size="sm" variant={on ? "primary" : "outline"} className="min-w-[60px]">{on ? "On" : "Off"}</ApiButton>
+    </div>
+  );
+  return (
+    <div className="mt-5 space-y-3 border-t border-border pt-4">
+      <p className="text-sm font-semibold">Public leaderboard</p>
+      {row("Show the leaderboard on the event page", "All teams by rank, with members and projects, once results are published.", !lb.hidden, { hidden: !lb.hidden })}
+      {row("Show judges' scores", "Each team's average score out of 100 and by criterion. Off: ranks only.", !!lb.showScores, { showScores: !lb.showScores })}
     </div>
   );
 }

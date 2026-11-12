@@ -240,6 +240,11 @@ export interface CalendarEvent {
   venue?: string | null; category?: EventCategoryRef | null; campuses?: { campus: { name: string; city?: string | null } }[];
 }
 export interface AttendResult { status: "checked_in" | "already" | string; name?: string; checkedInAt?: string; event?: { title: string; slug?: string } }
+export interface Standings {
+  published: boolean; hidden?: boolean; showScores?: boolean; totalTeams?: number;
+  round: { id: string; name: string } | null; rounds: { id: string; name: string }[];
+  rows: { rank: number | null; teamId: string; teamName: string; projectTitle: string | null; award: string | null; members: { name: string; avatarUrl: string | null }[]; score: number | null }[];
+}
 export interface ChatInfo { enabled: boolean; signedIn: boolean; brand: string; suggestions: string[]; usage: { used: number; limit: number; remaining: number } | null }
 export interface FeedbackInput {
   rating: number; nps?: number; comment?: string; liked?: string; improve?: string;
@@ -339,6 +344,7 @@ export interface EventDetail extends EventSummary {
   parentEvent: { slug: string; title: string; id?: string } | null;
   subEvents: SubEvent[];
   winners: Winner[];
+  resultsPublishedAt?: string | null;
   submissionsOpenAt?: string | null;
   submissionsCloseAt?: string | null;
   myTeam: Team | null;
@@ -968,6 +974,9 @@ export const Api = {
     api<AttendResult>(`/events/${encodeURIComponent(event)}/attend`, { method: "POST", body: { pass, ...coords } }),
   myFeedback: (eventId: string) => api<any>(`/events/${encodeURIComponent(eventId)}/feedback/mine`),
   sendFeedback: (eventId: string, body: FeedbackInput) => api(`/events/${encodeURIComponent(eventId)}/feedback`, { method: "POST", body }),
+  /** Public leaderboard of an event (after results are published). */
+  standings: (eventId: string, roundId?: string | null) =>
+    api<Standings>(`/events/${encodeURIComponent(eventId)}/standings${roundId ? `?roundId=${encodeURIComponent(roundId)}` : ""}`),
   chatInfo: () => api<ChatInfo>("/ai/chat/info"),
   chat: (messages: { role: "user" | "assistant"; text: string }[]) =>
     api<{ reply: string; usage: ChatInfo["usage"] }>("/ai/chat", { method: "POST", body: { messages } }),

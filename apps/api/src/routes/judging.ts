@@ -589,6 +589,68 @@ export function judgingRoutes(app: FastifyInstance) {
   });
 
   /**
+   * Public leaderboard (event page and app), once results are published.
+   * Ranks always show; scores only if the organiser turned on config.leaderboard.showScores; config.leaderboard.hidden hides it.
+   * Final standings follow the published ranks/awards, then the judges' scores of the last round; ?roundId= shows one round.
+   * Events without judging (quiz, coding contest) list the teams/participants by the ranks the organiser entered.
+   */
+  app.get<{ Params: { id: string } }>("/events/:id/standings", async (req) => {
+    const event = await findEvent(req, req.params.id);
+    const manager = await canManageEvent(req, event);
+    const cfg = ((event.config ?? {}) as { leaderboard?: { hidden?: boolean; showScores?: boolean } }).leaderboard ?? {};
+    if (!event.resultsPublishedAt && !manager) return { published: false, rows: [], rounds: [] };
+    if (cfg.hidden && !manager) return { published: true, hidden: true, rows: [], rounds: [] };
+    const showScores = !!cfg.showScores || manager;
+    const q = z.object({ roundId: z.string().optional() }).parse(req.query);
+
+    const [teams, rounds, scoredRounds] = await Promise.all([
+      prisma.team.findMany({
+        where: { eventId: event.id },
+        include: { members: { include: { user: { select: { name: true, avatarUrl: true } } }, orderBy: { joinedAt: "asc" } } },
+      }),
+      prisma.judgingRound.findMany({ where: { eventId: event.id }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+      prisma.score.groupBy({ by: ["roundId"], where: { team: { eventId: event.id }, submittedAt: { not: null } } }),
+    ]);
+    const scored = rounds.filter((r) => scoredRounds.some((s) => s.roundId === r.id));
+    const byTeam = new Map(teams.map((t) => [t.id, t]));
+    if (q.roundId && !scored.some((r) => r.id === q.roundId)) throw notFound("Round");
+    const roundId = q.roundId ?? scored[scored.length - 1]?.id ?? null;
+    const board = roundId ? await computeLeaderboard(event.id, roundId) : [];
+    const boardBy = new Map(board.map((r) => [r.team.id, r]));
+
+    type Row = { rank: number | null; teamId: string; teamName: string; projectTitle: string | null; award: string | null; members: { name: string; avatarUrl: string | null }[]; score: number | null; criteria?: { name: string; average: number | null; maxScore: number }[] };
+    const toRow = (teamId: string, rank: number | null): Row => {
+      const t = byTeam.get(teamId)!;
+      const b = boardBy.get(teamId);
+      return {
+        rank, teamId, teamName: t.name, projectTitle: t.projectTitle, award: t.award,
+        members: t.members.map((m) => ({ name: m.user.name, avatarUrl: m.user.avatarUrl })),
+        score: showScores && b && b.judgesScored ? b.total : null,
+        ...(showScores && b && b.judgesScored && { criteria: b.criteria.map((c) => ({ name: c.name, average: c.average, maxScore: c.maxScore })) }),
+      };
+    };
+
+    let rows: Row[];
+    if (q.roundId) {
+      // One round: the judges' ranking.
+      rows = board.filter((r) => r.judgesScored).map((r) => toRow(r.team.id, r.rank));
+    } else {
+      // Final: published ranks first, then awards, then the last round's scores.
+      const placed = teams.filter((t) => t.rank != null || t.award).sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
+      const rest = board.filter((r) => r.judgesScored && !placed.some((t) => t.id === r.team.id));
+      rows = [...placed.map((t) => t.id), ...rest.map((r) => r.team.id)].map((id, i) => toRow(id, byTeam.get(id)!.rank ?? i + 1));
+    }
+    return {
+      published: true,
+      showScores,
+      round: q.roundId ? scored.find((r) => r.id === q.roundId) ?? null : null,
+      rounds: scored,
+      totalTeams: teams.length,
+      rows,
+    };
+  });
+
+  /**
    * Publishes results. Body: `{ results: [{ teamId, rank?, award? }], finalists?: teamId[] }`
    * (the older `{ awards: [{ teamId, award, rank? }] }` is still accepted).
    */

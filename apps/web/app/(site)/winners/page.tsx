@@ -86,7 +86,10 @@ export default async function WinnersPage({ searchParams }: { searchParams: Prom
                 <Link href={`/events/${e.event.slug}`} className="font-heading text-2xl font-bold tracking-tight underline decoration-transparent decoration-2 underline-offset-4 hover:decoration-accent">{e.event.title}</Link>
                 <p className="text-sm text-muted">{fmtDate(e.event.startsAt)}</p>
               </div>
-              <Badge tone="primary">{eventLabel(e.event)}</Badge>
+              <div className="flex items-center gap-3">
+                <Link href={`/events/${e.event.slug}#leaderboard`} className="text-sm font-semibold text-primary hover:underline">Full leaderboard →</Link>
+                <Badge tone="primary">{eventLabel(e.event)}</Badge>
+              </div>
             </div>
             <WinnersPodium winners={e.winners} />
           </section>

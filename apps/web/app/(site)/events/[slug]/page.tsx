@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { sharePreview } from "@/lib/brand-meta";
 import Link from "next/link";
 import {
-  ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Phone, Radio, Sparkles, Star, Ticket, Trophy, Users, Video,
+  ArrowRight, CalendarDays, ChevronRight, Clock, CreditCard, Download, ExternalLink, Eye, Gavel, Images, Mail, MapPin, Medal, Phone, Radio, Sparkles, Star, Ticket, Trophy, Users, Video,
 } from "lucide-react";
 import { SPONSOR_TIERS, resolveTheme } from "@elevate/shared";
 import { absoluteUrl } from "@/lib/theme";
@@ -23,8 +23,9 @@ import { GalleryGrid } from "@/components/client/gallery-grid";
 import { GuestAvatar } from "@/components/guest-avatar";
 import { RichText, htmlToText } from "@/components/rich-text";
 import { MyTeamCard, PriceTag, ProblemStatementCard, WinnersPodium } from "@/components/event-extras";
+import { Leaderboard, type Standings } from "@/components/leaderboard";
 
-type Params = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string }> };
+type Params = { params: Promise<{ slug: string }>; searchParams: Promise<{ preview?: string; round?: string }> };
 
 function eventPath(slug: string, preview?: string) {
   return `/events/${encodeURIComponent(slug)}${preview ? `?preview=${encodeURIComponent(preview)}` : ""}`;
@@ -49,7 +50,7 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
 
 export default async function EventPage({ params, searchParams }: Params) {
   const { slug } = await params;
-  const { preview } = await searchParams;
+  const { preview, round } = await searchParams;
   const event = await apiGet<ElevateEvent>(eventPath(slug, preview));
   if (!event) notFound();
   const site = await getTenant();
@@ -65,6 +66,10 @@ export default async function EventPage({ params, searchParams }: Params) {
     event.resultsPublishedAt && !event.winners ? apiList<{ team: Team; rank: number }>(`/events/${event.id}/leaderboard`) : Promise.resolve([]),
     getOrigin(),
   ]);
+  const standings = event.resultsPublishedAt
+    ? await apiGet<Standings>(`/events/${event.id}/standings${round ? `?roundId=${encodeURIComponent(round)}` : ""}`)
+    : null;
+  const showLeaderboard = !!standings?.published && !standings.hidden && standings.rows.length > 0;
   const registration = myRegs.find((r) => r.eventId === event.id && r.status !== "CANCELLED");
   const myTeam = event.myTeam ?? myTeams.find((t) => t.eventId === event.id) ?? myTeams[0] ?? null;
   const campuses = eventCampuses(event);
@@ -108,6 +113,7 @@ export default async function EventPage({ params, searchParams }: Params) {
 
   const nav: { id: string; label: string }[] = [
     ...(winners.length ? [{ id: "winners", label: "Winners" }] : []),
+    ...(showLeaderboard ? [{ id: "leaderboard", label: "Leaderboard" }] : []),
     ...(event.description ? [{ id: "about", label: "About" }] : []),
     ...(subEvents.length ? [{ id: "events", label: "Events" }] : []),
     ...sections.map((s) => ({ id: `section-${s.id}`, label: s.title })),
@@ -236,6 +242,12 @@ export default async function EventPage({ params, searchParams }: Params) {
             {winners.length > 0 && (
               <Section id="winners" title="Winners" icon={<Trophy className="h-5 w-5 text-accent" />}>
                 <WinnersPodium winners={winners} />
+              </Section>
+            )}
+
+            {showLeaderboard && standings && (
+              <Section id="leaderboard" title="Leaderboard" icon={<Medal className="h-5 w-5 text-accent" />}>
+                <Leaderboard data={standings} eventSlug={event.slug} />
               </Section>
             )}
 

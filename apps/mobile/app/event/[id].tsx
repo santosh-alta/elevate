@@ -8,6 +8,7 @@ import { AWARD_LABELS, Api, EventDetail, EventFee, Faq, ProblemStatement, Regist
 import { HtmlContent } from "../../src/html";
 import { TagChips, modeLabel, statusTone } from "../../src/events";
 import { useSession } from "../../src/session";
+import { LeaderboardSection } from "../../src/leaderboard";
 import { STATUS_COLORS, withAlpha } from "../../src/theme";
 import {
   Badge,
@@ -477,6 +478,8 @@ export default function EventDetailScreen() {
             })}
           </>
         ) : null}
+
+        {event.resultsPublishedAt ? <LeaderboardSection eventId={event.id} /> : null}
 
         {event.description ? (
           <>
