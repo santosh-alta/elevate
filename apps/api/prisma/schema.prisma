@@ -1255,3 +1255,38 @@ model ExternalEvent {
   @@unique([tenantId, source, sourceId])
   @@index([tenantId, status, startsAt])
 }
+
+/// Apps (e.g. Claude) registered for "Connect Claude" through OAuth dynamic client registration.
+model OAuthClient {
+  id           String   @id
+  name         String
+  redirectUris String[]
+  createdAt    DateTime @default(now())
+
+  grants OAuthGrant[]
+}
+
+/// One step of an app connection: a pending sign-in "request", a one-time "code", or an "access"/"refresh" token.
+/// Secrets are stored only as SHA-256 hashes. All grants of one approval share a connectionId (revoked together).
+model OAuthGrant {
+  id            String    @id @default(cuid())
+  kind          String
+  tokenHash     String    @unique
+  clientId      String
+  tenantId      String
+  userId        String?
+  connectionId  String?
+  redirectUri   String?
+  codeChallenge String?
+  state         String?
+  scope         String?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  lastUsedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@index([connectionId])
+}

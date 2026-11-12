@@ -19,6 +19,7 @@
     "@fastify/cors": "^10.0.1",
     "@fastify/jwt": "^9.0.1",
     "@fastify/multipart": "^10.1.8",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/client": "^5.22.0",
     "@upstash/redis": "^1.41.0",

@@ -34,6 +34,8 @@ import { selfCheckinRoutes } from "./routes/selfCheckin";
 import { studentRoutes } from "./routes/students";
 import { insightRoutes } from "./routes/insights";
 import { externalEventRoutes } from "./routes/externalEvents";
+import { oauthRoutes } from "./routes/oauth";
+import { collectRoute, mcpRoutes } from "./routes/mcp";
 import { MAX_UPLOAD_BYTES } from "./lib/storage";
 
 export async function buildApp() {
@@ -96,6 +98,11 @@ export async function buildApp() {
   });
 
   app.get("/health", async () => ({ ok: true }));
+
+  // AI assistants: OAuth ("Connect Claude") and the MCP server. Every /v1 route is listed for the call_api tool.
+  app.addHook("onRoute", collectRoute);
+  await oauthRoutes(app);
+  await mcpRoutes(app);
 
   await app.register(
     async (v1) => {

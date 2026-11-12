@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, CalendarPlus, CalendarRange, ClipboardCheck, Globe, ListChecks, LayoutDashboard, MessageSquareHeart, Settings, UsersRound, BarChart3 } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarRange, ClipboardCheck, Globe, ListChecks, Sparkles, LayoutDashboard, MessageSquareHeart, Settings, UsersRound, BarChart3 } from "lucide-react";
 import { cn } from "@/components/ui/cn";
 
 type Who = { staff: boolean; reviewer: boolean; admin: boolean };
@@ -18,6 +18,7 @@ const ITEMS: { href: string; label: string; organizerLabel?: string; icon: typeo
   { href: "/admin/guests", label: "Guest library", icon: UsersRound, show: (w) => w.staff },
   { href: "/admin/feedback", label: "Feedback", icon: MessageSquareHeart, show: (w) => w.admin },
   { href: "/admin/settings", label: "Brand settings", icon: Settings, show: (w) => w.staff },
+  { href: "/connect/claude", label: "Connect Claude", icon: Sparkles, show: () => true },
 ];
 
 export function AdminNav(who: Who) {
