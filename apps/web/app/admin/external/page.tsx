@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowUpRight, Globe, MapPin, RefreshCw, Trophy, Users } from "lucide-react";
+import { ArrowUpRight, Globe, MapPin, Plus, RefreshCw, Trophy, Users } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { isBrandAdmin, getMe, requireStaffPage } from "@/lib/auth";
 import { ApiButton } from "@/components/client/api-button";
-import { ApiForm } from "@/components/client/api-form";
-import { Badge, Button, Card, CardHeader, Field, Input, Select } from "@/components/ui";
+import { ExternalEditButton, ExternalEventForm } from "@/components/admin/external-event-form";
+import { Badge, Card, CardHeader } from "@/components/ui";
 import { cn } from "@/components/ui/cn";
 
 export const metadata: Metadata = { title: "Outside events" };
@@ -14,9 +14,10 @@ type Item = {
   id: string; source: string; sourceLabel: string; title: string; organizer?: string | null; url: string; imageUrl?: string | null;
   startsAt: string; endsAt: string; registrationEndsAt?: string | null; mode: string; location?: string | null; prize?: string | null;
   participants?: number | null; tags: string[]; major: boolean; status: "SUGGESTED" | "APPROVED" | "HIDDEN"; reviewedAt?: string | null;
+  summary?: string | null; coverUrl?: string | null; teamSize?: string | null;
 };
 type Payload = {
-  items: Item[]; counts: Partial<Record<Item["status"], number>>;
+  items: Item[]; counts: Partial<Record<Item["status"] | "MANUAL", number>>;
   settings: { enabled: boolean; autoApproveMajor: boolean; sources: string[]; lastSyncAt?: string; lastResult?: Record<string, number | string> };
   sources: { key: string; label: string }[];
 };
@@ -25,6 +26,7 @@ const TABS = [
   { key: "SUGGESTED", label: "Waiting for review" },
   { key: "APPROVED", label: "Shown on calendar" },
   { key: "HIDDEN", label: "Hidden" },
+  { key: "MANUAL", label: "Added by team" },
 ] as const;
 const d = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
 
@@ -34,7 +36,7 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
   const admin = isBrandAdmin(await getMe());
   const sp = await searchParams;
   const status = TABS.some((t) => t.key === sp.status) ? sp.status! : "SUGGESTED";
-  const data = await apiGet<Payload>(`/admin/external-events?status=${status}`);
+  const data = await apiGet<Payload>(status === "MANUAL" ? "/admin/external-events?source=manual" : `/admin/external-events?status=${status}`);
   if (!data) return <p className="text-muted">Couldn&apos;t load outside events.</p>;
   const items = sp.major === "1" ? data.items.filter((i) => i.major) : data.items;
   const s = data.settings;
@@ -48,7 +50,10 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
             Hackathons and competitions on Unstop, Devfolio, MLH and Devpost that students can join, pulled every day. Approved ones appear on the public <Link href="/calendar" className="font-medium text-primary hover:underline">calendar</Link>, marked “External”.
           </p>
         </div>
+        <div className="flex gap-2">
+        <a href="#add" className="inline-flex h-9 items-center gap-1.5 rounded-brand bg-primary px-3 text-sm font-semibold text-primary-fg hover:opacity-90"><Plus className="h-4 w-4" />Add manually</a>
         {admin && <ApiButton path="/admin/external-events/sync" variant="outline" size="sm" successMessage="Pulled the latest listings"><RefreshCw className="h-4 w-4" />Pull now</ApiButton>}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -66,7 +71,7 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
         <div className="space-y-3">
           {!items.length && <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted">Nothing here. {status === "SUGGESTED" ? "New listings arrive with the daily pull." : ""}</p>}
           {items.map((e) => (
-            <Card key={e.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+            <Card key={e.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
               {e.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={e.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-12 w-12 shrink-0 rounded-xl border border-border bg-white object-contain p-1" />
@@ -76,6 +81,8 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
                   <Badge tone="amber">{e.sourceLabel}</Badge>
                   {e.major && <Badge tone="highlight"><Trophy className="h-3 w-3" />Major</Badge>}
                   {e.status === "APPROVED" && !e.reviewedAt && <span className="text-xs text-muted">shown automatically</span>}
+                  {e.source === "manual" && <Badge tone="primary">Added by team</Badge>}
+                  {status === "MANUAL" && e.status === "HIDDEN" && <Badge>Hidden</Badge>}
                 </div>
                 <a href={e.url} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 inline-flex items-center gap-1 font-semibold hover:text-primary">{e.title}<ArrowUpRight className="h-3.5 w-3.5" /></a>
                 <p className="flex flex-wrap gap-x-3 text-xs text-muted">
@@ -91,6 +98,7 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
                 {e.status !== "HIDDEN" && <ApiButton method="PATCH" path={`/admin/external-events/${e.id}`} body={{ status: "HIDDEN" }} size="sm" variant="outline">Hide</ApiButton>}
                 {e.source === "manual" && <ApiButton method="DELETE" path={`/admin/external-events/${e.id}`} size="sm" variant="ghost" confirm="Delete this listing?">Delete</ApiButton>}
               </div>
+              {e.source === "manual" && <ExternalEditButton item={e} />}
             </Card>
           ))}
         </div>
@@ -118,24 +126,9 @@ export default async function ExternalEventsPage({ searchParams }: { searchParam
             </div>
           </Card>
 
-          <Card>
-            <CardHeader title="Add one yourself" description="E.g. Smart India Hackathon, a Google or Microsoft challenge. It shows on the calendar right away." />
-            <ApiForm path="/admin/external-events" className="space-y-3 p-5" successMessage="Added to the calendar">
-              <Field label="Name"><Input name="title" required placeholder="Smart India Hackathon 2027" /></Field>
-              <Field label="Link to register"><Input name="url" type="url" required placeholder="https://" /></Field>
-              <Field label="Organiser"><Input name="organizer" placeholder="Optional" /></Field>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Starts"><Input name="startsAt" type="date" required /></Field>
-                <Field label="Ends"><Input name="endsAt" type="date" required /></Field>
-              </div>
-              <Field label="Apply by"><Input name="registrationEndsAt" type="date" /></Field>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Mode"><Select name="mode" defaultValue="ONLINE"><option value="ONLINE">Online</option><option value="OFFLINE">In person</option><option value="HYBRID">Hybrid</option></Select></Field>
-                <Field label="City"><Input name="location" placeholder="If in person" /></Field>
-              </div>
-              <Field label="Prize"><Input name="prize" placeholder="e.g. ₹1,00,000 in prizes" /></Field>
-              <Button type="submit" className="w-full">Add to calendar</Button>
-            </ApiForm>
+          <Card id="add" className="scroll-mt-24">
+            <CardHeader title="Add one yourself" description="Found a good hackathon or competition anywhere else? Paste its link, press Fill from link, check the details and add it. It shows on the calendar straight away." />
+            <div className="p-5"><ExternalEventForm /></div>
           </Card>
         </div>
       </div>

@@ -14,6 +14,30 @@ export type ExternalSettings = { enabled: boolean; autoApproveMajor: boolean; so
 export const EXTERNAL_SOURCES = ["unstop", "devfolio", "mlh", "devpost"] as const;
 export const SOURCE_LABELS: Record<string, string> = { unstop: "Unstop", devfolio: "Devfolio", mlh: "MLH", devpost: "Devpost", manual: "Added by team" };
 
+const PLATFORMS: [RegExp, string][] = [
+  [/unstop\.com$/, "Unstop"], [/devfolio\.co$/, "Devfolio"], [/devpost\.com$/, "Devpost"], [/mlh\.(io|com)$/, "MLH"],
+  [/hackerearth\.com$/, "HackerEarth"], [/hack2skill\.com$/, "Hack2skill"], [/kaggle\.com$/, "Kaggle"], [/codechef\.com$/, "CodeChef"],
+  [/leetcode\.com$/, "LeetCode"], [/codeforces\.com$/, "Codeforces"], [/hackerrank\.com$/, "HackerRank"], [/geeksforgeeks\.org$/, "GeeksforGeeks"],
+  [/sih\.gov\.in$/, "Smart India Hackathon"], [/google\.com$|withgoogle\.com$|g\.co$/, "Google"], [/microsoft\.com$/, "Microsoft"],
+  [/aws\.amazon\.com$|amazon\.(in|com)$/, "Amazon"], [/lu\.ma$/, "Luma"], [/eventbrite\.(com|co\.in)$/, "Eventbrite"],
+  [/townscript\.com$/, "Townscript"], [/konfhub\.com$/, "KonfHub"], [/commudle\.com$/, "Commudle"],
+];
+
+/** Known platform from a link (e.g. "HackerEarth"), or null. */
+export function platformFor(url: string): string | null {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return PLATFORMS.find(([re]) => re.test(host))?.[1] ?? null;
+  } catch { return null; }
+}
+
+/** What students see after "External ·": the source, or for team-added ones the platform of their link. */
+export function labelFor(e: { source: string; url: string }): string {
+  if (e.source !== "manual") return SOURCE_LABELS[e.source] ?? e.source;
+  if (platformFor(e.url)) return platformFor(e.url)!;
+  try { return new URL(e.url).hostname.replace(/^www\./, ""); } catch { return SOURCE_LABELS.manual; }
+}
+
 export function externalSettingsOf(settings: unknown): ExternalSettings {
   const s = ((settings ?? {}) as { externalEvents?: Partial<ExternalSettings> }).externalEvents ?? {};
   return {
