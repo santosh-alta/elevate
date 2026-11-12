@@ -30,5 +30,7 @@
     ],
     "tagline": "Creating Builders for an AI World"
   },
-  "webHost": "event.altaschool.tech"
+  "webHost": "event.altaschool.tech",
+  "expoOwner": "alta-school-of-technology",
+  "easProjectId": "f4f24d6f-4f62-4e95-be96-e9a83c66d36f"
 }

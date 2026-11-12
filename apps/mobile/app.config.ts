@@ -22,6 +22,8 @@ export interface BrandConfig {
   webHost?: string;
   /** EAS project id (from `eas init`); needed for push notifications. EAS_PROJECT_ID overrides it. */
   easProjectId?: string;
+  /** Expo account or organisation that owns the project (EAS builds, push). */
+  expoOwner?: string;
   /** Built-in theme (same shape as the tenant theme) used before /v1/tenant loads. */
   theme?: { colors?: Record<string, string>; [k: string]: unknown };
   /** App icon / splash files, relative to apps/mobile. Defaults to assets/brands/<slug>/{icon,adaptive-icon,splash-icon|splash}.png when present. */
@@ -60,6 +62,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config,
     name: brand.appName,
     slug: `${brand.slug}-events`,
+    ...(brand.expoOwner && { owner: brand.expoOwner }),
     scheme: brand.scheme,
     version: "1.0.0",
     orientation: "portrait",
