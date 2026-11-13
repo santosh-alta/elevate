@@ -39,7 +39,11 @@ export function formToJson(form: HTMLFormElement): Record<string, unknown> {
     if (kind === "array") { setPath(out, name, values); continue; }
     if (kind === "csv") { setPath(out, name, (values[0] ?? "").split(",").map((x) => x.trim()).filter(Boolean)); continue; }
     const v = values[0];
-    if (v === undefined) continue;
+    if (v === undefined) {
+      // Cleared on purpose: send "" so the server removes the stored value.
+      if (form.querySelector(`[name="${CSS.escape(rawName)}"][data-keep-empty]`)) setPath(out, name, "");
+      continue;
+    }
     if (kind === "number") setPath(out, name, Number(v));
     else if (kind === "bool") setPath(out, name, v === "on" || v === "true");
     else if (kind === "date") setPath(out, name, new Date(v).toISOString());

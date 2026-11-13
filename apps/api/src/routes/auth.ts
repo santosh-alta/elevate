@@ -237,6 +237,40 @@ export function authRoutes(app: FastifyInstance) {
     return signIn(user, tenant);
   });
 
+  /**
+   * Mobile app sign-in with Google/GitHub. The app opens the website's normal Google/GitHub flow in a browser with a
+   * challenge (SHA-256 hex of a secret only the app knows). When the website signs the person in, it swaps the session
+   * for a short-lived handoff code and sends the browser back to the app, which trades code + secret for its own
+   * session. A code intercepted on the way back is useless without the secret.
+   */
+  const HANDOFF_TTL_S = 120;
+  app.post("/auth/app-handoff", async (req) => {
+    const { user } = requireUser(req);
+    const { challenge } = z.object({ challenge: z.string().regex(/^[a-f0-9]{64}$/) }).parse(req.body);
+    const code = app.jwt.sign({ sub: user.id, typ: "app-handoff", ch: challenge }, { expiresIn: HANDOFF_TTL_S });
+    return { code, expiresIn: HANDOFF_TTL_S };
+  });
+
+  app.post("/auth/app-handoff/redeem", async (req) => {
+    const tenant = requireTenant(req);
+    const body = z.object({ code: z.string().min(20).max(2000), verifier: z.string().min(32).max(200) }).parse(req.body);
+    let claims: { sub?: string; typ?: string; ch?: string };
+    try { claims = app.jwt.verify(body.code); } catch { throw badRequest("That sign-in link expired. Please try again."); }
+    const expected = Buffer.from(claims.ch ?? "", "utf8");
+    const actual = Buffer.from(sha256(body.verifier), "utf8");
+    if (claims.typ !== "app-handoff" || !claims.sub || expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      throw badRequest("Sign-in failed. Please try again.");
+    }
+    const user = await prisma.user.findUnique({ where: { id: claims.sub } });
+    if (!user) throw badRequest("Sign-in failed. Please try again.");
+    await prisma.membership.upsert({
+      where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      create: { tenantId: tenant.id, userId: user.id, role: "STUDENT" },
+      update: {},
+    });
+    return signIn(user, tenant);
+  });
+
   /** Change email, step 1: send a code to the new address (it must not belong to another account). */
   app.post("/me/email/start", async (req) => {
     const tenant = requireTenant(req);

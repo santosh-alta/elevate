@@ -12,3 +12,8 @@ export const PROVIDERS = {
 export type Provider = keyof typeof PROVIDERS;
 export const isProvider = (p: string): p is Provider => p in PROVIDERS;
 export const STATE_COOKIE = "elevate_oauth_state";
+
+/** Mobile app sign-in: the app's SHA-256 challenge, and where to send the browser back (the app's own scheme). */
+export const appChallenge = (v: string | null) => (v && /^[a-f0-9]{64}$/.test(v) ? v : null);
+export const appReturn = (v: string | null) =>
+  v && /^[a-z][a-z0-9+.-]{1,40}:\/\/auth$/.test(v) && !/^(https?|javascript|data|file|intent):/.test(v) ? v : null;

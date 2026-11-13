@@ -64,7 +64,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     slug: `${brand.slug}-events`,
     ...(brand.expoOwner && { owner: brand.expoOwner }),
     scheme: brand.scheme,
-    version: "1.0.0",
+    version: "1.1.0",
     orientation: "portrait",
     userInterfaceStyle: "automatic",
     ...(icon && { icon }),

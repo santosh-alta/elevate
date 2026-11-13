@@ -5,7 +5,7 @@ import { prisma } from "./prisma";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { sub: string };
+    payload: { sub: string; typ?: string; ch?: string };
     user: { sub: string };
   }
 }
@@ -33,7 +33,8 @@ export async function authPlugin(app: FastifyInstance) {
   app.addHook("onRequest", async (req) => {
     if (!req.headers.authorization?.startsWith("Bearer ")) return;
     try {
-      const { sub } = await req.jwtVerify<{ sub: string }>();
+      const { sub, typ } = await req.jwtVerify<{ sub: string; typ?: string }>();
+      if (typ) return; // purpose-bound tokens (e.g. app sign-in handoff codes) are never sessions
       const user = await prisma.user.findUnique({ where: { id: sub } });
       if (!user) return;
       const membership = req.tenant

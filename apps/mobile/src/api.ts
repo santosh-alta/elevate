@@ -211,6 +211,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  profileCompletedAt?: string | null;
   phone?: string | null;
   avatarUrl?: string | null;
   linkedinUrl?: string | null;
@@ -955,6 +956,11 @@ export const Api = {
       body: { email, ...(name ? { name } : {}) },
       auth: false,
     }),
+  /** Which social sign-ins this brand has set up (public client ids, or null). */
+  authProviders: () => api<{ google: string | null; github: string | null }>("/auth/providers", { auth: false }),
+  /** Finish a Google/GitHub sign-in started in the browser: the handoff code plus the app's own secret. */
+  redeemSignIn: (code: string, verifier: string) =>
+    api<{ token: string; user: User }>("/auth/app-handoff/redeem", { method: "POST", body: { code, verifier }, auth: false }),
   verifyOtp: (email: string, code: string) =>
     api<{ token: string; user: User }>("/auth/otp/verify", { method: "POST", body: { email, code }, auth: false }),
   me: () => api<{ user: User; membership: Membership | null }>("/me"),

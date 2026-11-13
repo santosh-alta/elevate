@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { Text } from "react-native";
 import { Api, User } from "../src/api";
@@ -20,6 +20,9 @@ const LINKS: { key: keyof User; label: string; placeholder: string }[] = [
 
 export default function ProfileEditScreen() {
   const { user, refresh, theme } = useSession();
+  // ?first=1: shown right after someone's first sign-in.
+  const first = useLocalSearchParams<{ first?: string }>().first === "1";
+  const done = () => (first ? router.replace("/(tabs)") : router.back());
   const [v, setV] = useState<Partial<User>>(() => ({ ...user }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -37,7 +40,7 @@ export default function ProfileEditScreen() {
         ...Object.fromEntries(LINKS.map((l) => [l.key, clean(v[l.key])])),
       });
       await refresh();
-      router.back();
+      done();
     } catch (e: any) {
       setMsg(e?.message ?? "Couldn't save");
     } finally {
@@ -47,6 +50,12 @@ export default function ProfileEditScreen() {
 
   return (
     <Screen edges={[]}>
+      {first ? <Stack.Screen options={{ title: "Complete your profile", headerBackVisible: false, gestureEnabled: false }} /> : null}
+      {first ? (
+        <Muted style={{ marginBottom: 8, fontSize: 15, lineHeight: 22 }}>
+          Welcome{user?.name && user.name !== user.email.split("@")[0] ? `, ${user.name.split(" ")[0]}` : ""}! Add your name, phone and college so organisers know who you are. Certificates use this name.
+        </Muted>
+      ) : null}
       <SectionHeader>About you</SectionHeader>
       <Input label="Full name" value={str("name")} onChangeText={set("name")} autoComplete="name" />
       <Input label="Phone" value={str("phone")} onChangeText={set("phone")} keyboardType="phone-pad" autoComplete="tel" />
@@ -62,7 +71,8 @@ export default function ProfileEditScreen() {
       ))}
       <Muted style={{ fontSize: 12, marginBottom: 12 }}>Your email ({user?.email}) can be changed on the website, under Profile.</Muted>
       {msg ? <Text style={{ color: STATUS_COLORS.danger, marginBottom: 8 }}>{msg}</Text> : null}
-      <Button title="Save" icon="checkmark" size="lg" onPress={save} loading={busy} style={{ backgroundColor: theme.colors.primary }} />
+      <Button title={first ? "Save and continue" : "Save"} icon="checkmark" size="lg" onPress={save} loading={busy} style={{ backgroundColor: theme.colors.primary }} />
+      {first ? <Button title="Skip for now" variant="ghost" onPress={done} style={{ marginTop: 12, borderWidth: 0 }} /> : null}
     </Screen>
   );
 }
