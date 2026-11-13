@@ -38,7 +38,7 @@ export function authRoutes(app: FastifyInstance) {
       theme: themeOf(tenant),
       settings: {
         hashtags: s.hashtags ?? [], linkedinOrgUrl: s.linkedinOrgUrl, supportEmail: s.supportEmail, social: s.social ?? {},
-        website: s.website, phone: s.phone, address: s.address, signatories: s.signatories ?? [],
+        website: s.website, phone: s.phone, address: s.address, signatories: s.signatories ?? [], androidAppUrl: s.androidAppUrl,
       },
       // Only the display region from each campus profile (e.g. "Delhi NCR"); the rest is on /campuses/:code.
       campuses: campuses.map(({ details, ...c }) => ({ ...c, region: ((details ?? {}) as { region?: string }).region ?? null })),

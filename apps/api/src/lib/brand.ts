@@ -11,6 +11,7 @@ export interface BrandSettings {
   supportEmail?: string;
   /** Public website shown in email footers, e.g. "https://altaschool.tech" */
   website?: string;
+  androidAppUrl?: string;
   phone?: string;
   /** Postal address shown in email and site footers */
   address?: string;
