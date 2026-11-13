@@ -14,6 +14,7 @@ import { campusHref } from "@/lib/format";
 import { apiList } from "@/lib/api";
 import type { AppNotification, Tenant } from "@/lib/types";
 import { BrandLogo } from "./brand-logo";
+import { PlayBadge, androidAppUrl } from "./app-badges";
 import { buttonClass } from "./ui/button";
 
 /**
@@ -113,6 +114,12 @@ export async function SiteFooter({ tenant: given }: { tenant?: Tenant } = {}) {
                 </li>
               ))}
             </ul>
+          )}
+          {androidAppUrl(tenant) && (
+            <div className="space-y-2 pt-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-hero-fg/80">Get the app</p>
+              <PlayBadge tenant={tenant} />
+            </div>
           )}
         </div>
         <nav aria-label="Footer" className="space-y-3 text-sm">

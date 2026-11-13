@@ -206,6 +206,7 @@ export function adminRoutes(app: FastifyInstance) {
             supportEmail: z.string().email().optional(),
             social: z.record(z.string()).optional(),
             website: z.string().url().optional(),
+            androidAppUrl: z.union([z.literal(""), z.string().trim().regex(/^https:\/\/play\.google\.com\//, "Use the Google Play link")]).optional(),
             phone: z.string().trim().max(40).optional(),
             address: z.string().trim().max(300).optional(),
             // Web forms send rows as { "0": {...}, "1": {...} }; accept that as well as an array.

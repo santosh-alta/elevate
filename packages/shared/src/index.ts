@@ -412,6 +412,7 @@ export const ALTA_THEME: ThemeInput = {
 export const ALTA_SETTINGS = {
   website: "https://www.altaschool.tech",
   supportEmail: "event@altaschool.tech",
+  androidAppUrl: "https://play.google.com/store/apps/details?id=tech.altaschool.events",
   phone: "+91-7065333888",
   address: "SCO 27, AIHP (Highway Side), Institutional Area, Sector 32, Gurugram, Haryana 122001",
   linkedinOrgUrl: "https://www.linkedin.com/company/alta-school-of-technology",

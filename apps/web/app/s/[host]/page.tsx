@@ -11,6 +11,7 @@ import type { ElevateEvent } from "@/lib/types";
 import { EventCard } from "@/components/event-card";
 import { LinkButton } from "@/components/ui";
 import { HeroVideo } from "@/components/hero-video";
+import { PlayBadge } from "@/components/app-badges";
 
 export default async function HomePage({ params }: { params: Promise<{ host: string }> }) {
   const host = decodeURIComponent((await params).host);
@@ -59,6 +60,7 @@ export default async function HomePage({ params }: { params: Promise<{ host: str
             <LinkButton href="/events" size="lg" variant="cta">Explore events <ArrowRight className="h-4 w-4" /></LinkButton>
             <LinkButton href="/me" size="lg" variant="ghost" className="glass text-hero-fg hover:bg-hero-fg/15">My tickets &amp; certificates</LinkButton>
           </div>
+          <PlayBadge tenant={tenant} className="mt-6 animate-fade-up [animation-delay:280ms]" />
           {past.length > 0 && (
             <dl data-tour="home-stats" className="mt-14 grid max-w-2xl animate-fade-up grid-cols-3 gap-3 [animation-delay:320ms] sm:gap-4">
               <HeroStat icon={<CalendarDays className="h-4 w-4" />} value={past.length} label="Events held" />
