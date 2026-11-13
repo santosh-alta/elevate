@@ -56,8 +56,8 @@
   "submit": {
     "altaschool": {
       "android": {
-        "track": "internal",
-        "releaseStatus": "draft",
+        "track": "production",
+        "releaseStatus": "completed",
         "serviceAccountKeyPath": "./play-service-account.json"
       }
     },
