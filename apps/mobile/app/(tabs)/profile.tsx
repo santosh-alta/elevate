@@ -6,35 +6,19 @@ import * as WebBrowser from "expo-web-browser";
 import { Alert, Text, View } from "react-native";
 import { Api, WEB_BASE, brand } from "../../src/api";
 import { unregisterPush } from "../../src/push";
+import { Avatar } from "../../src/avatar";
 import { useSession } from "../../src/session";
 import { withAlpha } from "../../src/theme";
 import { Body, Button, Card, Muted, Row, Screen, SectionHeader, Title, humanize } from "../../src/ui";
 
 export default function ProfileScreen() {
   const { theme, user, membership, tenant, isStaff, canCheckin, signOut } = useSession();
-  const initials = (user?.name ?? "?")
-    .split(" ")
-    .map((p) => p.charAt(0))
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 
   return (
     <Screen>
       <Title>Profile</Title>
       <Card style={{ alignItems: "center", gap: 6, paddingVertical: 24 }}>
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: withAlpha(theme.colors.primary, 0.15),
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 28, fontWeight: "800", color: theme.colors.primary }}>{initials}</Text>
-        </View>
+        <Avatar name={user?.name} url={user?.avatarUrl} size={88} />
         <Text style={{ fontSize: 20, fontWeight: "700", color: theme.colors.fg, marginTop: 8 }}>{user?.name}</Text>
         <Muted>{user?.email}</Muted>
         <Button title="Edit profile" icon="create-outline" variant="secondary" size="sm" onPress={() => router.push("/profile-edit")} style={{ marginTop: 10, alignSelf: "stretch" }} />
@@ -43,6 +27,7 @@ export default function ProfileScreen() {
       <SectionHeader>More</SectionHeader>
       <Card style={{ gap: 10 }}>
         <Button title="Event calendar" icon="calendar-outline" variant="ghost" onPress={() => router.push("/calendar")} />
+        <Button title="Campuses" icon="business-outline" variant="ghost" onPress={() => router.push("/campuses")} />
         <Button title="Mark my attendance (scan venue QR)" icon="scan-outline" variant="ghost" onPress={() => router.push("/attend")} />
         <Button title="Ask the assistant" icon="sparkles-outline" variant="ghost" onPress={() => router.push("/assistant")} />
         <Button title="Notifications" icon="notifications-outline" variant="ghost" onPress={() => router.push("/notifications")} />

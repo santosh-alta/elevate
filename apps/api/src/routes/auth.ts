@@ -12,6 +12,8 @@ import { fromAddress, renderEmailHtml } from "../lib/notify";
 import type { Tenant, User } from "@prisma/client";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
+/** Profile photos that came from a Google or GitHub sign-in (as opposed to ones people uploaded). */
+const PROVIDER_PHOTO = /^https:\/\/([a-z0-9-]+\.)?(googleusercontent\.com|githubusercontent\.com)\//i;
 const MAX_ACTIVE_CODES = 5;
 
 /** Accepts a username or a full profile link and returns a full link. */
@@ -147,7 +149,8 @@ export function authRoutes(app: FastifyInstance) {
     if (user) {
       const fill = {
         ...(!user[p.field] && { [p.field]: p.id }),
-        ...(!user.avatarUrl && p.avatarUrl && { avatarUrl: p.avatarUrl }),
+        // Keep the photo fresh from the latest Google/GitHub sign-in, unless the person uploaded their own.
+        ...(p.avatarUrl && p.avatarUrl !== user.avatarUrl && (!user.avatarUrl || PROVIDER_PHOTO.test(user.avatarUrl)) && { avatarUrl: p.avatarUrl }),
         ...(!user.githubUrl && p.githubUrl && { githubUrl: p.githubUrl }),
       };
       if (Object.keys(fill).length) user = await prisma.user.update({ where: { id: user.id }, data: fill });

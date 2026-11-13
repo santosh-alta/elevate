@@ -48,6 +48,8 @@ function RootStack() {
         <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ title: "Calendar" }} />
+        <Stack.Screen name="campuses/index" options={{ title: "Campuses" }} />
+        <Stack.Screen name="campuses/[code]" options={{ title: "Campus" }} />
         <Stack.Screen name="attend/index" options={{ title: "Mark my attendance" }} />
         <Stack.Screen name="attend/[event]" options={{ title: "Checking you in" }} />
         <Stack.Screen name="events/[slug]" options={{ title: "Event" }} />

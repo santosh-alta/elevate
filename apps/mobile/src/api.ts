@@ -198,6 +198,24 @@ export interface Campus {
   city?: string | null;
 }
 
+export interface CampusCard {
+  id: string;
+  code: string;
+  slug?: string;
+  name: string;
+  city?: string | null;
+  photoUrl?: string | null;
+  details?: { region?: string; about?: string; [k: string]: unknown } | null;
+  upcoming: number;
+  past: number;
+}
+
+export interface CampusDetail extends Omit<CampusCard, "upcoming" | "past"> {
+  address?: string | null;
+  stats: { eventsHeld: number; participants: number; hackathons: number };
+  eventPhotos: { id: string; url: string; caption?: string | null; eventSlug: string; eventTitle: string }[];
+}
+
 export interface Tenant {
   id: string;
   slug: string;
@@ -774,7 +792,14 @@ function normaliseJudgePayload(data: any, roundId?: string): JudgePayload {
   };
 }
 
-function absoluteUrl(url: string): string {
+/** Campus photos are full URLs or paths on the brand website. */
+function campusPhoto(url?: string | null): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//.test(url)) return url;
+  return WEB_BASE && url.startsWith("/") ? `${WEB_BASE}${url}` : absoluteUrl(url);
+}
+
+export function absoluteUrl(url: string): string {
   if (/^https?:\/\//.test(url)) return url;
   const root = brand.apiUrl.replace(/\/$/, "");
   if (url.startsWith("/v1/")) return `${root}${url}`;
@@ -990,8 +1015,18 @@ export const Api = {
   // Events
   events: async (query = "upcoming=1") => list<EventSummary>(await api(`/events?${query}`), "events"),
   /** Upcoming events, optionally narrowed to one family (GET /events?family=). */
-  eventsByFamily: async (family?: EventFamily | null) =>
-    list<EventSummary>(await api(`/events?upcoming=1${family ? `&family=${family}` : ""}`), "events"),
+  /** Upcoming events; optionally one family, and/or one campus (its own events plus central ones). */
+  eventsByFamily: async (family?: EventFamily | null, campusId?: string | null, campusOnly = false) =>
+    list<EventSummary>(
+      await api(`/events?upcoming=1${family ? `&family=${family}` : ""}${campusId ? `&campusId=${campusId}${campusOnly ? "&campusOnly=true" : ""}` : ""}`),
+      "events",
+    ),
+  /** Campus directory: photo and counts of upcoming / past public events. */
+  campuses: async () => list<CampusCard>(await api("/campuses", { auth: false })).map((c) => ({ ...c, photoUrl: campusPhoto(c.photoUrl) })),
+  campus: async (code: string) => {
+    const c = await api<CampusDetail>(`/campuses/${encodeURIComponent(code)}`, { auth: false });
+    return { ...c, photoUrl: campusPhoto(c.photoUrl), eventPhotos: (c.eventPhotos ?? []).map((p) => ({ ...p, url: absoluteUrl(p.url) })) };
+  },
   event: async (idOrSlug: string) => normaliseEvent(await api<any>(`/events/${encodeURIComponent(idOrSlug)}`)),
   calendarUrl: (idOrSlug: string) => `${API_BASE}/events/${encodeURIComponent(idOrSlug)}/calendar.ics`,
   /** Public event page on the brand's website, when the brand has one configured. */

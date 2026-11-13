@@ -7,6 +7,7 @@ import { Alert, Image, Pressable, Share, Text, View } from "react-native";
 import { AWARD_LABELS, Api, EventDetail, EventFee, Faq, ProblemStatement, Registration, Sponsor, eventLabel, formatMoney } from "../../src/api";
 import { HtmlContent } from "../../src/html";
 import { TagChips, modeLabel, statusTone } from "../../src/events";
+import { EventPoster } from "../../src/poster";
 import { useSession } from "../../src/session";
 import { LeaderboardSection } from "../../src/leaderboard";
 import { STATUS_COLORS, withAlpha } from "../../src/theme";
@@ -180,7 +181,7 @@ export default function EventDetailScreen() {
   const turnout = registrations
     ? `${registrations.toLocaleString("en-IN")} registered`
     : recordedParticipants ? `${recordedParticipants.toLocaleString("en-IN")} participants`
-    : recordedRegistered ? `${recordedRegistered.toLocaleString("en-IN")} registered` : registrations !== undefined ? "Be the first to register" : null;
+    : recordedRegistered ? `${recordedRegistered.toLocaleString("en-IN")} registered` : registrations !== undefined && !["COMPLETED", "CANCELLED", "REGISTRATION_CLOSED", "JUDGING"].includes(event.status) ? "Be the first to register" : null;
 
   async function register() {
     setBusy(true);
@@ -263,16 +264,7 @@ export default function EventDetailScreen() {
           ),
         }}
       />
-      {event.coverImageUrl ? (
-        <Image source={{ uri: event.coverImageUrl }} style={{ width: "100%", height: 200 }} resizeMode="cover" />
-      ) : (
-        <View style={{ height: 120, backgroundColor: theme.colors.heroBg, justifyContent: "flex-end" }}>
-          <View style={{ flexDirection: "row", height: 4 }}>
-            <View style={{ flex: 1, backgroundColor: theme.gradient?.[0] ?? theme.colors.accent }} />
-            <View style={{ flex: 1, backgroundColor: theme.gradient?.[1] ?? theme.colors.secondary }} />
-          </View>
-        </View>
-      )}
+      <EventPoster event={event} height={200} />
 
       <View style={{ padding: 16 }}>
         <Row style={{ flexWrap: "wrap", marginBottom: 8 }}>

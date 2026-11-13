@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Image, Text, View } from "react-native";
 import { EventSummary, eventLabel } from "./api";
+import { EventPoster } from "./poster";
 import { useSession } from "./session";
 import { withAlpha } from "./theme";
 import { Badge, Card, IconName, Muted, Row, formatDate, humanize } from "./ui";
@@ -80,21 +81,7 @@ export function EventCard({ event, onPress }: { event: EventSummary; onPress: ()
   const { theme } = useSession();
   return (
     <Card onPress={onPress} style={{ padding: 0, overflow: "hidden" }}>
-      {event.coverImageUrl ? (
-        <Image source={{ uri: event.coverImageUrl }} style={{ height: 130, width: "100%" }} resizeMode="cover" />
-      ) : (
-        <View
-          style={{
-            height: 80,
-            backgroundColor: withAlpha(theme.colors.primary, 0.1),
-            alignItems: "flex-start",
-            justifyContent: "flex-end",
-            padding: 12,
-          }}
-        >
-          <Ionicons name={eventTypeIcon(event.type)} size={28} color={theme.colors.primary} />
-        </View>
-      )}
+      <EventPoster event={event} />
       <View style={{ padding: 16, gap: 6 }}>
         <Row style={{ flexWrap: "wrap" }}>
           <Badge label={eventLabel(event)} tone="primary" />
