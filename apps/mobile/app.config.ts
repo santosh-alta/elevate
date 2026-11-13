@@ -81,7 +81,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
         : fs.existsSync(path.resolve(__dirname, `google-services.${brand.slug}.json`)) && { googleServicesFile: `./google-services.${brand.slug}.json` }),
       // Only what the app uses: camera (tickets, venue QR), location while checking in, notifications.
-      blockedPermissions: ["android.permission.RECORD_AUDIO", "android.permission.ACCESS_BACKGROUND_LOCATION", "android.permission.SYSTEM_ALERT_WINDOW"],
+      blockedPermissions: ["android.permission.RECORD_AUDIO", "android.permission.ACCESS_BACKGROUND_LOCATION", "android.permission.SYSTEM_ALERT_WINDOW", "com.google.android.gms.permission.AD_ID"],
       // Event and venue check-in links on the website open in the app (verified via /.well-known/assetlinks.json).
       ...(brand.webHost && {
         intentFilters: [{
