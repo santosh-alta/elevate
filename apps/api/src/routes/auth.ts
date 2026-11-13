@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../plugins/prisma";
@@ -90,7 +91,19 @@ export function authRoutes(app: FastifyInstance) {
 
   app.post("/auth/otp/verify", async (req) => {
     const body = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) }).parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase().trim() } });
+    const email = body.email.toLowerCase().trim();
+
+    // App-store review account (Google Play / App Store reviewers can't receive email). Works only when both
+    // REVIEW_LOGIN_EMAIL and REVIEW_LOGIN_CODE are set on the server; the account is an ordinary student account.
+    const reviewEmail = process.env.REVIEW_LOGIN_EMAIL?.toLowerCase().trim();
+    const reviewCode = process.env.REVIEW_LOGIN_CODE ?? "";
+    if (reviewEmail && /^\d{6}$/.test(reviewCode) && email === reviewEmail) {
+      if (!timingSafeEqual(Buffer.from(body.code), Buffer.from(reviewCode))) throw badRequest("Invalid or expired code");
+      const reviewer = await prisma.user.upsert({ where: { email }, create: { email, name: "App Review" }, update: {} });
+      return signIn(reviewer, req.tenant);
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw badRequest("Invalid or expired code");
 
     const otp = await prisma.otpCode.findFirst({
