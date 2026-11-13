@@ -99,7 +99,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         "expo-splash-screen",
         {
           backgroundColor: splashColor,
-          ...(splash && { image: splash, imageWidth: splashIcon ? 240 : 200, resizeMode: "contain" }),
+          ...(splash && { image: splash, imageWidth: 200, resizeMode: "contain" }),
         },
       ],
       [
